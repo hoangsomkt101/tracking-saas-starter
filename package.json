@@ -1,0 +1,22 @@
+{
+  "name": "tracking-saas-monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.33.4",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "start:api": "pnpm --filter @apps/api start",
+    "start:redirect": "pnpm --filter @apps/redirect start",
+    "start:worker": "pnpm --filter @apps/worker start",
+    "start:web": "pnpm --filter @apps/web start",
+    "prisma:generate": "pnpm --filter @repo/db prisma generate",
+    "prisma:migrate": "pnpm --filter @repo/db prisma migrate dev",
+    "prisma:migrate:deploy": "pnpm --filter @repo/db prisma migrate deploy"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  }
+}

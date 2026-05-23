@@ -1,0 +1,408 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventDeliveryStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
+enum ActivityLogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+model Tenant {
+  id                String         @id @default(uuid())
+  ownerUserId       String         @unique
+  billingPlanId     String?
+  slug              String         @unique
+  publicKey         String         @unique @default(dbgenerated("substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)"))
+  name              String
+  clickWebhookToken String         @default(uuid())
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  ownerUser     User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  billingPlan   BillingPlan?   @relation(fields: [billingPlanId], references: [id], onDelete: SetNull)
+  campaigns      Campaign[]
+  brands         Brand[]
+  affiliatePlatforms AffiliatePlatform[]
+  datasets            Dataset[]
+  campaignDatasets   CampaignDataset[]
+  prelanders         Prelander[]
+  trackingLinks      TrackingLink[]
+  clickEvents        ClickEvent[]
+  conversionEvents   AffiliateConversionEvent[]
+  capiEvents         CapiEvent[]
+  reportSchedules    ReportSchedule[]
+  menuGrants         TenantMenuGrant[]
+  activityLogs       ActivityLog[]
+
+  @@index([ownerUserId])
+  @@index([billingPlanId])
+  @@index([publicKey])
+  @@index([createdAt])
+}
+
+model BillingPlan {
+  id                String   @id @default(uuid())
+  slug              String   @unique
+  name              String
+  description       String?
+  monthlyPriceCents Int      @default(0)
+  currency          String   @default("USD")
+  clickLimit        Int      @default(1000)
+  capiEventLimit    Int      @default(1000)
+  eapiEventLimit    Int      @default(1000)
+  campaignDatasetLimit Int   @default(2)
+  isDefault         Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenants           Tenant[]
+
+  @@index([isDefault])
+  @@index([isActive])
+}
+
+model MenuFeature {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  path        String   @unique
+  label       String
+  group       String
+  icon        String
+  badge       String?
+  description String?
+  sortOrder   Int      @default(0)
+  isCore      Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  grants      TenantMenuGrant[]
+
+  @@index([group])
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model TenantMenuGrant {
+  id            String      @id @default(uuid())
+  tenantId      String
+  menuFeatureId String
+  isEnabled     Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  menuFeature   MenuFeature @relation(fields: [menuFeatureId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, menuFeatureId])
+  @@index([tenantId])
+  @@index([menuFeatureId])
+  @@index([isEnabled])
+}
+
+model User {
+  id           String   @id @default(uuid())
+  clerkUserId  String   @unique
+  email        String?
+  firstName    String?
+  lastName     String?
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant?
+
+  @@index([email])
+}
+
+model Campaign {
+  id            String         @id @default(uuid())
+  tenantId      String
+  name          String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  datasets       CampaignDataset[]
+  trackingLinks  TrackingLink[]
+  clickEvents    ClickEvent[]
+
+  @@index([tenantId])
+  @@unique([tenantId, name])
+}
+
+model Brand {
+  id                  String            @id @default(uuid())
+  tenantId            String
+  affiliatePlatformId String
+  name                String
+  affiliateUrl        String
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  affiliatePlatform   AffiliatePlatform @relation(fields: [affiliatePlatformId], references: [id], onDelete: Cascade)
+  trackingLinks       TrackingLink[]
+
+  @@index([tenantId])
+  @@index([affiliatePlatformId])
+}
+
+model AffiliatePlatform {
+  id               String                     @id @default(uuid())
+  tenantId         String
+  name             String
+  slug             String
+  trackingParamKey String                     @default("subid1")
+  webhookMethod    String                     @default("POST")
+  webhookToken     String                     @default(uuid())
+  eventMapping     Json                       @default("[]")
+  defaultEventName String?                    @default("CompleteRegistration")
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  tenant           Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  brands           Brand[]
+  conversionEvents AffiliateConversionEvent[]
+
+  @@index([tenantId])
+  @@unique([tenantId, slug])
+  @@unique([tenantId, name])
+}
+
+model Dataset {
+  id          String     @id @default(uuid())
+  tenantId    String
+  platform    String
+  name        String
+  pixelId     String
+  accessToken String
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaigns   CampaignDataset[]
+  capiEvents  CapiEvent[]
+
+  @@index([tenantId])
+  @@index([platform])
+  @@index([isActive])
+  @@unique([tenantId, name])
+  @@unique([tenantId, platform, pixelId])
+}
+
+model CampaignDataset {
+  id         String   @id @default(uuid())
+  tenantId   String
+  campaignId String
+  datasetId  String
+  createdAt  DateTime @default(now())
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  dataset    Dataset  @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([campaignId])
+  @@index([datasetId])
+  @@unique([campaignId, datasetId])
+}
+
+model Prelander {
+  id              String         @id @default(uuid())
+  tenantId        String
+  name            String
+  headline        String
+  body            String
+  ctaText         String         @default("Continue")
+  ctaDelaySeconds Int            @default(2)
+  theme           String         @default("clean")
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  tenant          Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  trackingLinks   TrackingLink[]
+
+  @@index([tenantId])
+  @@index([isActive])
+  @@unique([tenantId, name])
+}
+
+model TrackingLink {
+  id               String         @id @default(uuid())
+  tenantId         String
+  campaignId       String?
+  brandId          String
+  prelanderId      String?
+  slug             String
+  prelanderEnabled Boolean        @default(true)
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign         Campaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  brand            Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  prelander        Prelander?     @relation(fields: [prelanderId], references: [id], onDelete: SetNull)
+  clickEvents      ClickEvent[]
+
+  @@index([tenantId])
+  @@index([campaignId])
+  @@index([brandId])
+  @@index([prelanderId])
+  @@index([isActive])
+  @@unique([tenantId, slug])
+}
+
+model ClickEvent {
+  id             BigInt      @id @default(autoincrement())
+  tenantId       String
+  campaignId     String?
+  trackingLinkId String
+  clickUuid      String      @unique
+  ip             String?
+  userAgent      String?
+  referrer       String?
+  fbp            String?
+  fbc            String?
+  ttp            String?
+  ttclid         String?
+  fbclid         String?
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign       Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  trackingLink   TrackingLink @relation(fields: [trackingLinkId], references: [id], onDelete: Cascade)
+  capiEvents     CapiEvent[]
+  conversionEvents AffiliateConversionEvent[]
+
+  @@index([tenantId, createdAt])
+  @@index([campaignId, createdAt])
+  @@index([trackingLinkId, createdAt])
+}
+
+model AffiliateConversionEvent {
+  id                  BigInt            @id @default(autoincrement())
+  tenantId            String
+  affiliatePlatformId String
+  clickEventId        BigInt?
+  clickUuid           String?
+  idempotencyKey      String?
+  requestCount        Int               @default(1)
+  lastReceivedAt      DateTime          @default(now())
+  eventName           String?
+  eventRule           String?
+  eventMatchedField   String?
+  eventMatchedValue   String?
+  customerId          String?
+  customerEmail       String?
+  spendAmount         Decimal?          @db.Decimal(18, 6)
+  payoutAmount        Decimal?          @db.Decimal(18, 6)
+  commissionAmount    Decimal?          @db.Decimal(18, 6)
+  currency            String?
+  attributionSnapshot Json?
+  capiEnrichment      Json?
+  rawPayload          Json
+  receivedMethod      String
+  createdAt           DateTime          @default(now())
+
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  affiliatePlatform   AffiliatePlatform @relation(fields: [affiliatePlatformId], references: [id], onDelete: Cascade)
+  clickEvent          ClickEvent?        @relation(fields: [clickEventId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, affiliatePlatformId, idempotencyKey])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, affiliatePlatformId, createdAt])
+  @@index([tenantId, clickEventId, createdAt])
+  @@index([tenantId, eventName, createdAt])
+  @@index([affiliatePlatformId, createdAt])
+  @@index([clickUuid])
+  @@index([idempotencyKey])
+}
+
+model CapiEvent {
+  id           BigInt              @id @default(autoincrement())
+  tenantId     String
+  clickEventId BigInt
+  datasetId    String?
+  platform     String
+  eventName    String
+  source       String              @default("click")
+  sourceId     String              @default("")
+  payload      Json
+  status       EventDeliveryStatus @default(PENDING)
+  attempts     Int                 @default(0)
+  lastError    String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clickEvent   ClickEvent          @relation(fields: [clickEventId], references: [id], onDelete: Cascade)
+  dataset      Dataset?            @relation(fields: [datasetId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, platform, eventName, createdAt])
+  @@index([datasetId])
+  @@index([status, createdAt])
+  @@unique([clickEventId, datasetId, eventName, source, sourceId])
+}
+
+model ActivityLog {
+  id         BigInt           @id @default(autoincrement())
+  tenantId   String
+  level      ActivityLogLevel @default(INFO)
+  source     String
+  eventType  String
+  message    String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime         @default(now())
+
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, eventType, createdAt])
+  @@index([tenantId, level, createdAt])
+  @@index([tenantId, source, createdAt])
+  @@index([tenantId, entityType, entityId])
+}
+
+model ReportSchedule {
+  id             String   @id @default(uuid())
+  tenantId       String
+  name           String
+  reportType     String   @default("analytics")
+  frequency      String   @default("weekly")
+  recipientEmail String?
+  filters        Json?
+  isActive       Boolean  @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([isActive, nextRunAt])
+  @@unique([tenantId, name])
+}
