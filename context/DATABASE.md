@@ -1,6 +1,6 @@
 # Database Context
 
-Tài liệu này mô tả database hiện tại của Tracking SaaS Starter theo schema Prisma trong `packages/db/prisma/schema.prisma`.
+Tài liệu này mô tả database hiện tại của Aff Track Pro theo schema Prisma trong `packages/db/prisma/schema.prisma`.
 
 Mục tiêu đọc nhanh:
 

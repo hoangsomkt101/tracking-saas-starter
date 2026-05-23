@@ -1,6 +1,6 @@
 # Features Context
 
-Tài liệu này mô tả chức năng hiện tại và hướng vận hành của Tracking SaaS Starter sau các cập nhật mới nhất.
+Tài liệu này mô tả chức năng hiện tại và hướng vận hành của Aff Track Pro sau các cập nhật mới nhất.
 
 Mục tiêu sản phẩm: giúp user tạo affiliate tracking workspace, quản lý campaign/offer/network, tạo shortlink, ghi nhận click, nhận conversion webhook, và chuẩn bị dữ liệu cho CAPI/analytics.
 

@@ -1,5 +1,5 @@
 {
-  "name": "tracking-saas-monorepo",
+  "name": "aff-track-pro-monorepo",
   "private": true,
   "packageManager": "pnpm@10.33.4",
   "scripts": {

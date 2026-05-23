@@ -1,6 +1,6 @@
-# Tracking SaaS Starter
+# Aff Track Pro
 
-Multi-tenant affiliate tracking + CAPI SaaS starter architecture.
+Multi-tenant affiliate tracking + CAPI platform architecture.
 
 ## Stack
 
@@ -190,7 +190,7 @@ The dashboard uses Clerk React for sign-in and calls the API with the current Cl
 
 ## Current Scope
 
-This is still a starter implementation. It provides the first complete vertical slice:
+Aff Track Pro currently provides the first complete vertical slice:
 
 1. Authenticate a user with Clerk.
 2. Sync Clerk user into the local `User` table.

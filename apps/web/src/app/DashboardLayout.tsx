@@ -298,7 +298,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
         <button type="button" className="workspace-switcher" onClick={() => navigate('/dashboard')}>
           <div className="workspace-logo"><Command size={17} /></div>
           <div>
-            <strong>Tracking SaaS</strong>
+            <strong>Aff Track Pro</strong>
             <span>{selectedTenant?.name ?? 'Workspace'}</span>
           </div>
           <ChevronDown size={16} />

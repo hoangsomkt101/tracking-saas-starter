@@ -13,7 +13,7 @@ export function SignedOutHome({ theme, onToggleTheme }: { theme: ThemeMode; onTo
       </div>
       <section className="landing-shell">
         <div className="landing-sidebar-preview">
-          <div className="mini-brand"><Command size={16} /> Tracking SaaS</div>
+          <div className="mini-brand"><Command size={16} /> Aff Track Pro</div>
           <div className="mini-nav active" />
           <div className="mini-nav" />
           <div className="mini-nav short" />

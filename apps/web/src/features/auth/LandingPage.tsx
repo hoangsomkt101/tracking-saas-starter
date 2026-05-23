@@ -38,7 +38,7 @@ export function LandingPage({ theme, onToggleTheme }: { theme: ThemeMode; onTogg
             <header className="landing-header">
                 <NavLink to="/" className="landing-brand">
                     <span className="landing-brand-mark"><Command size={18} /></span>
-                    <span>Tracking SaaS</span>
+                    <span>Aff Track Pro</span>
                 </NavLink>
                 <div className="landing-header-actions">
                     <ThemeToggle theme={theme} onToggle={onToggleTheme} />

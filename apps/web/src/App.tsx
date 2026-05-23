@@ -5,10 +5,12 @@ import { DashboardLayout } from './app/DashboardLayout'
 import { LandingPage } from './features/auth/LandingPage'
 import type { ThemeMode } from './types/domain'
 
+const themeStorageKey = 'aff-track-pro-theme'
+
 export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(() => {
     if (typeof window === 'undefined') return 'light'
-    const savedTheme = window.localStorage.getItem('tracking-saas-theme')
+    const savedTheme = window.localStorage.getItem(themeStorageKey)
     if (savedTheme === 'light' || savedTheme === 'dark') return savedTheme
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
   })
@@ -16,7 +18,7 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     document.documentElement.classList.toggle('dark', theme === 'dark')
-    window.localStorage.setItem('tracking-saas-theme', theme)
+    window.localStorage.setItem(themeStorageKey, theme)
   }, [theme])
 
   const toggleTheme = useCallback(() => {
