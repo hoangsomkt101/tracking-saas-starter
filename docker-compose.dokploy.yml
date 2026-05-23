@@ -1,0 +1,164 @@
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tracker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Dokploy environment}
+      POSTGRES_DB: ${POSTGRES_DB:-tracker}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        DATABASE_URL: postgresql://tracker:tracker@postgres:5432/tracker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_PORT: 3001
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in Dokploy environment}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:?Set CLERK_SECRET_KEY in Dokploy environment}
+      SUPERADMIN_EMAILS: ${SUPERADMIN_EMAILS:-}
+      SUPER_ADMIN_EMAILS: ${SUPER_ADMIN_EMAILS:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      SUPERADMIN_CLERK_USER_IDS: ${SUPERADMIN_CLERK_USER_IDS:-}
+      SUPER_ADMIN_CLERK_USER_IDS: ${SUPER_ADMIN_CLERK_USER_IDS:-}
+      ADMIN_CLERK_USER_IDS: ${ADMIN_CLERK_USER_IDS:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?Set ALLOWED_ORIGINS in Dokploy environment}
+      WEB_APP_ORIGIN: ${WEB_APP_ORIGIN:?Set WEB_APP_ORIGIN in Dokploy environment}
+      API_RATE_LIMIT_MAX: ${API_RATE_LIMIT_MAX:-600}
+      API_RATE_LIMIT_WINDOW: ${API_RATE_LIMIT_WINDOW:-1 minute}
+      PUBLIC_WEBHOOK_RATE_LIMIT_MAX: ${PUBLIC_WEBHOOK_RATE_LIMIT_MAX:-120}
+      PUBLIC_WEBHOOK_RATE_LIMIT_WINDOW: ${PUBLIC_WEBHOOK_RATE_LIMIT_WINDOW:-1 minute}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "3001"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  redirect:
+    build:
+      context: .
+      dockerfile: apps/redirect/Dockerfile
+      args:
+        DATABASE_URL: postgresql://tracker:tracker@postgres:5432/tracker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      REDIRECT_PORT: 3002
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in Dokploy environment}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIRECT_RATE_LIMIT_MAX: ${REDIRECT_RATE_LIMIT_MAX:-300}
+      REDIRECT_RATE_LIMIT_WINDOW: ${REDIRECT_RATE_LIMIT_WINDOW:-1 minute}
+      REDIRECT_BROWSER_PIXEL_REDIRECT_DELAY_MS: ${REDIRECT_BROWSER_PIXEL_REDIRECT_DELAY_MS:-1500}
+      REDIRECT_CAPI_DELAY_MS: ${REDIRECT_CAPI_DELAY_MS:-3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose:
+      - "3002"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3002/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+      args:
+        DATABASE_URL: postgresql://tracker:tracker@postgres:5432/tracker
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in Dokploy environment}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+      WORKER_METRICS_INTERVAL_MS: ${WORKER_METRICS_INTERVAL_MS:-60000}
+      CAPI_DRY_RUN: ${CAPI_DRY_RUN:-true}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:?Set VITE_API_URL in Dokploy environment}
+        VITE_REDIRECT_URL: ${VITE_REDIRECT_URL:?Set VITE_REDIRECT_URL in Dokploy environment}
+        VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:?Set VITE_CLERK_PUBLISHABLE_KEY in Dokploy environment}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      VITE_API_URL: ${VITE_API_URL:?Set VITE_API_URL in Dokploy environment}
+      VITE_REDIRECT_URL: ${VITE_REDIRECT_URL:?Set VITE_REDIRECT_URL in Dokploy environment}
+      VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:?Set VITE_CLERK_PUBLISHABLE_KEY in Dokploy environment}
+    depends_on:
+      api:
+        condition: service_healthy
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  migrate:
+    profiles:
+      - migrate
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      args:
+        DATABASE_URL: postgresql://tracker:tracker@postgres:5432/tracker
+    restart: "no"
+    command: ["pnpm", "--filter", "@repo/db", "exec", "prisma", "migrate", "deploy"]
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in Dokploy environment}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
