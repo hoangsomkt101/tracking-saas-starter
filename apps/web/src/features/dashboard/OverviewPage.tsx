@@ -2,14 +2,27 @@ import { Activity, ArrowUpRight, CircleDollarSign, FolderKanban, Layers3, Link2,
 import { Badge } from '../../components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { StatusBanner } from '../../components/common/StatusBanner'
-import type { DashboardContext } from '../../types/domain'
+import { formatCurrencyAmount, formatPercent } from '../../lib/format'
+import type { AnalyticsRow, DashboardContext } from '../../types/domain'
+
+function formatDashboardDay(value: string) {
+  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(new Date(value))
+}
+
+function getChartMetric(row: AnalyticsRow) {
+  return row.revenue || row.conversions || row.clicks
+}
 
 export function OverviewPage({ ctx }: { ctx: DashboardContext }) {
+  const analytics = ctx.data.analyticsBreakdown
+  const summary = analytics.summary
+  const chartRows = [...(analytics.byDay ?? [])].sort((a, b) => String(a.id).localeCompare(String(b.id))).slice(-12)
+  const maxChartMetric = Math.max(1, ...chartRows.map(getChartMetric))
   const stats = [
-    { label: 'Total Revenue', value: '$12,485', icon: CircleDollarSign, hint: '+12.5% from last month', accent: 'green' },
-    { label: 'Campaigns', value: ctx.data.campaigns.length, icon: Megaphone, hint: `${ctx.tenantCampaigns.length} in current workspace`, accent: 'blue' },
-    { label: 'Tracking Links', value: ctx.data.trackingLinks.length, icon: Link2, hint: `${ctx.tenantTrackingLinks.length} visible links`, accent: 'violet' },
-    { label: 'Click Events', value: ctx.data.clickEvents.length, icon: Activity, hint: 'Latest 100 events', accent: 'orange' }
+    { label: 'Total Revenue', value: formatCurrencyAmount(summary.revenue), icon: CircleDollarSign, hint: `${formatCurrencyAmount(summary.payout)} payout · ${formatCurrencyAmount(summary.spend)} spend`, accent: 'green' },
+    { label: 'Campaigns', value: ctx.tenantCampaigns.length, icon: Megaphone, hint: `${ctx.tenantCampaigns.length} in current workspace`, accent: 'blue' },
+    { label: 'Tracking Links', value: ctx.tenantTrackingLinks.length, icon: Link2, hint: `${ctx.tenantTrackingLinks.length} visible links`, accent: 'violet' },
+    { label: 'Click Events', value: summary.clicks, icon: MousePointerClick, hint: `${summary.conversions} conversions · ${formatPercent(summary.conversionRate)} CVR`, accent: 'orange' }
   ]
 
   return (
@@ -38,19 +51,32 @@ export function OverviewPage({ ctx }: { ctx: DashboardContext }) {
           <CardHeader>
             <div>
               <CardTitle>Performance overview</CardTitle>
-              <CardDescription>Traffic trend mô phỏng theo dữ liệu click hiện tại.</CardDescription>
+              <CardDescription>Daily trend lấy trực tiếp từ analytics database: revenue, conversions và clicks.</CardDescription>
             </div>
-            <Badge variant="secondary">Last 30 days</Badge>
+            <Badge variant="secondary">Latest {chartRows.length || 0} days</Badge>
           </CardHeader>
           <CardContent>
-            <div className="chart-bars" aria-label="Performance chart">
-              {[38, 54, 42, 78, 61, 88, 74, 92, 68, 83, 96, 72].map((height, index) => (
-                <div key={index} style={{ height: `${height}%` }} />
-              ))}
-            </div>
+            {chartRows.length ? (
+              <div className="chart-bars" aria-label="Performance chart" style={{ gridTemplateColumns: `repeat(${chartRows.length}, 1fr)` }}>
+                {chartRows.map((row) => {
+                  const metric = getChartMetric(row)
+                  const height = Math.max(8, (metric / maxChartMetric) * 100)
+                  return (
+                    <div
+                      key={row.id}
+                      title={`${formatDashboardDay(row.id)} · ${formatCurrencyAmount(row.revenue)} revenue · ${row.conversions} conversions · ${row.clicks} clicks`}
+                      style={{ height: `${height}%` }}
+                    />
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="empty-state">Chưa có dữ liệu analytics trong database.</p>
+            )}
             <div className="chart-footer">
-              <span><Users2 size={15} /> {ctx.data.clickEvents.length} total clicks</span>
-              <span><FolderKanban size={15} /> {ctx.data.campaigns.length} campaigns</span>
+              <span><Users2 size={15} /> {summary.clicks} total clicks</span>
+              <span><CircleDollarSign size={15} /> {formatCurrencyAmount(summary.revenue)} revenue</span>
+              <span><FolderKanban size={15} /> {ctx.tenantCampaigns.length} campaigns</span>
             </div>
           </CardContent>
         </Card>
