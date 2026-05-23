@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router'
-import { HelpCircle, Settings, WalletCards } from 'lucide-react'
+import { Settings, WalletCards } from 'lucide-react'
 import { FeatureGate, PlaceholderPage } from '../components/common/FeatureGate'
 import { OverviewPage } from '../features/dashboard/OverviewPage'
 import { AnalyticsPage } from '../features/analytics/AnalyticsPage'
@@ -7,6 +7,7 @@ import { SuperAdminPage, SuperAdminUserManagePage } from '../features/admin/Supe
 import { ClickEventsPage } from '../features/events/EventPages'
 import { ActivityLogsPage } from '../features/logs/ActivityLogsPage'
 import { ApiKeysPage } from '../features/account/ApiKeysPage'
+import { SupportPage } from '../features/support/SupportPage'
 import { BrandCreatePage, BrandDeletePage, BrandDetailPage, BrandEditPage, BrandsPage, CampaignCreatePage, CampaignDeletePage, CampaignDetailPage, CampaignEditPage, CampaignsPage, DatasetCreatePage, DatasetDeletePage, DatasetDetailPage, DatasetEditPage, DatasetsPage, PlatformCreatePage, PlatformDeletePage, PlatformDetailPage, PlatformEditPage, PlatformsPage, PrelanderCreatePage, PrelanderDeletePage, PrelanderDetailPage, PrelanderEditPage, PrelandersPage, TrackingLinkCreatePage, TrackingLinkDeletePage, TrackingLinkDetailPage, TrackingLinkEditPage, TrackingLinksPage } from '../features/resources/ResourcePages'
 import type { DashboardContext } from '../types/domain'
 
@@ -51,7 +52,7 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/billing" element={<FeatureGate ctx={ctx} featureKey="billing"><PlaceholderPage icon={WalletCards} title="Billing" description="Plan, usage quota và invoices." /></FeatureGate>} />
       <Route path="/api-keys" element={<FeatureGate ctx={ctx} featureKey="api-keys"><ApiKeysPage ctx={ctx} /></FeatureGate>} />
       <Route path="/settings" element={<FeatureGate ctx={ctx} featureKey="settings"><PlaceholderPage icon={Settings} title="Settings" description="Workspace settings và tracking integrations." /></FeatureGate>} />
-      <Route path="/support" element={<FeatureGate ctx={ctx} featureKey="support"><PlaceholderPage icon={HelpCircle} title="Support" description="Documentation, onboarding checklist và contact support." /></FeatureGate>} />
+      <Route path="/support" element={<FeatureGate ctx={ctx} featureKey="support"><SupportPage /></FeatureGate>} />
       <Route path="/superadmin" element={<SuperAdminPage ctx={ctx} />} />
       <Route path="/superadmin/users/:id/manage" element={<SuperAdminUserManagePage ctx={ctx} />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

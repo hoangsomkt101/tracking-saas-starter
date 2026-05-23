@@ -53,6 +53,6 @@ export const pageMeta: Record<string, { title: string; description: string }> = 
   '/billing': { title: 'Billing', description: 'Plan, usage quota and invoices.' },
   '/api-keys': { title: 'API Keys', description: 'Reveal, copy and rotate workspace webhook tokens.' },
   '/settings': { title: 'Settings', description: 'Workspace and integration settings.' },
-  '/support': { title: 'Support', description: 'Help center and implementation notes.' },
+  '/support': { title: 'Support', description: 'Thông tin hỗ trợ, hotline và pháp lý doanh nghiệp.' },
   '/superadmin': { title: 'Super Admin', description: 'Quản lý các tài khoản đã đăng ký và workspace tương ứng.' }
 }
