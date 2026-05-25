@@ -14,9 +14,9 @@ type CreateResourceCardProps = {
 }
 
 const affiliatePlatformOptions = [
-  { value: 'impact', label: 'Impact', param: 'subid1' },
-  { value: 'partnerstack', label: 'PartnerStack', param: 'sid1' },
-  { value: 'first_promo', label: 'First Promo', param: 'fp_sid' }
+  { value: 'impact', label: 'Impact' },
+  { value: 'partnerstack', label: 'PartnerStack' },
+  { value: 'first_promo', label: 'First Promo' }
 ]
 
 export function CreateCampaignCard({ ctx, onCreated }: CreateResourceCardProps) {
@@ -94,7 +94,7 @@ export function CreateBrandCard({ ctx, onCreated }: CreateResourceCardProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleCreateBrand}>
-          <label><FieldLabel>Affiliate platform</FieldLabel><Select name="affiliatePlatformId" required disabled={!ctx.tenantAffiliatePlatforms.length}>{ctx.tenantAffiliatePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{platform.name} ({platform.trackingParamKey})</option>)}</Select></label>
+          <label><FieldLabel>Affiliate platform</FieldLabel><Select name="affiliatePlatformId" required disabled={!ctx.tenantAffiliatePlatforms.length}>{ctx.tenantAffiliatePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{platform.name}</option>)}</Select></label>
           <label><FieldLabel>Brand / Offer name</FieldLabel><Input name="brandName" placeholder="Demo Offer" required /></label>
           <label><FieldLabel>Affiliate URL</FieldLabel><Input name="affiliateUrl" placeholder="https://example.com/campaign" required /></label>
           <Button type="submit" disabled={!ctx.tenantAffiliatePlatforms.length}><Plus size={16} /> Create brand</Button>
@@ -133,13 +133,13 @@ export function CreateAffiliatePlatformCard({ ctx, onCreated }: CreateResourceCa
     <Card className="form-card">
       <CardHeader>
         <CardTitle><Globe2 size={18} /> Create Affiliate Platform</CardTitle>
-        <CardDescription>Chỉ chọn nền tảng hỗ trợ và đặt tên. Hệ thống tự cấu hình param/webhook tương ứng.</CardDescription>
+        <CardDescription>Chỉ chọn nền tảng hỗ trợ và đặt tên. Hệ thống tự cấu hình phần còn lại.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleCreateAffiliatePlatform}>
-          <label><FieldLabel>Platform</FieldLabel><Select name="platform" defaultValue="impact" required>{affiliatePlatformOptions.map((option) => <option key={option.value} value={option.value}>{option.label} · {option.param}</option>)}</Select></label>
+          <label><FieldLabel>Platform</FieldLabel><Select name="platform" defaultValue="impact" required>{affiliatePlatformOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</Select></label>
           <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Impact - Main account" required /></label>
-          <p className="form-hint">Impact dùng <strong>subid1</strong>, PartnerStack dùng <strong>sid1</strong>, First Promo dùng <strong>fp_sid</strong>. Các setting còn lại được hệ thống tự tạo.</p>
+          <p className="form-hint">Các thiết lập kỹ thuật còn lại được hệ thống tự tạo.</p>
           <Button type="submit" disabled={!ctx.selectedTenant}><Plus size={16} /> Create platform</Button>
         </form>
       </CardContent>
