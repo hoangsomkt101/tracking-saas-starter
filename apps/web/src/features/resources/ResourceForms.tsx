@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../..
 import { Input } from '../../components/ui/input'
 import { Select } from '../../components/ui/select'
 import { FieldLabel } from '../../components/common/FieldLabel'
-import { EventMappingBuilder, parseEventMappingInput } from '../affiliate-platforms/EventMappingBuilder'
 import { getFormString } from '../../lib/forms'
 import type { AffiliatePlatform, Brand, Campaign, DashboardContext, Dataset, Prelander, TrackingLink } from '../../types/domain'
 
@@ -13,6 +12,12 @@ type CreateResourceCardProps = {
   ctx: DashboardContext
   onCreated?: () => void | Promise<void>
 }
+
+const affiliatePlatformOptions = [
+  { value: 'impact', label: 'Impact', param: 'subid1' },
+  { value: 'partnerstack', label: 'PartnerStack', param: 'sid1' },
+  { value: 'first_promo', label: 'First Promo', param: 'fp_sid' }
+]
 
 export function CreateCampaignCard({ ctx, onCreated }: CreateResourceCardProps) {
   async function handleCreateCampaign(event: FormEvent<HTMLFormElement>) {
@@ -112,11 +117,7 @@ export function CreateAffiliatePlatformCard({ ctx, onCreated }: CreateResourceCa
         body: JSON.stringify({
           tenantId: ctx.selectedTenant.id,
           name: String(form.get('name') ?? ''),
-          slug: String(form.get('slug') ?? ''),
-          trackingParamKey: String(form.get('trackingParamKey') ?? ''),
-          webhookMethod: String(form.get('webhookMethod') ?? 'POST'),
-          defaultEventName: String(form.get('defaultEventName') ?? 'CompleteRegistration'),
-          eventMapping: parseEventMappingInput(String(form.get('eventMapping') ?? ''))
+          platform: String(form.get('platform') ?? 'impact')
         })
       })
       ctx.setStatus({ type: 'success', message: 'Đã tạo affiliate platform/network' })
@@ -132,18 +133,13 @@ export function CreateAffiliatePlatformCard({ ctx, onCreated }: CreateResourceCa
     <Card className="form-card">
       <CardHeader>
         <CardTitle><Globe2 size={18} /> Create Affiliate Platform</CardTitle>
-        <CardDescription>Quản lý network theo workspace: rule subid/sid/fp_sid và webhook GET/POST.</CardDescription>
+        <CardDescription>Chỉ chọn nền tảng hỗ trợ và đặt tên. Hệ thống tự cấu hình param/webhook tương ứng.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleCreateAffiliatePlatform}>
-          <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Impact / PartnerStack / FirstPromoter" required /></label>
-          <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="impact" /></label>
-          <label><FieldLabel>Tracking param key</FieldLabel><Input name="trackingParamKey" placeholder="subid1 / sid1 / fp_sid" /></label>
-          <label><FieldLabel>Webhook method</FieldLabel><Select name="webhookMethod" defaultValue="GET"><option value="POST">POST</option><option value="GET">GET</option></Select></label>
-          <label><FieldLabel>Default event</FieldLabel><Input name="defaultEventName" defaultValue="CompleteRegistration" placeholder="CompleteRegistration" /></label>
-          <FieldLabel>Event mapping rules</FieldLabel>
-          <EventMappingBuilder name="eventMapping" ctx={ctx} tenantId={ctx.selectedTenant?.id} defaultEventName="CompleteRegistration" />
-          <p className="form-hint">Impact gửi postback query về affiliate webhook. Mặc định Amount=0 và Payout=0 gửi <strong>CompleteRegistration</strong>; nếu một trong hai giá trị lớn hơn 0 gửi <strong>Purchase</strong>.</p>
+          <label><FieldLabel>Platform</FieldLabel><Select name="platform" defaultValue="impact" required>{affiliatePlatformOptions.map((option) => <option key={option.value} value={option.value}>{option.label} · {option.param}</option>)}</Select></label>
+          <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Impact - Main account" required /></label>
+          <p className="form-hint">Impact dùng <strong>subid1</strong>, PartnerStack dùng <strong>sid1</strong>, First Promo dùng <strong>fp_sid</strong>. Các setting còn lại được hệ thống tự tạo.</p>
           <Button type="submit" disabled={!ctx.selectedTenant}><Plus size={16} /> Create platform</Button>
         </form>
       </CardContent>

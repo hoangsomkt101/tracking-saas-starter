@@ -59,6 +59,58 @@ export type AffiliateEventMatch = {
   eventMatchedValue?: string
 }
 
+export type SupportedAffiliatePlatformKey = 'impact' | 'partnerstack' | 'first_promo'
+
+export type SupportedAffiliatePlatformDefinition = {
+  key: SupportedAffiliatePlatformKey
+  label: string
+  slug: string
+  trackingParamKey: string
+  webhookMethod: 'GET' | 'POST'
+  defaultEventName: string
+}
+
+export const supportedAffiliatePlatforms: SupportedAffiliatePlatformDefinition[] = [
+  { key: 'impact', label: 'Impact', slug: 'impact', trackingParamKey: 'subid1', webhookMethod: 'GET', defaultEventName: 'CompleteRegistration' },
+  { key: 'partnerstack', label: 'PartnerStack', slug: 'partnerstack', trackingParamKey: 'sid1', webhookMethod: 'POST', defaultEventName: 'CompleteRegistration' },
+  { key: 'first_promo', label: 'First Promo', slug: 'first-promo', trackingParamKey: 'fp_sid', webhookMethod: 'POST', defaultEventName: 'CompleteRegistration' }
+]
+
+const supportedAffiliatePlatformAliases: Record<string, SupportedAffiliatePlatformKey> = {
+  impact: 'impact',
+  impactcom: 'impact',
+  subid1: 'impact',
+  partnerstack: 'partnerstack',
+  sid1: 'partnerstack',
+  firstpromo: 'first_promo',
+  firstpromoter: 'first_promo',
+  firstpromotercom: 'first_promo',
+  firstpromoio: 'first_promo',
+  firstpromocom: 'first_promo',
+  fpsid: 'first_promo'
+}
+
+function normalizeSupportedAffiliatePlatformLookup(value: string) {
+  return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]/g, '')
+}
+
+export function getSupportedAffiliatePlatform(value: unknown): SupportedAffiliatePlatformDefinition | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = normalizeSupportedAffiliatePlatformLookup(value.trim())
+  const key = supportedAffiliatePlatformAliases[normalized]
+  return key ? supportedAffiliatePlatforms.find((platform) => platform.key === key) : undefined
+}
+
+export function requireSupportedAffiliatePlatform(value: unknown) {
+  const platform = getSupportedAffiliatePlatform(value)
+  if (!platform) throw new Error('platform must be Impact, PartnerStack, or First Promo')
+  return platform
+}
+
+export function getSupportedAffiliatePlatformParamKey(value: unknown) {
+  return requireSupportedAffiliatePlatform(value).trackingParamKey
+}
+
 export function getRedisUrl() {
   return process.env.REDIS_URL ?? 'redis://localhost:6379'
 }

@@ -107,6 +107,8 @@ export type AffiliatePlatform = {
   tenantId: string
   name: string
   slug: string
+  platformKey?: 'impact' | 'partnerstack' | 'first_promo' | string | null
+  platformLabel?: string | null
   trackingParamKey: string
   webhookMethod: 'GET' | 'POST'
   webhookToken: string
