@@ -1592,6 +1592,45 @@ label {
   white-space: pre-wrap;
 }
 
+.copyable-value {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.35rem;
+  max-width: 100%;
+  min-width: 0;
+  vertical-align: middle;
+}
+
+.copy-icon-button.copy-icon-button {
+  border-radius: 999px;
+  color: hsl(var(--muted-foreground));
+  flex: 0 0 auto;
+  height: 1.75rem;
+  padding: 0;
+  width: 1.75rem;
+}
+
+.copy-icon-button.copy-icon-button:hover {
+  color: hsl(var(--foreground));
+}
+
+.copyable-code-block {
+  position: relative;
+}
+
+.copyable-code-block .copy-icon-button {
+  background: hsl(var(--background) / 0.88);
+  border: 1px solid hsl(var(--border));
+  position: absolute;
+  right: 0.5rem;
+  top: 0.5rem;
+  z-index: 1;
+}
+
+.copyable-code-block .webhook-code-sample {
+  padding-right: 2.8rem;
+}
+
 .webhook-sample-card,
 .api-key-card {
   margin-top: 1rem;
