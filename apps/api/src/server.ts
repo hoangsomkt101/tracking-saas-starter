@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { createClerkClient, verifyToken } from '@clerk/backend'
+import { TokenVerificationError } from '@clerk/backend/errors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
@@ -14,6 +15,9 @@ await app.register(rateLimit, { max: Number(process.env.API_RATE_LIMIT_MAX ?? 60
 const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY })
 const clickEventsQueue = createClickEventsQueue()
 const readinessRedis = createRedisConnection()
+const DEFAULT_CLERK_JWT_CLOCK_SKEW_MS = 30_000
+const configuredClerkJwtClockSkewInMs = Number(process.env.CLERK_JWT_CLOCK_SKEW_MS ?? DEFAULT_CLERK_JWT_CLOCK_SKEW_MS)
+const clerkJwtClockSkewInMs = Number.isFinite(configuredClerkJwtClockSkewInMs) && configuredClerkJwtClockSkewInMs >= 0 ? configuredClerkJwtClockSkewInMs : DEFAULT_CLERK_JWT_CLOCK_SKEW_MS
 
 const allowedCorsOrigins = new Set([
   'http://localhost:3000',
@@ -97,7 +101,7 @@ async function assertBillingLimit(tenantId: string, metric: 'clicks' | 'capiEven
 async function requireUser(req: FastifyRequest) {
   if (!isClerkConfigured()) throw new Error('CLERK_SECRET_KEY is not configured')
   const token = getBearerToken(req); if (!token) throw new Error('Missing Clerk bearer token')
-  const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY })
+  const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY, clockSkewInMs: clerkJwtClockSkewInMs })
   const clerkUserId = payload.sub; if (!clerkUserId) throw new Error('Invalid Clerk token')
   const clerkUser = await clerk.users.getUser(clerkUserId)
   const primaryEmail = clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
@@ -553,6 +557,18 @@ app.route({
 })
 
 app.addHook('onClose', async () => { await clickEventsQueue.close(); await readinessRedis.quit() })
-app.setErrorHandler((error, _req, reply) => { app.log.error(error); if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return reply.code(409).send({ error: 'Dữ liệu đã tồn tại, vui lòng dùng tên hoặc slug khác' }); const message = error instanceof Error ? error.message : 'Unknown error'; const unauthorized = ['Unauthorized', 'Missing Clerk bearer token', 'Invalid Clerk token']; const hints = ['required', 'must', 'not found', 'access denied', 'exceeded', 'tồn tại']; const statusCode = unauthorized.includes(message) ? 401 : hints.some((h) => message.toLowerCase().includes(h.toLowerCase())) ? 400 : 500; return reply.code(statusCode).send({ error: statusCode === 500 ? 'Internal server error' : message }) })
+app.setErrorHandler((error, _req, reply) => {
+  app.log.error(error)
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return reply.code(409).send({ error: 'Dữ liệu đã tồn tại, vui lòng dùng tên hoặc slug khác' })
+  if (error instanceof TokenVerificationError) {
+    const isServerConfigError = error.reason === 'invalid-secret-key' || error.reason === 'remote-jwk-failed-to-load' || error.reason === 'local-jwk-missing'
+    return reply.code(isServerConfigError ? 500 : 401).send({ error: isServerConfigError ? 'Internal server error' : 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn, vui lòng tải lại trang/đăng nhập lại' })
+  }
+  const message = error instanceof Error ? error.message : 'Unknown error'
+  const unauthorized = ['Unauthorized', 'Missing Clerk bearer token', 'Invalid Clerk token']
+  const hints = ['required', 'must', 'not found', 'access denied', 'exceeded', 'tồn tại']
+  const statusCode = unauthorized.includes(message) ? 401 : hints.some((h) => message.toLowerCase().includes(h.toLowerCase())) ? 400 : 500
+  return reply.code(statusCode).send({ error: statusCode === 500 ? 'Internal server error' : message })
+})
 
 app.listen({ port: Number(process.env.API_PORT ?? 3001), host: '0.0.0.0' })
