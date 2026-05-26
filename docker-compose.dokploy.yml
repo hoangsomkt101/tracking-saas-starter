@@ -109,7 +109,7 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
       WORKER_METRICS_INTERVAL_MS: ${WORKER_METRICS_INTERVAL_MS:-60000}
-      CAPI_DRY_RUN: ${CAPI_DRY_RUN:-true}
+      CAPI_DRY_RUN: ${CAPI_DRY_RUN:-false}
     depends_on:
       postgres:
         condition: service_healthy
