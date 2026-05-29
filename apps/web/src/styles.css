@@ -2509,6 +2509,60 @@ body {
   width: 1.9rem;
 }
 
+.app-shell.is-sidebar-collapsed {
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+}
+
+.app-shell.is-sidebar-collapsed .sidebar {
+  align-items: center;
+  padding-left: 0.6rem;
+  padding-right: 0.6rem;
+}
+
+.app-shell.is-sidebar-collapsed .workspace-switcher {
+  gap: 0;
+  grid-template-columns: 2rem;
+  justify-content: center;
+  padding: 0.45rem;
+  width: 2.9rem;
+}
+
+.app-shell.is-sidebar-collapsed .workspace-switcher>div:nth-child(2),
+.app-shell.is-sidebar-collapsed .workspace-switcher>svg,
+.app-shell.is-sidebar-collapsed .nav-group p,
+.app-shell.is-sidebar-collapsed .sidebar-link span,
+.app-shell.is-sidebar-collapsed .nav-badge,
+.app-shell.is-sidebar-collapsed .sidebar-upgrade-card {
+  display: none;
+}
+
+.app-shell.is-sidebar-collapsed .sidebar-nav {
+  align-items: center;
+  width: 100%;
+}
+
+.app-shell.is-sidebar-collapsed .nav-group {
+  align-items: center;
+  width: 100%;
+}
+
+.app-shell.is-sidebar-collapsed .sidebar-link {
+  display: inline-flex;
+  height: 2.35rem;
+  justify-content: center;
+  min-height: 2.35rem;
+  padding: 0;
+  width: 2.35rem;
+}
+
+.app-shell.is-sidebar-collapsed .sidebar-link svg {
+  flex: 0 0 auto;
+}
+
+.app-shell.is-sidebar-collapsed .sidebar-toggle svg {
+  transform: rotate(180deg);
+}
+
 .main-panel {
   align-content: start;
   background: hsl(var(--background));
@@ -3403,18 +3457,57 @@ tbody tr:last-child td {
 }
 
 @media (max-width: 900px) {
-  .app-shell {
+
+  .app-shell,
+  .app-shell.is-sidebar-collapsed {
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
+  .sidebar,
+  .app-shell.is-sidebar-collapsed .sidebar {
+    align-items: stretch;
     height: auto;
     max-height: none;
+    padding: 0.75rem;
     position: static;
   }
 
-  .sidebar-nav {
+  .sidebar-nav,
+  .app-shell.is-sidebar-collapsed .sidebar-nav {
+    align-items: stretch;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: auto;
+  }
+
+  .app-shell.is-sidebar-collapsed .workspace-switcher {
+    gap: 0.65rem;
+    grid-template-columns: 2rem minmax(0, 1fr) 1rem;
+    justify-content: stretch;
+    padding: 0.45rem 0.55rem;
+    width: 100%;
+  }
+
+  .app-shell.is-sidebar-collapsed .workspace-switcher>div:nth-child(2),
+  .app-shell.is-sidebar-collapsed .workspace-switcher>svg,
+  .app-shell.is-sidebar-collapsed .nav-group p,
+  .app-shell.is-sidebar-collapsed .sidebar-link span,
+  .app-shell.is-sidebar-collapsed .nav-badge {
+    display: block;
+  }
+
+  .app-shell.is-sidebar-collapsed .nav-group {
+    align-items: stretch;
+  }
+
+  .app-shell.is-sidebar-collapsed .sidebar-link {
+    display: grid;
+    gap: 0.65rem;
+    grid-template-columns: 1.05rem minmax(0, 1fr) auto;
+    height: auto;
+    justify-content: initial;
+    min-height: 2.15rem;
+    padding: 0 0.55rem;
+    width: 100%;
   }
 
   .sidebar-upgrade-card {

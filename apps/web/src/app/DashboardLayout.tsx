@@ -22,6 +22,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [selectedTenantId, setSelectedTenantId] = useState('')
   const [eventFilters, setEventFilters] = useState<EventFilters>(defaultEventFilters)
   const [clickEventsPage, setClickEventsPage] = useState(1)
@@ -286,9 +287,9 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   const meta = pageMeta[location.pathname] ?? pageMeta['/dashboard']
 
   return (
-    <main className="app-shell shadcn-theme">
-      <aside className="sidebar">
-        <button type="button" className="workspace-switcher" onClick={() => navigate('/dashboard')}>
+    <main className={`app-shell shadcn-theme ${isSidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
+      <aside id="dashboard-sidebar" className="sidebar" aria-label="Dashboard sidebar">
+        <button type="button" className="workspace-switcher" title={selectedTenant?.name ?? 'Workspace'} onClick={() => navigate('/dashboard')}>
           <div className="workspace-logo"><Command size={17} /></div>
           <div>
             <strong>Aff Track Pro</strong>
@@ -304,7 +305,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
               {group.items.map((item) => {
                 const Icon = item.icon
                 return (
-                  <NavLink key={item.path} to={item.path} className={({ isActive }) => `sidebar-link ${isActive ? 'is-active' : ''}`}>
+                  <NavLink key={item.path} to={item.path} title={item.label} className={({ isActive }) => `sidebar-link ${isActive ? 'is-active' : ''}`}>
                     <Icon size={17} />
                     <span>{item.label}</span>
                     {item.badge && <Badge variant="secondary" className="nav-badge">{item.badge}</Badge>}
@@ -330,7 +331,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
       <section className="main-panel">
         <header className="app-topbar">
           <div className="topbar-left">
-            <Button variant="ghost" size="icon" type="button" aria-label="Toggle sidebar"><PanelLeft size={16} /></Button>
+            <Button className="sidebar-toggle" variant="ghost" size="icon" type="button" aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-pressed={isSidebarCollapsed} aria-controls="dashboard-sidebar" onClick={() => setIsSidebarCollapsed((current) => !current)}><PanelLeft size={16} /></Button>
             <div className="search-box">
               <Search size={16} />
               <input placeholder="Search campaigns, links, platforms..." />
