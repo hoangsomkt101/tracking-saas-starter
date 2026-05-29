@@ -80,12 +80,38 @@ function CopyableValue({ ctx, value, label = 'URL', children }: { ctx: Dashboard
   )
 }
 
+const impactWebhookQueryTemplate = [
+  'SubId1={SubId1}',
+  'SubId2={SubId2}',
+  'SubId3={SubId3}',
+  'CampaignId={CampaignId}',
+  'CampaignName={CampaignName}',
+  'ActionTrackerId={ActionTrackerId}',
+  'ActionTrackerName={ActionTrackerName}',
+  'Amount={Amount}',
+  'Payout={Payout}',
+  'EventDate={EventDate}',
+  'CreationDate={CreationDate}',
+  'LockingDate={LockingDate}',
+  'RefClickId={RefClickId}',
+  'SharedId={SharedId}'
+].join('&')
+
 function getAffiliateTenantKey(platform: AffiliatePlatform, tenant?: Tenant) {
   return tenant?.id === platform.tenantId ? tenant.publicKey || platform.tenantId : platform.tenantId
 }
 
+function isImpactAffiliatePlatform(platform: AffiliatePlatform) {
+  return platform.platformKey === 'impact' || platform.slug === 'impact'
+}
+
 function getAffiliateWebhookUrl(platform: AffiliatePlatform, tenant?: Tenant) {
   return `${apiBaseUrl}/affiliate-webhooks/${getAffiliateTenantKey(platform, tenant)}/${platform.slug}`
+}
+
+function getAffiliateWebhookDetailUrl(platform: AffiliatePlatform, tenant?: Tenant) {
+  const webhookUrl = getAffiliateWebhookUrl(platform, tenant)
+  return isImpactAffiliatePlatform(platform) ? `${webhookUrl}?${impactWebhookQueryTemplate}` : webhookUrl
 }
 
 function getAffiliateWebhookPath(platform: AffiliatePlatform, tenant?: Tenant) {
@@ -204,7 +230,7 @@ export function PlatformsPage({ ctx }: { ctx: DashboardContext }) {
   return (<><StatusBanner status={ctx.status} /><section className="resource-page"><PageToolbar title={<><Globe2 size={18} /> Affiliate platforms</>} description={`${ctx.tenantAffiliatePlatforms.length} affiliate networks. Chỉ hỗ trợ Impact, PartnerStack và First Promo.`} createPath="/platforms/new" createLabel="Thêm platform" /><Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Name</th><th>Platform</th><th>Webhook</th><th>Actions</th></tr></thead><tbody>{ctx.tenantAffiliatePlatforms.map((platform) => <tr key={platform.id}><td><strong>{platform.name}</strong></td><td>{platform.platformLabel ?? platform.slug}</td><td><CopyableValue ctx={ctx} value={getAffiliateWebhookUrl(platform, ctx.selectedTenant)} label="webhook URL"><span>{platform.webhookMethod} {getAffiliateWebhookPath(platform, ctx.selectedTenant)}</span></CopyableValue></td><td><ActionButtons detailPath={`/platforms/${platform.id}`} editPath={`/platforms/${platform.id}/edit`} deletePath={`/platforms/${platform.id}/delete`} /></td></tr>)}{!ctx.tenantAffiliatePlatforms.length && <tr><td colSpan={4}>Chưa có affiliate platform.</td></tr>}</tbody></table></div></CardContent></Card></section></>)
 }
 export function PlatformCreatePage({ ctx }: { ctx: DashboardContext }) { const navigate = useNavigate(); return <section className="form-route"><CreateAffiliatePlatformCard ctx={ctx} onCreated={() => navigate('/platforms')} /><Button asChild variant="outline"><NavLink to="/platforms">Quay lại danh sách</NavLink></Button></section> }
-export function PlatformDetailPage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const platform = ctx.tenantAffiliatePlatforms.find((item) => item.id === id); if (!platform) return <NotFoundEntity name="Affiliate platform" backPath="/platforms" />; return <EntityDetailCard title={<><Globe2 size={18} /> {platform.name}</>} description="Chi tiết affiliate platform." backPath="/platforms"><DetailGrid><DetailItem label="Platform ID" value={platform.id} /><DetailItem label="Platform" value={platform.platformLabel ?? platform.slug} /><DetailItem label="Webhook URL" value={<CopyableValue ctx={ctx} value={getAffiliateWebhookUrl(platform, ctx.selectedTenant)} label="webhook URL"><code>{getAffiliateWebhookUrl(platform, ctx.selectedTenant)}</code></CopyableValue>} /><DetailItem label="Webhook method" value={`${platform.webhookMethod} (GET/POST đều được nhận)`} /><DetailItem label="Auth" value="Không cần token; chèn URL này vào postback/webhook nội bộ của sàn affiliate." /><DetailItem label="Created" value={formatDate(platform.createdAt)} /></DetailGrid></EntityDetailCard> }
+export function PlatformDetailPage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const platform = ctx.tenantAffiliatePlatforms.find((item) => item.id === id); if (!platform) return <NotFoundEntity name="Affiliate platform" backPath="/platforms" />; const webhookUrl = getAffiliateWebhookDetailUrl(platform, ctx.selectedTenant); return <EntityDetailCard title={<><Globe2 size={18} /> {platform.name}</>} description="Chi tiết affiliate platform." backPath="/platforms"><DetailGrid><DetailItem label="Platform ID" value={platform.id} /><DetailItem label="Platform" value={platform.platformLabel ?? platform.slug} /><DetailItem label="Webhook URL" value={<CopyableValue ctx={ctx} value={webhookUrl} label="webhook URL"><code>{webhookUrl}</code></CopyableValue>} /><DetailItem label="Webhook method" value={`${platform.webhookMethod} (GET/POST đều được nhận)`} /><DetailItem label="Auth" value="Không cần token; chèn URL này vào postback/webhook nội bộ của sàn affiliate." /><DetailItem label="Created" value={formatDate(platform.createdAt)} /></DetailGrid></EntityDetailCard> }
 export function PlatformEditPage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const platform = ctx.tenantAffiliatePlatforms.find((item) => item.id === id); if (!platform) return <NotFoundEntity name="Affiliate platform" backPath="/platforms" />; const current = platform; async function handleSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); await runEntityAction(ctx, async () => { await ctx.fetchJson<AffiliatePlatform>(`/affiliate-platforms/${current.id}`, { method: 'PUT', body: JSON.stringify({ name: getFormString(form, 'name'), platform: getFormString(form, 'platform') }) }); navigate('/platforms') }, 'Đã cập nhật affiliate platform') } return <EntityDetailCard title={<><Pencil size={18} /> Sửa platform</>} description="Chỉ đổi nền tảng hỗ trợ và tên hiển thị." backPath="/platforms"><form className="route-form" onSubmit={(event) => void handleSubmit(event)}><label><FieldLabel>Platform</FieldLabel><Select name="platform" defaultValue={current.platformKey ?? current.slug}><option value="impact">Impact</option><option value="partnerstack">PartnerStack</option><option value="first_promo">First Promo</option></Select></label><label><FieldLabel>Name</FieldLabel><Input name="name" defaultValue={current.name} required /></label><p className="form-hint">Các thiết lập kỹ thuật còn lại được hệ thống tự quản lý.</p><Button type="submit">Lưu platform</Button></form></EntityDetailCard> }
 export function PlatformDeletePage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const platform = ctx.tenantAffiliatePlatforms.find((item) => item.id === id); if (!platform) return <NotFoundEntity name="Affiliate platform" backPath="/platforms" />; const current = platform; async function handleDelete() { await runEntityAction(ctx, async () => { await ctx.fetchJson<{ ok: boolean }>(`/affiliate-platforms/${current.id}`, { method: 'DELETE' }); navigate('/platforms') }, 'Đã xóa affiliate platform') } return <EntityDetailCard title={<><Trash2 size={18} /> Xóa platform</>} description="Xác nhận xóa ở URL riêng." backPath="/platforms"><div className="danger-zone"><p>Bạn sắp xóa <strong>{current.name}</strong>. Brand/link liên quan có thể bị xóa theo.</p><Button variant="destructive" onClick={() => void handleDelete()}><Trash2 size={16} /> Xác nhận xóa</Button></div></EntityDetailCard> }
 
