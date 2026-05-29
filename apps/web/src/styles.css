@@ -4144,3 +4144,119 @@ select[class*="rounded-md"] {
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--compose-border-subtle)) transparent;
 }
+
+/* Subtle depth pass: background contrast + low-noise block shadows */
+:root {
+  --compose-app-bg: 240 6% 97.5%;
+  --compose-block-bg: 0 0% 100%;
+  --compose-block-muted-bg: 240 5% 96.5%;
+  --compose-shadow-soft: 0 1px 2px hsl(240 10% 3.9% / 0.045), 0 8px 24px hsl(240 10% 3.9% / 0.035);
+  --compose-shadow-subtle: 0 1px 2px hsl(240 10% 3.9% / 0.04);
+  --compose-shadow-floating: 0 10px 28px hsl(240 10% 3.9% / 0.055);
+}
+
+:root[data-theme="dark"] {
+  --compose-app-bg: 240 10% 3.9%;
+  --compose-block-bg: 240 7% 6.5%;
+  --compose-block-muted-bg: 240 5% 10%;
+  --compose-shadow-soft: 0 1px 2px hsl(0 0% 0% / 0.22), 0 10px 28px hsl(0 0% 0% / 0.18);
+  --compose-shadow-subtle: 0 1px 2px hsl(0 0% 0% / 0.2);
+  --compose-shadow-floating: 0 12px 32px hsl(0 0% 0% / 0.24);
+}
+
+body {
+  background:
+    radial-gradient(circle at 82% -8%, hsl(var(--foreground) / 0.035), transparent 24rem),
+    linear-gradient(hsl(var(--muted) / 0.34) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--muted) / 0.34) 1px, transparent 1px),
+    hsl(var(--compose-app-bg));
+  background-size: auto, 40px 40px, 40px 40px, auto;
+}
+
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 82% -8%, hsl(var(--foreground) / 0.055), transparent 24rem),
+    linear-gradient(hsl(var(--border) / 0.18) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.18) 1px, transparent 1px),
+    hsl(var(--compose-app-bg));
+  background-size: auto, 40px 40px, 40px 40px, auto;
+}
+
+.app-shell,
+.main-panel {
+  background: hsl(var(--compose-app-bg));
+}
+
+.sidebar,
+.app-topbar {
+  background: hsl(var(--compose-block-bg) / 0.92);
+  box-shadow: var(--compose-shadow-subtle);
+}
+
+.app-topbar {
+  box-shadow: 0 1px 0 hsl(var(--compose-border-subtle)), 0 8px 22px hsl(240 10% 3.9% / 0.035);
+}
+
+:root[data-theme="dark"] .app-topbar {
+  box-shadow: 0 1px 0 hsl(var(--compose-border-subtle)), 0 10px 24px hsl(0 0% 0% / 0.2);
+}
+
+.card,
+.stat-card,
+.overview-card,
+.workspace-card,
+.form-card,
+.table-card,
+.events-card,
+.filter-card,
+.page-card,
+.placeholder-card,
+.detail-card,
+.list-shell-card,
+.tracking-preview-card,
+.landing-feature-card,
+.desire-metrics-card,
+.landing-cta-panel,
+.hero-card,
+.landing-sidebar-preview {
+  background: hsl(var(--compose-block-bg));
+  box-shadow: var(--compose-shadow-soft);
+}
+
+.stat-card,
+.workspace-card,
+.overview-card {
+  box-shadow: var(--compose-shadow-floating);
+}
+
+.workspace-switcher,
+.search-box,
+.workspace-chip,
+.workspace-mini-stats>div,
+.campaign-dataset-summary,
+.feature-card-toggle,
+.support-contact-card,
+.business-info-card,
+.comparison-item,
+.activity-log-item,
+.event-rule-builder,
+.event-rule-card,
+.mapping-test-panel,
+.empty-state,
+th,
+.detail-row td,
+.webhook-code-sample,
+.mapping-sample-input,
+.mapping-json-preview pre,
+.detail-grid pre,
+.activity-log-metadata pre,
+.preview-event-card,
+.desire-metric {
+  background: hsl(var(--compose-block-muted-bg));
+}
+
+.copyable-code-block .copy-icon-button,
+.copy-icon-button.copy-icon-button:hover,
+.sidebar-toggle.sidebar-toggle:hover {
+  box-shadow: none;
+}
