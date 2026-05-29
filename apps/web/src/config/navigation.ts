@@ -1,4 +1,4 @@
-import { BarChart3, Crown, Globe2, HelpCircle, Home, KeyRound, Layers3, Link2, Megaphone, MousePointerClick, ScrollText, ShieldCheck } from 'lucide-react'
+import { BarChart3, Crown, Globe2, HelpCircle, Home, KeyRound, Link2, Megaphone, MousePointerClick, ScrollText, ShieldCheck } from 'lucide-react'
 import type { NavGroup } from '../types/domain'
 
 export const navGroups: NavGroup[] = [
@@ -14,7 +14,6 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Tracking',
     items: [
-      { path: '/prelanders', label: 'Prelanders', icon: Layers3, featureKey: 'prelanders' },
       { path: '/tracking-links', label: 'Tracking Links', icon: Link2, featureKey: 'tracking-links' },
       { path: '/click-events', label: 'Click Events', icon: MousePointerClick, badge: 'Manual', featureKey: 'click-events' },
       { path: '/logs', label: 'Activity Logs', icon: ScrollText, featureKey: 'activity-logs' },
@@ -41,8 +40,7 @@ export const pageMeta: Record<string, { title: string; description: string }> = 
   '/campaigns': { title: 'Campaigns', description: 'Create campaigns and select configured dataset.' },
   '/platforms': { title: 'Affiliate Platforms', description: 'Manage supported affiliate networks and webhooks.' },
   '/datasets': { title: 'Datasets', description: 'Manage Meta/TikTok datasets in one place.' },
-  '/prelanders': { title: 'Prelanders', description: 'Create branded bridge pages before redirecting visitors to offers.' },
-  '/tracking-links': { title: 'Tracking Links', description: 'Create shortlinks with direct Affiliate URL and platform selection.' },
+  '/tracking-links': { title: 'Tracking Links', description: 'Create shortlinks with direct Affiliate URL, platform selection and bridge page settings.' },
   '/click-events': { title: 'Click Events', description: 'Review latest captured click events.' },
   '/logs': { title: 'Activity Logs', description: 'Theo dõi click, prelanding, webhook affiliate, CAPI và thay đổi cấu hình.' },
   '/analytics': { title: 'Analytics', description: 'Attribution and traffic insights.' },

@@ -8,7 +8,7 @@ import { ClickEventsPage } from '../features/events/EventPages'
 import { ActivityLogsPage } from '../features/logs/ActivityLogsPage'
 import { ApiKeysPage } from '../features/account/ApiKeysPage'
 import { SupportPage } from '../features/support/SupportPage'
-import { CampaignCreatePage, CampaignDeletePage, CampaignDetailPage, CampaignEditPage, CampaignsPage, DatasetCreatePage, DatasetDeletePage, DatasetDetailPage, DatasetEditPage, DatasetsPage, PlatformCreatePage, PlatformDeletePage, PlatformDetailPage, PlatformEditPage, PlatformsPage, PrelanderCreatePage, PrelanderDeletePage, PrelanderDetailPage, PrelanderEditPage, PrelandersPage, TrackingLinkCreatePage, TrackingLinkDeletePage, TrackingLinkDetailPage, TrackingLinkEditPage, TrackingLinksPage } from '../features/resources/ResourcePages'
+import { CampaignCreatePage, CampaignDeletePage, CampaignDetailPage, CampaignEditPage, CampaignsPage, DatasetCreatePage, DatasetDeletePage, DatasetDetailPage, DatasetEditPage, DatasetsPage, PlatformCreatePage, PlatformDeletePage, PlatformDetailPage, PlatformEditPage, PlatformsPage, TrackingLinkCreatePage, TrackingLinkDeletePage, TrackingLinkDetailPage, TrackingLinkEditPage, TrackingLinksPage } from '../features/resources/ResourcePages'
 import type { DashboardContext } from '../types/domain'
 
 export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
@@ -31,11 +31,6 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/datasets/:id" element={<FeatureGate ctx={ctx} featureKey="datasets"><DatasetDetailPage ctx={ctx} /></FeatureGate>} />
       <Route path="/datasets/:id/edit" element={<FeatureGate ctx={ctx} featureKey="datasets"><DatasetEditPage ctx={ctx} /></FeatureGate>} />
       <Route path="/datasets/:id/delete" element={<FeatureGate ctx={ctx} featureKey="datasets"><DatasetDeletePage ctx={ctx} /></FeatureGate>} />
-      <Route path="/prelanders" element={<FeatureGate ctx={ctx} featureKey="prelanders"><PrelandersPage ctx={ctx} /></FeatureGate>} />
-      <Route path="/prelanders/new" element={<FeatureGate ctx={ctx} featureKey="prelanders"><PrelanderCreatePage ctx={ctx} /></FeatureGate>} />
-      <Route path="/prelanders/:id" element={<FeatureGate ctx={ctx} featureKey="prelanders"><PrelanderDetailPage ctx={ctx} /></FeatureGate>} />
-      <Route path="/prelanders/:id/edit" element={<FeatureGate ctx={ctx} featureKey="prelanders"><PrelanderEditPage ctx={ctx} /></FeatureGate>} />
-      <Route path="/prelanders/:id/delete" element={<FeatureGate ctx={ctx} featureKey="prelanders"><PrelanderDeletePage ctx={ctx} /></FeatureGate>} />
       <Route path="/tracking-links" element={<FeatureGate ctx={ctx} featureKey="tracking-links"><TrackingLinksPage ctx={ctx} /></FeatureGate>} />
       <Route path="/tracking-links/new" element={<FeatureGate ctx={ctx} featureKey="tracking-links"><TrackingLinkCreatePage ctx={ctx} /></FeatureGate>} />
       <Route path="/tracking-links/:id" element={<FeatureGate ctx={ctx} featureKey="tracking-links"><TrackingLinkDetailPage ctx={ctx} /></FeatureGate>} />

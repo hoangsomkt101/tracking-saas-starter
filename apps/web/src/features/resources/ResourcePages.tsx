@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router'
 import { Building2, Copy, ExternalLink, Globe2, Layers3, Link2, Megaphone, Pencil, ShieldCheck, Trash2 } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
@@ -250,14 +250,6 @@ export function BrandDetailPage({ ctx }: { ctx: DashboardContext }) { const { id
 export function BrandEditPage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const brand = ctx.tenantBrands.find((item) => item.id === id); if (!brand) return <NotFoundEntity name="Brand / Offer" backPath="/brands" />; const current = brand; async function handleSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); await runEntityAction(ctx, async () => { await ctx.fetchJson<Brand>(`/brands/${current.id}`, { method: 'PUT', body: JSON.stringify({ affiliatePlatformId: getFormString(form, 'affiliatePlatformId'), name: getFormString(form, 'name'), affiliateUrl: getFormString(form, 'affiliateUrl') }) }); navigate('/brands') }, 'Đã cập nhật brand/offer') } return <EntityDetailCard title={<><Pencil size={18} /> Sửa brand / offer</>} description="Brand/Offer chỉ quản lý thông tin offer; campaign được gắn ở từng tracking link." backPath="/brands"><form className="route-form" onSubmit={(event) => void handleSubmit(event)}><label><FieldLabel>Affiliate platform</FieldLabel><Select name="affiliatePlatformId" defaultValue={current.affiliatePlatformId}>{ctx.tenantAffiliatePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{platform.name}</option>)}</Select></label><label><FieldLabel>Name</FieldLabel><Input name="name" defaultValue={current.name} required /></label><label><FieldLabel>Affiliate URL</FieldLabel><Input name="affiliateUrl" defaultValue={current.affiliateUrl} required /></label><Button type="submit">Lưu brand</Button></form></EntityDetailCard> }
 export function BrandDeletePage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const brand = ctx.tenantBrands.find((item) => item.id === id); if (!brand) return <NotFoundEntity name="Brand / Offer" backPath="/brands" />; const current = brand; async function handleDelete() { await runEntityAction(ctx, async () => { await ctx.fetchJson<{ ok: boolean }>(`/brands/${current.id}`, { method: 'DELETE' }); navigate('/brands') }, 'Đã xóa brand/offer') } return <EntityDetailCard title={<><Trash2 size={18} /> Xóa brand / offer</>} description="Xác nhận xóa ở URL riêng." backPath="/brands"><div className="danger-zone"><p>Bạn sắp xóa <strong>{current.name}</strong>. Tracking links liên quan có thể bị xóa theo.</p><Button variant="destructive" onClick={() => void handleDelete()}><Trash2 size={16} /> Xác nhận xóa</Button></div></EntityDetailCard> }
 
-export function PrelandersPage({ ctx }: { ctx: DashboardContext }) {
-  return (<><StatusBanner status={ctx.status} /><section className="resource-page"><PageToolbar title={<><Layers3 size={18} /> Prelanders</>} description={`${ctx.tenantPrelanders.length} bridge pages. Quản lý ở các URL riêng.`} createPath="/prelanders/new" createLabel="Thêm prelander" /><Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Name</th><th>Headline</th><th>Theme</th><th>Delay</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantPrelanders.map((prelander) => <tr key={prelander.id}><td><strong>{prelander.name}</strong></td><td>{prelander.headline}</td><td>{prelander.theme}</td><td>{prelander.ctaDelaySeconds}s</td><td><Badge variant={prelander.isActive ? 'secondary' : 'outline'}>{prelander.isActive ? 'Active' : 'Inactive'}</Badge></td><td><ActionButtons detailPath={`/prelanders/${prelander.id}`} editPath={`/prelanders/${prelander.id}/edit`} deletePath={`/prelanders/${prelander.id}/delete`} /></td></tr>)}{!ctx.tenantPrelanders.length && <tr><td colSpan={6}>Chưa có prelander.</td></tr>}</tbody></table></div></CardContent></Card></section></>)
-}
-export function PrelanderCreatePage({ ctx }: { ctx: DashboardContext }) { const navigate = useNavigate(); return <section className="form-route"><CreatePrelanderCard ctx={ctx} onCreated={() => navigate('/prelanders')} /><Button asChild variant="outline"><NavLink to="/prelanders">Quay lại danh sách</NavLink></Button></section> }
-export function PrelanderDetailPage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const prelander = ctx.tenantPrelanders.find((item) => item.id === id); if (!prelander) return <NotFoundEntity name="Prelander" backPath="/prelanders" />; return <EntityDetailCard title={<><Layers3 size={18} /> {prelander.name}</>} description="Chi tiết prelander." backPath="/prelanders"><DetailGrid><DetailItem label="Prelander ID" value={prelander.id} /><DetailItem label="Headline" value={prelander.headline} /><DetailItem label="Body" value={prelander.body} /><DetailItem label="CTA" value={prelander.ctaText} /><DetailItem label="Delay" value={`${prelander.ctaDelaySeconds}s`} /><DetailItem label="Theme" value={prelander.theme} /><DetailItem label="Created" value={formatDate(prelander.createdAt)} /></DetailGrid></EntityDetailCard> }
-export function PrelanderEditPage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const prelander = ctx.tenantPrelanders.find((item) => item.id === id); if (!prelander) return <NotFoundEntity name="Prelander" backPath="/prelanders" />; const current = prelander; async function handleSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); await runEntityAction(ctx, async () => { await ctx.fetchJson<Prelander>(`/prelanders/${current.id}`, { method: 'PUT', body: JSON.stringify({ name: getFormString(form, 'name'), headline: getFormString(form, 'headline'), body: getFormString(form, 'body'), ctaText: getFormString(form, 'ctaText'), ctaDelaySeconds: Number(form.get('ctaDelaySeconds') ?? 0), theme: getFormString(form, 'theme'), isActive: form.get('isActive') === 'on' }) }); navigate('/prelanders') }, 'Đã cập nhật prelander') } return <EntityDetailCard title={<><Pencil size={18} /> Sửa prelander</>} description="Cập nhật prelander ở trang riêng." backPath="/prelanders"><form className="route-form" onSubmit={(event) => void handleSubmit(event)}><label><FieldLabel>Name</FieldLabel><Input name="name" defaultValue={current.name} required /></label><label><FieldLabel>Headline</FieldLabel><Input name="headline" defaultValue={current.headline} required /></label><label><FieldLabel>Body</FieldLabel><Input name="body" defaultValue={current.body} required /></label><label><FieldLabel>CTA text</FieldLabel><Input name="ctaText" defaultValue={current.ctaText} /></label><label><FieldLabel>Delay seconds</FieldLabel><Input name="ctaDelaySeconds" type="number" min="0" defaultValue={current.ctaDelaySeconds} /></label><label><FieldLabel>Theme</FieldLabel><Select name="theme" defaultValue={current.theme}><option value="clean">Clean</option><option value="dark">Dark</option><option value="warm">Warm</option></Select></label><label className="checkbox"><input name="isActive" type="checkbox" defaultChecked={current.isActive} /> Active</label><Button type="submit">Lưu prelander</Button></form></EntityDetailCard> }
-export function PrelanderDeletePage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const prelander = ctx.tenantPrelanders.find((item) => item.id === id); if (!prelander) return <NotFoundEntity name="Prelander" backPath="/prelanders" />; const current = prelander; async function handleDelete() { await runEntityAction(ctx, async () => { await ctx.fetchJson<{ ok: boolean }>(`/prelanders/${current.id}`, { method: 'DELETE' }); navigate('/prelanders') }, 'Đã xóa prelander') } return <EntityDetailCard title={<><Trash2 size={18} /> Xóa prelander</>} description="Xác nhận xóa ở URL riêng." backPath="/prelanders"><div className="danger-zone"><p>Bạn sắp xóa <strong>{current.name}</strong>.</p><Button variant="destructive" onClick={() => void handleDelete()}><Trash2 size={16} /> Xác nhận xóa</Button></div></EntityDetailCard> }
-
 function getTrackingLinkWebhookFetchSample(link: TrackingLink) {
   const webhookUrl = getTrackingLinkWebhookUrl(link)
   return [
@@ -309,9 +301,79 @@ function getTrackingLinkWebhookFetchSample(link: TrackingLink) {
 }
 
 export function TrackingLinksPage({ ctx }: { ctx: DashboardContext }) {
-  return (<><StatusBanner status={ctx.status} /><section className="resource-page"><PageToolbar title={<><Link2 size={18} /> Tracking links</>} description={`${ctx.tenantTrackingLinks.length} shortlinks. Quản lý ở các URL riêng.`} createPath="/tracking-links/new" createLabel="Thêm link" /><TrackingLinksTable ctx={ctx} /></section></>)
+  return (<><StatusBanner status={ctx.status} /><section className="resource-page"><PageToolbar title={<><Link2 size={18} /> Tracking links</>} description={`${ctx.tenantTrackingLinks.length} shortlinks · ${ctx.tenantPrelanders.length} bridge pages. Quản lý link và bridge page tại đây.`} createPath="/tracking-links/new" createLabel="Thêm link" /><TrackingLinksTable ctx={ctx} /><TrackingLinkBridgePagesPanel ctx={ctx} /></section></>)
 }
-export function TrackingLinksTable({ ctx }: { ctx: DashboardContext }) { return <Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Slug</th><th>Campaign</th><th>Affiliate platform</th><th>Affiliate URL</th><th>Shortlink</th><th>Click webhook</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantTrackingLinks.map((link) => <tr key={link.id}><td><strong>{link.slug}</strong></td><td>{link.campaign?.name ?? getCampaignName(ctx, link.campaignId)}</td><td>{link.affiliatePlatform?.name ?? link.affiliatePlatformId}</td><td><CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">Open <ExternalLink size={13} /></a></CopyableValue></td><td><CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkPath(link)} <ExternalLink size={13} /></a></CopyableValue></td><td><CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookPath(link)}</code></CopyableValue></td><td><Badge variant={link.isActive ? 'secondary' : 'outline'}>{link.isActive ? 'Active' : 'Inactive'}</Badge></td><td><ActionButtons detailPath={`/tracking-links/${link.id}`} editPath={`/tracking-links/${link.id}/edit`} deletePath={`/tracking-links/${link.id}/delete`} /></td></tr>)}{!ctx.tenantTrackingLinks.length && <tr><td colSpan={8}>Chưa có tracking link.</td></tr>}</tbody></table></div></CardContent></Card> }
+export function TrackingLinksTable({ ctx }: { ctx: DashboardContext }) { return <Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Slug</th><th>Campaign</th><th>Affiliate platform</th><th>Affiliate URL</th><th>Bridge page</th><th>Shortlink</th><th>Click webhook</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantTrackingLinks.map((link) => <tr key={link.id}><td><strong>{link.slug}</strong></td><td>{link.campaign?.name ?? getCampaignName(ctx, link.campaignId)}</td><td>{link.affiliatePlatform?.name ?? link.affiliatePlatformId}</td><td><CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">Open <ExternalLink size={13} /></a></CopyableValue></td><td>{link.prelander?.name ?? (link.prelanderEnabled ? 'Không chọn' : 'Disabled')}</td><td><CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkPath(link)} <ExternalLink size={13} /></a></CopyableValue></td><td><CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookPath(link)}</code></CopyableValue></td><td><Badge variant={link.isActive ? 'secondary' : 'outline'}>{link.isActive ? 'Active' : 'Inactive'}</Badge></td><td><ActionButtons detailPath={`/tracking-links/${link.id}`} editPath={`/tracking-links/${link.id}/edit`} deletePath={`/tracking-links/${link.id}/delete`} /></td></tr>)}{!ctx.tenantTrackingLinks.length && <tr><td colSpan={9}>Chưa có tracking link.</td></tr>}</tbody></table></div></CardContent></Card> }
+
+function TrackingLinkBridgePagesPanel({ ctx }: { ctx: DashboardContext }) {
+  const [editingPrelanderId, setEditingPrelanderId] = useState<string | null>(null)
+  const editingPrelander = ctx.tenantPrelanders.find((item) => item.id === editingPrelanderId) ?? null
+  const getUsageCount = (prelanderId: string) => ctx.tenantTrackingLinks.filter((link) => link.prelanderId === prelanderId).length
+
+  async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!editingPrelander) return
+    const form = new FormData(event.currentTarget)
+
+    await runEntityAction(ctx, async () => {
+      await ctx.fetchJson<Prelander>(`/prelanders/${editingPrelander.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: getFormString(form, 'name'),
+          headline: getFormString(form, 'headline'),
+          body: getFormString(form, 'body'),
+          ctaText: getFormString(form, 'ctaText'),
+          ctaDelaySeconds: Number(form.get('ctaDelaySeconds') ?? 0),
+          theme: getFormString(form, 'theme'),
+          isActive: form.get('isActive') === 'on'
+        })
+      })
+      setEditingPrelanderId(null)
+    }, 'Đã cập nhật bridge page')
+  }
+
+  async function handleDelete(prelander: Prelander) {
+    if (!window.confirm(`Xóa bridge page "${prelander.name}"? Tracking links đang dùng sẽ chuyển về redirect thẳng.`)) return
+    await runEntityAction(ctx, async () => {
+      await ctx.fetchJson<{ ok: boolean }>(`/prelanders/${prelander.id}`, { method: 'DELETE' })
+      if (editingPrelanderId === prelander.id) setEditingPrelanderId(null)
+    }, 'Đã xóa bridge page')
+  }
+
+  return (
+    <div className="content-grid tracking-link-bridge-pages">
+      <CreatePrelanderCard ctx={ctx} />
+      <Card className="table-card">
+        <CardHeader className="section-heading">
+          <div>
+            <CardTitle><Layers3 size={18} /> Bridge pages</CardTitle>
+            <CardDescription>Tạo và quản lý bridge page/prelander để chọn trong từng tracking link.</CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="table-wrap"><table><thead><tr><th>Name</th><th>Headline</th><th>Theme</th><th>Delay</th><th>Used by</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantPrelanders.map((prelander) => <tr key={prelander.id}><td><strong>{prelander.name}</strong></td><td>{prelander.headline}</td><td>{prelander.theme}</td><td>{prelander.ctaDelaySeconds}s</td><td>{getUsageCount(prelander.id)} links</td><td><Badge variant={prelander.isActive ? 'secondary' : 'outline'}>{prelander.isActive ? 'Active' : 'Inactive'}</Badge></td><td><div className="row-actions"><Button variant="secondary" size="sm" type="button" onClick={() => setEditingPrelanderId(editingPrelanderId === prelander.id ? null : prelander.id)}><Pencil size={14} /> {editingPrelanderId === prelander.id ? 'Hủy' : 'Sửa'}</Button><Button variant="destructive" size="sm" type="button" onClick={() => void handleDelete(prelander)}><Trash2 size={14} /> Xóa</Button></div></td></tr>)}{!ctx.tenantPrelanders.length && <tr><td colSpan={7}>Chưa có bridge page.</td></tr>}</tbody></table></div>
+        </CardContent>
+      </Card>
+      {editingPrelander && (
+        <Card className="form-card">
+          <CardHeader><CardTitle><Pencil size={18} /> Sửa bridge page</CardTitle><CardDescription>Cập nhật bridge page đang được dùng trong Tracking Links.</CardDescription></CardHeader>
+          <CardContent>
+            <form key={editingPrelander.id} onSubmit={(event) => void handleEditSubmit(event)}>
+              <label><FieldLabel>Name</FieldLabel><Input name="name" defaultValue={editingPrelander.name} required /></label>
+              <label><FieldLabel>Headline</FieldLabel><Input name="headline" defaultValue={editingPrelander.headline} required /></label>
+              <label><FieldLabel>Body</FieldLabel><Input name="body" defaultValue={editingPrelander.body} required /></label>
+              <label><FieldLabel>CTA text</FieldLabel><Input name="ctaText" defaultValue={editingPrelander.ctaText} /></label>
+              <label><FieldLabel>Delay seconds</FieldLabel><Input name="ctaDelaySeconds" type="number" min="0" defaultValue={editingPrelander.ctaDelaySeconds} /></label>
+              <label><FieldLabel>Theme</FieldLabel><Select name="theme" defaultValue={editingPrelander.theme}><option value="clean">Clean</option><option value="dark">Dark</option><option value="warm">Warm</option></Select></label>
+              <label className="checkbox"><input name="isActive" type="checkbox" defaultChecked={editingPrelander.isActive} /> Active</label>
+              <Button type="submit">Lưu bridge page</Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}
 export function TrackingLinkCreatePage({ ctx }: { ctx: DashboardContext }) { const navigate = useNavigate(); return <section className="form-route"><CreateTrackingLinkCard ctx={ctx} onCreated={() => navigate('/tracking-links')} /><Button asChild variant="outline"><NavLink to="/tracking-links">Quay lại danh sách</NavLink></Button></section> }
 export function TrackingLinkDetailPage({ ctx }: { ctx: DashboardContext }) {
   const { id = '' } = useParams()
@@ -325,7 +387,7 @@ export function TrackingLinkDetailPage({ ctx }: { ctx: DashboardContext }) {
         <DetailItem label="Campaign" value={link.campaign?.name ?? getCampaignName(ctx, link.campaignId)} />
         <DetailItem label="Affiliate platform" value={link.affiliatePlatform?.name ?? link.affiliatePlatformId} />
         <DetailItem label="Affiliate URL" value={<CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">{link.affiliateUrl}</a></CopyableValue>} />
-        <DetailItem label="Prelander" value={link.prelander?.name ?? (link.prelanderEnabled ? 'Default bridge' : 'Disabled')} />
+        <DetailItem label="Bridge page" value={link.prelander?.name ?? (link.prelanderEnabled ? 'Không chọn' : 'Disabled')} />
         <DetailItem label="Shortlink" value={<CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkUrl(link)}</a></CopyableValue>} />
         <DetailItem label="Click webhook" value={<CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookUrl(link)}</code></CopyableValue>} />
         <DetailItem label="Webhook method" value="POST JSON" />
@@ -412,9 +474,9 @@ export function TrackingLinkEditPage({ ctx }: { ctx: DashboardContext }) {
         </label>
 
         <label>
-          <FieldLabel>Prelander</FieldLabel>
+          <FieldLabel>Bridge page (optional)</FieldLabel>
           <Select name="prelanderId" defaultValue={current.prelanderId ?? ''}>
-            <option value="">Default bridge</option>
+            <option value="">Không chọn bridge page</option>
             {ctx.tenantPrelanders.map((prelander) => (
               <option key={prelander.id} value={prelander.id}>{prelander.name}</option>
             ))}
@@ -427,7 +489,7 @@ export function TrackingLinkEditPage({ ctx }: { ctx: DashboardContext }) {
         </label>
 
         <label className="checkbox">
-          <input name="prelanderEnabled" type="checkbox" defaultChecked={current.prelanderEnabled} /> Prelander enabled
+          <input name="prelanderEnabled" type="checkbox" defaultChecked={current.prelanderEnabled} /> Enable bridge page
         </label>
         <label className="checkbox">
           <input name="isActive" type="checkbox" defaultChecked={current.isActive} /> Active

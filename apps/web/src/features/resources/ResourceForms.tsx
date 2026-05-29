@@ -215,26 +215,26 @@ export function CreatePrelanderCard({ ctx, onCreated }: CreateResourceCardProps)
           isActive: true
         })
       })
-      ctx.setStatus({ type: 'success', message: 'Đã tạo prelander' })
+      ctx.setStatus({ type: 'success', message: 'Đã tạo bridge page' })
       formElement.reset()
       await ctx.loadData()
       await onCreated?.()
     } catch (error) {
-      ctx.setStatus({ type: 'error', message: error instanceof Error ? error.message : 'Không tạo được prelander' })
+      ctx.setStatus({ type: 'error', message: error instanceof Error ? error.message : 'Không tạo được bridge page' })
     }
   }
 
   return (
     <Card className="form-card">
-      <CardHeader><CardTitle><Layers3 size={18} /> Create Prelander</CardTitle><CardDescription>Trang bridge/landing hiển thị trước khi redirect sang offer.</CardDescription></CardHeader>
+      <CardHeader><CardTitle><Layers3 size={18} /> Create Bridge Page</CardTitle><CardDescription>Trang bridge/landing hiển thị trước khi redirect sang Affiliate URL của tracking link.</CardDescription></CardHeader>
       <CardContent><form onSubmit={handleCreatePrelander}>
-        <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Bridge page VN" required disabled={!ctx.selectedTenant} /></label>
+        <label><FieldLabel>Bridge page name</FieldLabel><Input name="name" placeholder="Bridge page VN" required disabled={!ctx.selectedTenant} /></label>
         <label><FieldLabel>Headline</FieldLabel><Input name="headline" placeholder="Special offer is ready" required /></label>
         <label><FieldLabel>Body</FieldLabel><Input name="body" placeholder="Short trust-building message before redirect" required /></label>
         <label><FieldLabel>CTA text</FieldLabel><Input name="ctaText" defaultValue="Continue" /></label>
         <label><FieldLabel>Delay seconds</FieldLabel><Input name="ctaDelaySeconds" type="number" min="0" defaultValue="2" /></label>
         <label><FieldLabel>Theme</FieldLabel><Select name="theme" defaultValue="clean"><option value="clean">Clean</option><option value="dark">Dark</option><option value="warm">Warm</option></Select></label>
-        <Button type="submit" disabled={!ctx.selectedTenant}><Plus size={16} /> Create prelander</Button>
+        <Button type="submit" disabled={!ctx.selectedTenant}><Plus size={16} /> Create bridge page</Button>
       </form></CardContent>
     </Card>
   )
@@ -273,16 +273,16 @@ export function CreateTrackingLinkCard({ ctx, onCreated }: CreateResourceCardPro
     <Card id="links" className="form-card">
       <CardHeader>
         <CardTitle><Link2 size={18} /> Create Tracking Link</CardTitle>
-        <CardDescription>Shortlink ghi click rồi redirect sang Affiliate URL nhập trực tiếp trên link này.</CardDescription>
+        <CardDescription>Shortlink ghi click rồi redirect sang Affiliate URL; bridge page được quản lý ngay trong Tracking Links.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleCreateTrackingLink}>
           <label><FieldLabel>Campaign (optional)</FieldLabel><Select name="campaignId" defaultValue=""><option value="">Không chọn campaign</option>{ctx.tenantCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}</Select></label>
           <label><FieldLabel>Affiliate platform</FieldLabel><Select name="affiliatePlatformId" required disabled={!ctx.tenantAffiliatePlatforms.length}>{ctx.tenantAffiliatePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{platform.name}</option>)}</Select></label>
           <label><FieldLabel>Affiliate URL</FieldLabel><Input name="affiliateUrl" placeholder="https://example.com/campaign" required /></label>
-          <label><FieldLabel>Prelander</FieldLabel><Select name="prelanderId" defaultValue=""><option value="">Auto redirect / default bridge</option>{ctx.tenantPrelanders.map((prelander) => <option key={prelander.id} value={prelander.id}>{prelander.name}</option>)}</Select></label>
+          <label><FieldLabel>Bridge page (optional)</FieldLabel><Select name="prelanderId" defaultValue=""><option value="">Không chọn bridge page</option>{ctx.tenantPrelanders.map((prelander) => <option key={prelander.id} value={prelander.id}>{prelander.name}</option>)}</Select></label>
           <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="demo" required /></label>
-          <label className="checkbox"><input name="prelanderEnabled" type="checkbox" defaultChecked /> Enable prelander</label>
+          <label className="checkbox"><input name="prelanderEnabled" type="checkbox" defaultChecked /> Enable bridge page</label>
           <Button type="submit" disabled={!ctx.tenantAffiliatePlatforms.length}><Plus size={16} /> Create link</Button>
         </form>
       </CardContent>

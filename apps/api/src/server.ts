@@ -75,7 +75,6 @@ function getDefaultMenuFeatures() {
     { id: 'menu-campaigns', key: 'campaigns', path: '/campaigns', label: 'Campaigns', group: 'Platform', icon: 'Megaphone', sortOrder: 20, isCore: true },
     { id: 'menu-platforms', key: 'platforms', path: '/platforms', label: 'Affiliate Platforms', group: 'Platform', icon: 'Globe2', sortOrder: 30, isCore: true },
     { id: 'menu-datasets', key: 'datasets', path: '/datasets', label: 'Datasets', group: 'Platform', icon: 'ShieldCheck', sortOrder: 40, isCore: true },
-    { id: 'menu-prelanders', key: 'prelanders', path: '/prelanders', label: 'Prelanders', group: 'Tracking', icon: 'Layers3', sortOrder: 55, isCore: true },
     { id: 'menu-tracking-links', key: 'tracking-links', path: '/tracking-links', label: 'Tracking Links', group: 'Tracking', icon: 'Link2', sortOrder: 60, isCore: true },
     { id: 'menu-click-events', key: 'click-events', path: '/click-events', label: 'Click Events', group: 'Tracking', icon: 'MousePointerClick', badge: 'Manual', sortOrder: 70, isCore: true },
     { id: 'menu-activity-logs', key: 'activity-logs', path: '/logs', label: 'Activity Logs', group: 'Tracking', icon: 'ScrollText', sortOrder: 75, isCore: true },
@@ -86,7 +85,7 @@ function getDefaultMenuFeatures() {
     { id: 'menu-superadmin', key: 'superadmin', path: '/superadmin', label: 'Super Admin', group: 'Admin', icon: 'Crown', badge: 'Root', sortOrder: 1000, isCore: false }
   ]
 }
-async function ensureMenuFeaturesSeeded() { await prisma.menuFeature.updateMany({ where: { key: 'brands' }, data: { isActive: false, isCore: false } }); await Promise.all(getDefaultMenuFeatures().map((feature) => prisma.menuFeature.upsert({ where: { key: feature.key }, update: { ...feature, isActive: true }, create: feature }))) }
+async function ensureMenuFeaturesSeeded() { await prisma.menuFeature.updateMany({ where: { key: { in: ['brands', 'prelanders'] } }, data: { isActive: false, isCore: false } }); await Promise.all(getDefaultMenuFeatures().map((feature) => prisma.menuFeature.upsert({ where: { key: feature.key }, update: { ...feature, isActive: true }, create: feature }))) }
 async function ensureTenantCoreMenuGrants(tenantId: string) { await ensureMenuFeaturesSeeded(); const core = await prisma.menuFeature.findMany({ where: { isCore: true, isActive: true } }); await Promise.all(core.map((f) => prisma.tenantMenuGrant.upsert({ where: { tenantId_menuFeatureId: { tenantId, menuFeatureId: f.id } }, update: {}, create: { tenantId, menuFeatureId: f.id, isEnabled: true } }))) }
 function requireWebhookToken(queryToken: unknown, headerToken: unknown) { const token = getWebhookToken(queryToken, headerToken); if (!token) throw new Error('Webhook token is required'); return token }
 
