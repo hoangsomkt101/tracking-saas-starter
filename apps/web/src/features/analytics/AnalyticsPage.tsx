@@ -58,7 +58,7 @@ export function AnalyticsPage({ ctx }: { ctx: DashboardContext }) {
     <>
       <EventFiltersForm ctx={ctx} showStatus />
       <Card className="table-card"><CardHeader className="section-heading"><div><CardTitle><Download size={18} /> Export reports</CardTitle><CardDescription>Xuất CSV theo bộ lọc hiện tại.</CardDescription></div><div className="button-row"><Button type="button" variant="outline" size="sm" onClick={() => exportCsv('conversions')}>Conversions CSV</Button><Button type="button" variant="outline" size="sm" onClick={() => exportCsv('clicks')}>Clicks CSV</Button><Button type="button" variant="outline" size="sm" onClick={() => exportCsv('breakdown')}>Breakdown CSV</Button></div></CardHeader></Card>
-      <section className="stats-grid">{cards.map((card) => { const Icon = card.icon; return <Card key={card.label} className="stat-card"><CardHeader><CardDescription>{card.label}</CardDescription><div className="stat-icon accent-blue"><Icon size={17} /></div></CardHeader><CardContent><strong>{card.value}</strong><span>{card.hint}</span></CardContent></Card> })}</section>
+      <section className="stats-grid analytics-stats-grid">{cards.map((card) => { const Icon = card.icon; return <Card key={card.label} className="stat-card"><CardHeader><CardDescription>{card.label}</CardDescription><div className="stat-icon accent-blue"><Icon size={17} /></div></CardHeader><CardContent><strong>{card.value}</strong><span>{card.hint}</span></CardContent></Card> })}</section>
       <section className="single-page-grid">
         <FunnelChart steps={breakdown.funnel ?? []} />
         <PeriodComparisonCard comparison={breakdown.comparison} />

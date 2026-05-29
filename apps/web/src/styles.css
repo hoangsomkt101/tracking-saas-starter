@@ -4315,3 +4315,36 @@ th,
 .sidebar-toggle.sidebar-toggle:hover {
   box-shadow: none;
 }
+
+.analytics-stats-grid.analytics-stats-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.analytics-stats-grid .stat-card .space-y-1\.5.p-6 {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+}
+
+.analytics-stats-grid .stat-card .space-y-1\.5.p-6>*+* {
+  margin-top: 0;
+}
+
+@media (max-width: 1180px) {
+  .analytics-stats-grid.analytics-stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .analytics-stats-grid.analytics-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .analytics-stats-grid.analytics-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
