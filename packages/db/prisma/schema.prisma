@@ -28,7 +28,6 @@ model Tenant {
   slug              String         @unique
   publicKey         String         @unique @default(dbgenerated("substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)"))
   name              String
-  clickWebhookToken String         @default(uuid())
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 

@@ -17,7 +17,6 @@ Mục tiêu sản phẩm: giúp user tạo affiliate tracking workspace, quản 
   - Tracking Links
 - Click public đi qua redirect service `/r/:tenantKey/:slug`.
 - Conversion từ affiliate network đi vào API webhook `/affiliate-webhooks/:tenantId/:platformSlug?token=...`.
-- Custom click webhook có endpoint riêng theo tracking link `/click-webhooks/:tenantKey/:slug?token=...`.
 - Worker xử lý `click.created`, tạo/gửi CAPI PageView tới Meta/TikTok hoặc dry-run theo `CAPI_DRY_RUN`.
 - Superadmin quản lý billing plans và cấp/tắt menu/function theo tenant.
 
@@ -454,7 +453,6 @@ ClickEvent là dữ liệu gốc của tracking và attribution.
 ### Nguồn tạo ClickEvent
 
 - Redirect service khi visitor click shortlink `/r/:tenantKey/:slug`.
-- Custom click webhook theo từng tracking link `/click-webhooks/:tenantKey/:slug?token=...`.
 
 ### Dữ liệu capture
 
@@ -482,41 +480,6 @@ ClickEvent là dữ liệu gốc của tracking và attribution.
 | --- | --- | --- |
 | `GET` | `/click-events` | List click events gần nhất. |
 
-## 9. Custom Click Webhook
-
-### Mục đích
-
-Cho website/landing page ngoài gửi click event vào hệ thống mà không cần đi qua shortlink redirect.
-
-### Endpoint
-
-```txt
-POST /click-webhooks/:tenantKey/:slug?token=:clickWebhookToken
-```
-
-### Body hỗ trợ
-
-```json
-{
-  "clickUuid": "optional_uuid",
-  "fbclid": "...",
-  "ttclid": "...",
-  "fbp": "...",
-  "fbc": "...",
-  "ttp": "...",
-  "ip": "...",
-  "userAgent": "...",
-  "referrer": "...",
-  "metadata": {}
-}
-```
-
-Yêu cầu:
-
-- `tenantKey` là `Tenant.publicKey` hoặc `Tenant.id`.
-- `slug` nằm trên URL webhook nên body không cần gửi `slug` hoặc `trackingLinkId` nữa.
-- Có token đúng của tenant qua `?token=...` hoặc header `x-webhook-token`.
-- TrackingLink phải tồn tại, active, và endpoint sẽ tự gắn đúng Brand/Offer của link đó.
 
 ## 10. Affiliate Conversion Webhook
 
@@ -608,7 +571,6 @@ Hiển thị:
 - Tổng tracking links.
 - Tổng click events.
 - Workspace info.
-- Custom click webhook endpoint.
 - Biểu đồ demo theo dữ liệu hiện tại.
 
 ### Campaigns
@@ -737,7 +699,6 @@ Có:
 | `GET` | `/capi-events` | List recent CAPI delivery events. |
 | `GET` | `/conversion-events` | List recent affiliate conversion events. |
 | `GET` | `/analytics/summary` | Summary clicks/conversions/CAPI. |
-| `POST` | `/click-webhooks/:tenantKey/:slug?token=...` | Custom click webhook theo tracking link/brand. |
 | `GET/POST` | `/affiliate-webhooks/:tenantId/:platformSlug?token=...` | Affiliate conversion webhook. |
 
 ### Superadmin

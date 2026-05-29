@@ -6,7 +6,7 @@ import rateLimit from '@fastify/rate-limit'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import { Prisma, prisma, type User } from '@repo/db'
-import { createClickEventsQueue, createFbc, createRedisConnection, getSupportedAffiliatePlatform, getWebhookToken, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, normalizeHeaderValue, parseEnvList, requireSupportedAffiliatePlatform, resolveAffiliateEventName, validateHttpUrl, type AffiliateEventMatch, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
+import { createClickEventsQueue, createRedisConnection, getSupportedAffiliatePlatform, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, parseEnvList, requireSupportedAffiliatePlatform, resolveAffiliateEventName, validateHttpUrl, type AffiliateEventMatch, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
 
 const app = Fastify({ logger: true })
 await app.register(helmet, { contentSecurityPolicy: false })
@@ -31,7 +31,7 @@ function applyCorsHeaders(req: FastifyRequest, reply: FastifyReply) {
   reply
     .header('vary', 'Origin')
     .header('access-control-allow-methods', 'GET,POST,PUT,DELETE,OPTIONS')
-    .header('access-control-allow-headers', 'authorization,content-type,x-webhook-token,x-idempotency-key')
+    .header('access-control-allow-headers', 'authorization,content-type,x-idempotency-key')
     .header('access-control-max-age', '86400')
   if (origin && allowedCorsOrigins.has(origin)) reply.header('access-control-allow-origin', origin)
 }
@@ -54,7 +54,7 @@ function getAffiliatePlatformChoice(input: AnyRecord, fallback?: { name?: string
 function getAffiliatePlatformBaseData(definition: SupportedAffiliatePlatformDefinition) { return { trackingParamKey: definition.trackingParamKey, webhookMethod: definition.webhookMethod, defaultEventName: definition.defaultEventName, eventMapping: [] as Prisma.InputJsonValue } }
 function getBearerToken(req: FastifyRequest) { const h = req.headers.authorization; return h?.startsWith('Bearer ') ? h.slice('Bearer '.length).trim() : null }
 function isClerkConfigured() { return Boolean(process.env.CLERK_SECRET_KEY && !process.env.CLERK_SECRET_KEY.includes('your_clerk_secret_key') && !process.env.CLERK_SECRET_KEY.includes('replace_me')) }
-function isPublicRoute(req: FastifyRequest) { return req.url === '/health' || req.url === '/health/live' || req.url === '/health/ready' || req.url === '/metrics' || req.method === 'OPTIONS' || req.url.startsWith('/click-webhooks/') || req.url.startsWith('/affiliate-webhooks/') }
+function isPublicRoute(req: FastifyRequest) { return req.url === '/health' || req.url === '/health/live' || req.url === '/health/ready' || req.url === '/metrics' || req.method === 'OPTIONS' || req.url.startsWith('/affiliate-webhooks/') }
 
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_LIMIT = 25
@@ -88,7 +88,6 @@ function getDefaultMenuFeatures() {
 }
 async function ensureMenuFeaturesSeeded() { await prisma.menuFeature.updateMany({ where: { key: { in: ['brands', 'prelanders'] } }, data: { isActive: false, isCore: false } }); await Promise.all(getDefaultMenuFeatures().map((feature) => prisma.menuFeature.upsert({ where: { key: feature.key }, update: { ...feature, isActive: true }, create: feature }))) }
 async function ensureTenantCoreMenuGrants(tenantId: string) { await ensureMenuFeaturesSeeded(); const core = await prisma.menuFeature.findMany({ where: { isCore: true, isActive: true } }); await Promise.all(core.map((f) => prisma.tenantMenuGrant.upsert({ where: { tenantId_menuFeatureId: { tenantId, menuFeatureId: f.id } }, update: {}, create: { tenantId, menuFeatureId: f.id, isEnabled: true } }))) }
-function requireWebhookToken(queryToken: unknown, headerToken: unknown) { const token = getWebhookToken(queryToken, headerToken); if (!token) throw new Error('Webhook token is required'); return token }
 
 function getDefaultTenantName(clerkUser: Awaited<ReturnType<typeof clerk.users.getUser>>) { const fullName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ').trim(); const email = clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId); return fullName || email?.emailAddress || `User ${clerkUser.id}` }
 function getDefaultTenantSlug(clerkUser: Awaited<ReturnType<typeof clerk.users.getUser>>) { return toSlug(getDefaultTenantName(clerkUser)) || toSlug(clerkUser.id) || 'tenant' }
@@ -114,7 +113,7 @@ async function assertTenantAccess(userId: string, tenantId: string) { const tena
 function isSuperAdmin(user: User) { const emails = new Set([...parseEnvList(process.env.SUPERADMIN_EMAILS), ...parseEnvList(process.env.SUPER_ADMIN_EMAILS), ...parseEnvList(process.env.ADMIN_EMAILS)].map((x) => x.toLowerCase())); const ids = new Set([...parseEnvList(process.env.SUPERADMIN_CLERK_USER_IDS), ...parseEnvList(process.env.SUPER_ADMIN_CLERK_USER_IDS), ...parseEnvList(process.env.ADMIN_CLERK_USER_IDS)].map((x) => x.toLowerCase())); return Boolean((user.email && emails.has(user.email.toLowerCase())) || ids.has(user.clerkUserId.toLowerCase())) }
 function requireSuperAdmin(req: FastifyRequest) { const u = requireAuthenticated(req); if (!isSuperAdmin(u)) throw new Error('Super admin access denied'); return u }
 
-function serializeTenant<T extends { clickWebhookToken?: string | null }>(tenant: T) { return { ...tenant, clickWebhookToken: maskSecret(tenant.clickWebhookToken) } }
+function serializeTenant<T extends AnyRecord>(tenant: T) { return tenant }
 function serializeDataset<T extends { accessToken?: string | null }>(dataset: T) { return { ...dataset, accessToken: maskSecret(dataset.accessToken) } }
 function serializeAffiliatePlatform<T extends { webhookToken?: string | null; slug?: string | null; trackingParamKey?: string | null; name?: string | null }>(platform: T) { const definition = getSupportedAffiliatePlatform(platform.slug ?? '') ?? getSupportedAffiliatePlatform(platform.trackingParamKey ?? '') ?? getSupportedAffiliatePlatform(platform.name ?? ''); return { ...platform, platformKey: definition?.key ?? null, platformLabel: definition?.label ?? platform.name ?? null, webhookToken: maskSecret(platform.webhookToken) } }
 function serializeClick(e: AnyRecord) { return { ...e, id: e.id.toString() } }
@@ -314,8 +313,6 @@ app.put('/superadmin/tenants/:id/menu-features', async (req, reply) => { require
 app.put('/superadmin/tenants/:id/billing-plan', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const billingPlanId = requireString((req.body as AnyRecord).billingPlanId, 'billingPlanId'); const [tenant, plan] = await Promise.all([prisma.tenant.findUnique({ where: { id } }), prisma.billingPlan.findUnique({ where: { id: billingPlanId } })]); if (!tenant) return reply.code(404).send({ error: 'Tenant not found' }); if (!plan) return reply.code(404).send({ error: 'Billing plan not found' }); return prisma.tenant.update({ where: { id }, data: { billingPlanId }, include: { billingPlan: true } }) })
 
 app.get('/tenants', async (req) => { const u = requireAuthenticated(req); const tenants = await prisma.tenant.findMany({ where: { ownerUserId: u.id }, include: { billingPlan: true, menuGrants: { where: { isEnabled: true, menuFeature: { isActive: true } }, include: { menuFeature: true }, orderBy: { menuFeature: { sortOrder: 'asc' } } } }, orderBy: { createdAt: 'desc' } }); return tenants.map(serializeTenant) })
-app.get('/tenants/:id/click-webhook-token', async (req) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; const tenant = await assertTenantAccess(u.id, id); return { clickWebhookToken: tenant.clickWebhookToken } })
-app.post('/tenants/:id/click-webhook-token/rotate', async (req) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; await assertTenantAccess(u.id, id); const tenant = serializeTenant(await prisma.tenant.update({ where: { id }, data: { clickWebhookToken: randomUUID() } })); await createActivityLog({ tenantId: id, source: 'api', eventType: 'tenant.click_webhook_token_rotated', message: 'Click webhook token was rotated', entityType: 'tenant', entityId: id, metadata: { actorUserId: u.id } }); return tenant })
 
 const trackingLinkInclude = { tenant: true, campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } as const
 const campaignInclude = { tenant: true, datasets: { include: { dataset: true }, orderBy: { createdAt: 'asc' as const } }, trackingLinks: { include: trackingLinkInclude, orderBy: { createdAt: 'desc' as const } } }
@@ -471,65 +468,6 @@ app.put('/tracking-links/:id', async (req, reply) => {
 app.delete('/tracking-links/:id', async (req, reply) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; if (!await prisma.trackingLink.findFirst({ where: { id, tenant: { ownerUserId: u.id } } })) return reply.code(404).send({ error: 'Tracking link not found' }); await prisma.trackingLink.delete({ where: { id } }); return { ok: true } })
 
 async function enqueueClick(clickEvent: { id: bigint; clickUuid: string; tenantId: string; trackingLinkId: string }, eventName?: string, source: 'click' | 'affiliate_conversion' = 'click', sourceId?: string) { await clickEventsQueue.add('click.created', { clickEventId: clickEvent.id.toString(), clickUuid: clickEvent.clickUuid, tenantId: clickEvent.tenantId, trackingLinkId: clickEvent.trackingLinkId, eventName, source, sourceId }, { jobId: sourceId ? `${clickEvent.clickUuid}-${sourceId}` : clickEvent.clickUuid }) }
-function getSafeMetadata(value: unknown): AnyRecord { return value && typeof value === 'object' && !Array.isArray(value) ? value as AnyRecord : {} }
-app.post('/click-webhooks/:tenantKey/:slug', { config: { rateLimit: { max: Number(process.env.PUBLIC_WEBHOOK_RATE_LIMIT_MAX ?? 120), timeWindow: process.env.PUBLIC_WEBHOOK_RATE_LIMIT_WINDOW ?? '1 minute' } } }, async (req, reply) => {
-  const { tenantKey, slug } = req.params as { tenantKey: string; slug: string }
-  const q = req.query as AnyRecord
-  const b = (req.body ?? {}) as AnyRecord
-  const token = requireWebhookToken(q.token, req.headers['x-webhook-token'])
-  const trackingLink = await prisma.trackingLink.findFirst({
-    where: { slug, tenant: { OR: [{ id: tenantKey }, { publicKey: tenantKey }], clickWebhookToken: token } },
-    include: { tenant: true, campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } }
-  })
-  if (!trackingLink?.isActive) return reply.code(404).send({ error: 'Click webhook not found' })
-
-  await assertBillingLimit(trackingLink.tenantId, 'clicks')
-  const fbclid = optionalString(b.fbclid)
-  const ttclid = optionalString(b.ttclid)
-  const clickEvent = await prisma.clickEvent.create({
-    data: {
-      tenantId: trackingLink.tenantId,
-      campaignId: trackingLink.campaignId ?? null,
-      trackingLinkId: trackingLink.id,
-      clickUuid: optionalString(b.clickUuid) ?? randomUUID(),
-      ip: optionalString(b.ip) ?? req.ip,
-      userAgent: optionalString(b.userAgent) ?? normalizeHeaderValue(req.headers['user-agent']),
-      referrer: optionalString(b.referrer) ?? normalizeHeaderValue(req.headers.referer),
-      fbp: optionalString(b.fbp),
-      fbc: optionalString(b.fbc) ?? createFbc(fbclid),
-      ttp: optionalString(b.ttp),
-      ttclid,
-      fbclid,
-      metadata: compactRecord({
-        ...getSafeMetadata(b.metadata),
-        tenantKey,
-        tenantId: trackingLink.tenantId,
-        campaignId: trackingLink.campaignId,
-        campaign: trackingLink.campaign?.name,
-        trackingLinkId: trackingLink.id,
-        slug: trackingLink.slug,
-        brandId: trackingLink.brandId,
-        brand: trackingLink.brand?.name,
-        source: 'tracking_link_webhook',
-        affiliatePlatform: trackingLink.affiliatePlatform.slug,
-        trackingParamKey: trackingLink.affiliatePlatform.trackingParamKey
-      }) as Prisma.InputJsonValue
-    }
-  })
-  await enqueueClick(clickEvent)
-  await createActivityLog({ tenantId: trackingLink.tenantId, source: 'click-webhook', eventType: 'click.created', message: `Click captured for tracking link "${trackingLink.slug}"`, entityType: 'clickEvent', entityId: clickEvent.id, metadata: { clickEventId: clickEvent.id, clickUuid: clickEvent.clickUuid, tenantKey, trackingLinkId: trackingLink.id, slug: trackingLink.slug, campaignId: trackingLink.campaignId, brandId: trackingLink.brandId, brand: trackingLink.brand?.name, affiliatePlatform: trackingLink.affiliatePlatform.slug, ip: clickEvent.ip, referrer: clickEvent.referrer, fbclid, ttclid, source: 'tracking_link_webhook' } })
-  return reply.code(201).send({
-    ok: true,
-    id: clickEvent.id.toString(),
-    clickUuid: clickEvent.clickUuid,
-    tenantId: clickEvent.tenantId,
-    trackingLinkId: clickEvent.trackingLinkId,
-    slug: trackingLink.slug,
-    brandId: trackingLink.brandId,
-    brand: trackingLink.brand?.name,
-    trackingParamKey: trackingLink.affiliatePlatform.trackingParamKey
-  })
-})
 
 app.get('/click-events', async (req) => { const u = requireAuthenticated(req); const q = req.query as AnyRecord; const tenantId = optionalQueryString(q.tenantId); if (tenantId) await assertTenantAccess(u.id, tenantId); const where = buildClickEventWhere(u.id, q); const include = { campaign: true, trackingLink: { include: { affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } }; if (!wantsPaginatedResponse(q)) return (await prisma.clickEvent.findMany({ where, include, orderBy: { createdAt: 'desc' }, take: 100 })).map(serializeClick); const pagination = parsePagination(q); const [rows, total] = await Promise.all([prisma.clickEvent.findMany({ where, include, orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.take }), prisma.clickEvent.count({ where })]); return makePaginatedResponse(rows.map(serializeClick), total, pagination) })
 app.get('/capi-events', async (req) => { const u = requireAuthenticated(req); const q = req.query as AnyRecord; const tenantId = optionalQueryString(q.tenantId); if (tenantId) await assertTenantAccess(u.id, tenantId); const where = buildCapiEventWhere(u.id, q); const include = { clickEvent: { include: { campaign: true, trackingLink: { include: { affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } } } }; if (!wantsPaginatedResponse(q)) return (await prisma.capiEvent.findMany({ where, include, orderBy: { createdAt: 'desc' }, take: 100 })).map(serializeCapi); const pagination = parsePagination(q); const [rows, total] = await Promise.all([prisma.capiEvent.findMany({ where, include, orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.take }), prisma.capiEvent.count({ where })]); return makePaginatedResponse(rows.map(serializeCapi), total, pagination) })

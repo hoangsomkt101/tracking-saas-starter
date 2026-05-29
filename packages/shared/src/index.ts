@@ -163,15 +163,6 @@ export function maskSecret(value?: string | null, visiblePrefix = 6, visibleSuff
   return `${value.slice(0, visiblePrefix)}••••${value.slice(-visibleSuffix)}`
 }
 
-export function getWebhookToken(queryToken?: unknown, headerToken?: unknown) {
-  const token = typeof headerToken === 'string' && headerToken.trim()
-    ? headerToken
-    : typeof queryToken === 'string'
-      ? queryToken
-      : undefined
-
-  return token?.trim() || undefined
-}
 
 export function validateHttpUrl(value: string, field = 'url') {
   let url: URL

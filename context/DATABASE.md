@@ -70,7 +70,6 @@ erDiagram
     string billingPlanId FK_nullable
     string slug UK
     string name
-    string clickWebhookToken
     datetime createdAt
     datetime updatedAt
   }
@@ -297,11 +296,9 @@ Billing hiện là internal plan/level, chưa phải subscription payment provid
 
 Điểm enforce quota:
 
-- Custom click webhook API theo từng tracking link kiểm tra `clickLimit` trước khi tạo `ClickEvent`.
 - Affiliate webhook API kiểm tra `eapiEventLimit` trước khi tạo `AffiliateConversionEvent`.
 - Worker kiểm tra `capiEventLimit` trước khi tạo/upsert `CapiEvent`.
 
-Lưu ý: redirect service public `/r/:tenantId/:slug` hiện tạo click trực tiếp trong redirect app. Nếu cần quota click áp dụng cả redirect click, cần đảm bảo redirect service cũng gọi cùng logic quota hoặc đi qua API click webhook.
 
 ## Dynamic menu/function grant
 
@@ -360,7 +357,6 @@ Workspace chứa toàn bộ dữ liệu tracking của một user.
 | `billingPlanId` | Billing plan hiện tại của tenant, nullable. |
 | `slug` | Slug workspace, unique toàn hệ thống. |
 | `name` | Tên workspace. |
-| `clickWebhookToken` | Token riêng cho custom click webhook. |
 | `createdAt`, `updatedAt` | Audit timestamps. |
 
 Quan hệ chính:

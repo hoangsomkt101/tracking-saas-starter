@@ -1687,32 +1687,10 @@ label {
   padding-right: 2.8rem;
 }
 
-.webhook-sample-card,
-.api-key-card {
+.webhook-sample-card {
   margin-top: 1rem;
 }
 
-.api-key-panel {
-  display: grid;
-  gap: 1rem;
-}
-
-.api-key-workspace {
-  width: fit-content;
-}
-
-.api-key-input-row {
-  align-items: center;
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
-
-.api-key-actions,
-.api-key-usage {
-  display: grid;
-  gap: 0.75rem;
-}
 
 .content-grid {
   align-items: start;
@@ -3372,12 +3350,6 @@ tbody tr:last-child td {
   transform: none;
 }
 
-.api-key-input-row {
-  align-items: center;
-  display: grid;
-  gap: 0.75rem;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-}
 
 .mapping-sample-input,
 .webhook-code-sample,
@@ -3650,9 +3622,6 @@ tbody tr:last-child td {
   .support-contact-grid,
   .scheduler-form,
   .single-page-grid>.form-card form,
-  .api-key-input-row {
-    grid-template-columns: 1fr;
-  }
 
   .topbar-left,
   .topbar-actions,

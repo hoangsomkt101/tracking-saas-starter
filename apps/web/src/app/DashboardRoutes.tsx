@@ -6,7 +6,6 @@ import { AnalyticsPage } from '../features/analytics/AnalyticsPage'
 import { SuperAdminPage, SuperAdminUserManagePage } from '../features/admin/SuperAdminPages'
 import { ClickEventsPage } from '../features/events/EventPages'
 import { ActivityLogsPage } from '../features/logs/ActivityLogsPage'
-import { ApiKeysPage } from '../features/account/ApiKeysPage'
 import { SupportPage } from '../features/support/SupportPage'
 import { CampaignCreatePage, CampaignDeletePage, CampaignDetailPage, CampaignEditPage, CampaignsPage, DatasetCreatePage, DatasetDeletePage, DatasetDetailPage, DatasetEditPage, DatasetsPage, PlatformCreatePage, PlatformDeletePage, PlatformDetailPage, PlatformEditPage, PlatformsPage, TrackingLinkCreatePage, TrackingLinkDeletePage, TrackingLinkDetailPage, TrackingLinkEditPage, TrackingLinksPage } from '../features/resources/ResourcePages'
 import type { DashboardContext } from '../types/domain'
@@ -40,7 +39,6 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/logs" element={<FeatureGate ctx={ctx} featureKey="activity-logs"><ActivityLogsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/analytics" element={<FeatureGate ctx={ctx} featureKey="analytics"><AnalyticsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/billing" element={<FeatureGate ctx={ctx} featureKey="billing"><PlaceholderPage icon={WalletCards} title="Billing" description="Plan, usage quota và invoices." /></FeatureGate>} />
-      <Route path="/api-keys" element={<FeatureGate ctx={ctx} featureKey="api-keys"><ApiKeysPage ctx={ctx} /></FeatureGate>} />
       <Route path="/settings" element={<FeatureGate ctx={ctx} featureKey="settings"><PlaceholderPage icon={Settings} title="Settings" description="Workspace settings và tracking integrations." /></FeatureGate>} />
       <Route path="/support" element={<FeatureGate ctx={ctx} featureKey="support"><SupportPage /></FeatureGate>} />
       <Route path="/superadmin" element={<SuperAdminPage ctx={ctx} />} />

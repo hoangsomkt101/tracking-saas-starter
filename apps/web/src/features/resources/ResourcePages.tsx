@@ -45,13 +45,6 @@ function getTrackingLinkPath(link: TrackingLink) {
   return `/${link.slug}/${getTrackingTenantKey(link)}`
 }
 
-function getTrackingLinkWebhookUrl(link: TrackingLink) {
-  return `${apiBaseUrl}/click-webhooks/${getTrackingTenantKey(link)}/${link.slug}`
-}
-
-function getTrackingLinkWebhookPath(link: TrackingLink) {
-  return `/click-webhooks/${getTrackingTenantKey(link)}/${link.slug}`
-}
 
 async function copyToClipboard(ctx: DashboardContext, value: string, label = 'URL') {
   if (!value) return
@@ -250,60 +243,10 @@ export function BrandDetailPage({ ctx }: { ctx: DashboardContext }) { const { id
 export function BrandEditPage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const brand = ctx.tenantBrands.find((item) => item.id === id); if (!brand) return <NotFoundEntity name="Brand / Offer" backPath="/brands" />; const current = brand; async function handleSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); await runEntityAction(ctx, async () => { await ctx.fetchJson<Brand>(`/brands/${current.id}`, { method: 'PUT', body: JSON.stringify({ affiliatePlatformId: getFormString(form, 'affiliatePlatformId'), name: getFormString(form, 'name'), affiliateUrl: getFormString(form, 'affiliateUrl') }) }); navigate('/brands') }, 'Đã cập nhật brand/offer') } return <EntityDetailCard title={<><Pencil size={18} /> Sửa brand / offer</>} description="Brand/Offer chỉ quản lý thông tin offer; campaign được gắn ở từng tracking link." backPath="/brands"><form className="route-form" onSubmit={(event) => void handleSubmit(event)}><label><FieldLabel>Affiliate platform</FieldLabel><Select name="affiliatePlatformId" defaultValue={current.affiliatePlatformId}>{ctx.tenantAffiliatePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{platform.name}</option>)}</Select></label><label><FieldLabel>Name</FieldLabel><Input name="name" defaultValue={current.name} required /></label><label><FieldLabel>Affiliate URL</FieldLabel><Input name="affiliateUrl" defaultValue={current.affiliateUrl} required /></label><Button type="submit">Lưu brand</Button></form></EntityDetailCard> }
 export function BrandDeletePage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const brand = ctx.tenantBrands.find((item) => item.id === id); if (!brand) return <NotFoundEntity name="Brand / Offer" backPath="/brands" />; const current = brand; async function handleDelete() { await runEntityAction(ctx, async () => { await ctx.fetchJson<{ ok: boolean }>(`/brands/${current.id}`, { method: 'DELETE' }); navigate('/brands') }, 'Đã xóa brand/offer') } return <EntityDetailCard title={<><Trash2 size={18} /> Xóa brand / offer</>} description="Xác nhận xóa ở URL riêng." backPath="/brands"><div className="danger-zone"><p>Bạn sắp xóa <strong>{current.name}</strong>. Tracking links liên quan có thể bị xóa theo.</p><Button variant="destructive" onClick={() => void handleDelete()}><Trash2 size={16} /> Xác nhận xóa</Button></div></EntityDetailCard> }
 
-function getTrackingLinkWebhookFetchSample(link: TrackingLink) {
-  const webhookUrl = getTrackingLinkWebhookUrl(link)
-  return [
-    `const webhookUrl = '${webhookUrl}'`,
-    "const webhookToken = 'YOUR_WORKSPACE_CLICK_WEBHOOK_TOKEN'",
-    '',
-    'function getCookie(name) {',
-    '  const value = document.cookie',
-    "    .split('; ')",
-    "    .find((row) => row.startsWith(name + '='))",
-    "    ?.split('=')[1]",
-    '',
-    '  return value ? decodeURIComponent(value) : undefined',
-    '}',
-    '',
-    'async function sendClickWebhook() {',
-    '  const params = new URLSearchParams(window.location.search)',
-    '  const payload = {',
-    '    // clickUuid: crypto.randomUUID(), // optional; bỏ dòng này để hệ thống tự sinh UUID',
-    "    fbclid: params.get('fbclid') || undefined,",
-    "    ttclid: params.get('ttclid') || undefined,",
-    "    fbp: getCookie('_fbp'),",
-    "    fbc: getCookie('_fbc'),",
-    "    ttp: getCookie('_ttp'),",
-    '    userAgent: navigator.userAgent,',
-    '    referrer: document.referrer || undefined,',
-    '    metadata: {',
-    "      source: 'tracking-link-fetch',",
-    '      pageUrl: window.location.href',
-    '    }',
-    '  }',
-    '',
-    '  const response = await fetch(webhookUrl, {',
-    "    method: 'POST',",
-    '    headers: {',
-    "      'Content-Type': 'application/json',",
-    "      'x-webhook-token': webhookToken",
-    '    },',
-    '    body: JSON.stringify(payload)',
-    '  })',
-    '',
-    '  const data = await response.json().catch(() => ({}))',
-    "  if (!response.ok) throw new Error(data.error || 'Click webhook failed')",
-    '  return data',
-    '}',
-    '',
-    'sendClickWebhook().then(console.log).catch(console.error)'
-  ].join('\n')
-}
-
 export function TrackingLinksPage({ ctx }: { ctx: DashboardContext }) {
   return (<><StatusBanner status={ctx.status} /><section className="resource-page"><PageToolbar title={<><Link2 size={18} /> Tracking links</>} description={`${ctx.tenantTrackingLinks.length} shortlinks. Bridge page nằm trực tiếp trong từng tracking link.`} createPath="/tracking-links/new" createLabel="Thêm link" /><TrackingLinksTable ctx={ctx} /></section></>)
 }
-export function TrackingLinksTable({ ctx }: { ctx: DashboardContext }) { return <Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Slug</th><th>Campaign</th><th>Affiliate platform</th><th>Affiliate URL</th><th>Bridge page</th><th>Shortlink</th><th>Click webhook</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantTrackingLinks.map((link) => <tr key={link.id}><td><strong>{link.slug}</strong></td><td>{link.campaign?.name ?? getCampaignName(ctx, link.campaignId)}</td><td>{link.affiliatePlatform?.name ?? link.affiliatePlatformId}</td><td><CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">Open <ExternalLink size={13} /></a></CopyableValue></td><td>{link.prelanderEnabled ? (link.prelanderTitle || link.prelanderHeadline || 'Enabled') : 'Disabled'}</td><td><CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkPath(link)} <ExternalLink size={13} /></a></CopyableValue></td><td><CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookPath(link)}</code></CopyableValue></td><td><Badge variant={link.isActive ? 'secondary' : 'outline'}>{link.isActive ? 'Active' : 'Inactive'}</Badge></td><td><ActionButtons detailPath={`/tracking-links/${link.id}`} editPath={`/tracking-links/${link.id}/edit`} deletePath={`/tracking-links/${link.id}/delete`} /></td></tr>)}{!ctx.tenantTrackingLinks.length && <tr><td colSpan={9}>Chưa có tracking link.</td></tr>}</tbody></table></div></CardContent></Card> }
+export function TrackingLinksTable({ ctx }: { ctx: DashboardContext }) { return <Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Slug</th><th>Campaign</th><th>Affiliate platform</th><th>Affiliate URL</th><th>Bridge page</th><th>Shortlink</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantTrackingLinks.map((link) => <tr key={link.id}><td><strong>{link.slug}</strong></td><td>{link.campaign?.name ?? getCampaignName(ctx, link.campaignId)}</td><td>{link.affiliatePlatform?.name ?? link.affiliatePlatformId}</td><td><CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">Open <ExternalLink size={13} /></a></CopyableValue></td><td>{link.prelanderEnabled ? (link.prelanderTitle || link.prelanderHeadline || 'Enabled') : 'Disabled'}</td><td><CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkPath(link)} <ExternalLink size={13} /></a></CopyableValue></td><td><Badge variant={link.isActive ? 'secondary' : 'outline'}>{link.isActive ? 'Active' : 'Inactive'}</Badge></td><td><ActionButtons detailPath={`/tracking-links/${link.id}`} editPath={`/tracking-links/${link.id}/edit`} deletePath={`/tracking-links/${link.id}/delete`} /></td></tr>)}{!ctx.tenantTrackingLinks.length && <tr><td colSpan={8}>Chưa có tracking link.</td></tr>}</tbody></table></div></CardContent></Card> }
 
 export function TrackingLinkCreatePage({ ctx }: { ctx: DashboardContext }) { const navigate = useNavigate(); return <section className="form-route"><CreateTrackingLinkCard ctx={ctx} onCreated={() => navigate('/tracking-links')} /><Button asChild variant="outline"><NavLink to="/tracking-links">Quay lại danh sách</NavLink></Button></section> }
 export function TrackingLinkDetailPage({ ctx }: { ctx: DashboardContext }) {
@@ -325,27 +268,8 @@ export function TrackingLinkDetailPage({ ctx }: { ctx: DashboardContext }) {
         <DetailItem label="CTA" value={link.prelanderCtaText || 'Continue'} />
         <DetailItem label="Delay seconds" value={`${link.prelanderCtaDelaySeconds ?? 2}s`} />
         <DetailItem label="Shortlink" value={<CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkUrl(link)}</a></CopyableValue>} />
-        <DetailItem label="Click webhook" value={<CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookUrl(link)}</code></CopyableValue>} />
-        <DetailItem label="Webhook method" value="POST JSON" />
-        <DetailItem label="Required body" value="clickUuid optional; nếu không gửi hệ thống tự sinh UUID" />
-        <DetailItem label="Auth" value="Gửi token workspace qua query ?token=... hoặc header x-webhook-token" />
         <DetailItem label="Created" value={formatDate(link.createdAt)} />
       </DetailGrid>
-
-      <p className="form-hint">Payload không cần truyền slug/trackingLinkId nữa vì URL đã nằm dưới tracking link này. Có thể gửi thêm fbclid, ttclid, fbp, fbc, ttp, ip, userAgent, referrer, metadata.</p>
-
-      <Card className="form-card webhook-sample-card">
-        <CardHeader>
-          <CardTitle><Link2 size={18} /> Fetch sample (JS)</CardTitle>
-          <CardDescription>Dán mẫu này vào landing page/custom script. Thay <code>YOUR_WORKSPACE_CLICK_WEBHOOK_TOKEN</code> bằng token workspace hoặc chuyển token sang query <code>?token=...</code>.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="copyable-code-block">
-            <CopyIconButton ctx={ctx} value={getTrackingLinkWebhookFetchSample(link)} label="fetch sample" />
-            <pre className="webhook-code-sample">{getTrackingLinkWebhookFetchSample(link)}</pre>
-          </div>
-        </CardContent>
-      </Card>
     </EntityDetailCard>
   )
 }

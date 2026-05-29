@@ -23,7 +23,6 @@ Core tracking foundation is implemented.
 | Prelanders | CRUD, theme `clean/dark/warm`, CTA text, body, delay, active flag | Done | Simple template renderer; no drag/drop builder or custom domain/SEO yet. |
 | Tracking Links | CRUD, tenant-unique slug, brand/campaign linkage, optional prelander, active flag | Done | One tracking param appended to affiliate URL based on affiliate platform config. |
 | Redirect tracking | Public `/r/:tenantId/:slug`, click UUID generation, IP/UA/referrer/cookies/click IDs capture, CAPI queue enqueue | Done | Redirect service stays lightweight; no bot filtering/fraud scoring yet. |
-| Custom click webhook | `POST /click-webhooks/:tenantKey/:slug`, token auth, endpoint scoped to a tracking link/brand, custom click UUID and metadata | Done | Payload mapping is fixed to supported fields; no custom field mapper UI yet. |
 | CAPI pipeline | Redis/BullMQ queue, worker, dry-run by default, Meta/TikTok payload build, delivery status and attempts | Done | Event payload is basic; no advanced Meta/TikTok value/content/user-data mapping yet. |
 | Rate limiting / hardening | Fastify rate limits on API/redirect/public webhooks, Helmet, CORS allow-list | Done | No per-tenant adaptive throttling yet. |
 | Quota foundation | Click/CAPI/EAPI monthly quota checks against billing plan | Done | User-side billing usage page belongs Phase 3. |
@@ -32,7 +31,7 @@ Core tracking foundation is implemented.
 
 These are not blockers for MVP but are good hardening items:
 
-- [ ] Bot/fraud filtering for redirect and click webhook traffic.
+- [ ] Bot/fraud filtering for redirect traffic.
 - [ ] More complete cookie/user-data collection for CAPI quality.
 - [ ] Secret vault/KMS or encrypted columns for ad platform access tokens.
 - [ ] Custom domain support for redirect/prelander URLs.

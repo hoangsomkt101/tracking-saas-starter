@@ -44,7 +44,6 @@ export type Tenant = {
   name: string
   slug: string
   publicKey: string
-  clickWebhookToken: string
   billingPlanId?: string | null
   billingPlan?: BillingPlan | null
   menuGrants?: TenantMenuGrant[]
