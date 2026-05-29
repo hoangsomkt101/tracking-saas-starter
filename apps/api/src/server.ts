@@ -486,16 +486,16 @@ app.delete('/report-schedules/:id', async (req, reply) => { const u = requireAut
 
 app.route({
   method: ['GET', 'POST'],
-  url: '/affiliate-webhooks/:tenantId/:platformSlug',
+  url: '/affiliate-webhooks/:tenantKey/:platformSlug',
   config: { rateLimit: { max: Number(process.env.PUBLIC_WEBHOOK_RATE_LIMIT_MAX ?? 120), timeWindow: process.env.PUBLIC_WEBHOOK_RATE_LIMIT_WINDOW ?? '1 minute' } },
   handler: async (req, reply) => {
-    const p = req.params as { tenantId: string; platformSlug: string }
+    const p = req.params as { tenantKey: string; platformSlug: string }
     const q = req.query as AnyRecord
     const method = req.method.toUpperCase()
-    const platform = await prisma.affiliatePlatform.findFirst({ where: { tenantId: p.tenantId, slug: p.platformSlug, webhookToken: requireWebhookToken(q.token, req.headers['x-webhook-token']) } })
+    const platform = await prisma.affiliatePlatform.findFirst({ where: { slug: p.platformSlug, tenant: { OR: [{ id: p.tenantKey }, { publicKey: p.tenantKey }] } } })
     if (!platform) return reply.code(404).send({ error: 'Affiliate webhook not found' })
 
-    const payload = sanitizeWebhookPayload(normalizeAffiliateWebhookPayload(method === 'GET' ? { ...(req.query as AnyRecord) } : req.body ?? {}))
+    const payload = sanitizeWebhookPayload(normalizeAffiliateWebhookPayload(method === 'GET' ? { ...q } : req.body ?? {}))
     const clickUuid = extractClickUuid(payload, platform.trackingParamKey)
     const eventMatch = resolvePlatformEventName(platform, payload)
     const money = extractConversionMoney(payload)
