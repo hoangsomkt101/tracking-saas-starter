@@ -3512,3 +3512,500 @@ tbody tr:last-child td {
     height: 180px;
   }
 }
+
+/* Compose token pass: thinner typography, lighter strokes, compact controls */
+:root {
+  --compose-text-primary: 240 5% 26%;
+  --compose-text-secondary: 240 10% 3.9%;
+  --compose-text-tertiary: 240 4% 46%;
+  --compose-text-inverse: 0 0% 98%;
+  --compose-border-subtle: 240 5% 91%;
+  --compose-border-muted: 240 5% 94%;
+  --compose-surface-base: 0 0% 0%;
+  --compose-surface-muted: 0 0% 100%;
+  --compose-surface-strong: 240 4% 10%;
+  --compose-focus: 240 5.9% 10%;
+  --compose-stroke-width: 1px;
+  --compose-radius-xs: 4px;
+  --compose-radius-sm: 6px;
+  --compose-radius-md: 8px;
+  --compose-radius-lg: 12px;
+  color: hsl(var(--compose-text-primary));
+  font-family: Inter, "Inter Fallback", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+
+:root[data-theme="dark"] {
+  --compose-text-primary: 240 5% 84%;
+  --compose-text-secondary: 0 0% 98%;
+  --compose-text-tertiary: 240 5% 65%;
+  --compose-text-inverse: 240 10% 4%;
+  --compose-border-subtle: 240 4% 18%;
+  --compose-border-muted: 240 4% 14%;
+  --compose-surface-base: 0 0% 100%;
+  --compose-surface-muted: 240 10% 3.9%;
+  --compose-surface-strong: 0 0% 98%;
+  --compose-focus: 0 0% 98%;
+}
+
+body {
+  color: hsl(var(--compose-text-primary));
+  font-weight: 400;
+}
+
+.shadcn-theme,
+.shadcn-theme button,
+.shadcn-theme input,
+.shadcn-theme select,
+.shadcn-theme textarea {
+  font-family: inherit;
+  font-weight: 400;
+}
+
+.shadcn-theme svg {
+  stroke-width: 1.65;
+  color: currentColor;
+}
+
+.shadcn-theme button svg,
+.sidebar-link svg,
+.search-box svg,
+.heading-actions svg,
+.row-actions svg,
+.stat-icon svg,
+.workspace-logo svg,
+.upgrade-icon svg {
+  opacity: 0.76;
+  stroke-width: 1.55;
+}
+
+.shadcn-theme button:hover svg,
+.sidebar-link:hover svg,
+.sidebar-link.is-active svg {
+  opacity: 0.92;
+}
+
+.shadcn-theme .font-medium,
+.shadcn-theme .font-semibold {
+  font-weight: 500;
+}
+
+.shadcn-theme .text-sm {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.shadcn-theme .text-xs {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.shadcn-theme .border,
+.shadcn-theme .border-input,
+.workspace-switcher,
+.sidebar,
+.app-topbar,
+.search-box,
+.card,
+.stat-card,
+.overview-card,
+.workspace-card,
+.form-card,
+.table-card,
+.events-card,
+.filter-card,
+.page-card,
+.placeholder-card,
+.detail-card,
+.list-shell-card,
+.workspace-chip,
+.workspace-mini-stats>div,
+.campaign-dataset-summary,
+.feature-card-toggle,
+.support-contact-card,
+.business-info-card,
+.comparison-item,
+.activity-log-item,
+.event-rule-builder,
+.event-rule-card,
+.mapping-test-panel,
+.mapping-json-preview pre,
+.detail-grid pre,
+.webhook-code-sample,
+.bridge-fields,
+.danger-zone,
+th,
+td,
+.pagination-controls,
+.chart-footer,
+.workspace-metrics,
+.metrics-card-header {
+  border-color: hsl(var(--compose-border-subtle));
+  border-width: var(--compose-stroke-width);
+}
+
+:root[data-theme="dark"] .shadcn-theme .border,
+:root[data-theme="dark"] .shadcn-theme .border-input,
+:root[data-theme="dark"] .workspace-switcher,
+:root[data-theme="dark"] .sidebar,
+:root[data-theme="dark"] .app-topbar,
+:root[data-theme="dark"] .search-box,
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .stat-card,
+:root[data-theme="dark"] .overview-card,
+:root[data-theme="dark"] .workspace-card,
+:root[data-theme="dark"] .form-card,
+:root[data-theme="dark"] .table-card,
+:root[data-theme="dark"] .events-card,
+:root[data-theme="dark"] .filter-card,
+:root[data-theme="dark"] .page-card,
+:root[data-theme="dark"] .placeholder-card,
+:root[data-theme="dark"] .detail-card,
+:root[data-theme="dark"] .list-shell-card,
+:root[data-theme="dark"] .workspace-chip,
+:root[data-theme="dark"] .workspace-mini-stats>div,
+:root[data-theme="dark"] .campaign-dataset-summary,
+:root[data-theme="dark"] .feature-card-toggle,
+:root[data-theme="dark"] .support-contact-card,
+:root[data-theme="dark"] .business-info-card,
+:root[data-theme="dark"] .comparison-item,
+:root[data-theme="dark"] .activity-log-item,
+:root[data-theme="dark"] .event-rule-builder,
+:root[data-theme="dark"] .event-rule-card,
+:root[data-theme="dark"] .mapping-test-panel,
+:root[data-theme="dark"] .mapping-json-preview pre,
+:root[data-theme="dark"] .detail-grid pre,
+:root[data-theme="dark"] .webhook-code-sample,
+:root[data-theme="dark"] .bridge-fields,
+:root[data-theme="dark"] .danger-zone,
+:root[data-theme="dark"] th,
+:root[data-theme="dark"] td,
+:root[data-theme="dark"] .pagination-controls,
+:root[data-theme="dark"] .chart-footer,
+:root[data-theme="dark"] .workspace-metrics,
+:root[data-theme="dark"] .metrics-card-header {
+  border-color: hsl(var(--compose-border-subtle));
+}
+
+a,
+.sidebar-link,
+.workspace-switcher,
+button,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+.shadcn-theme .inline-flex {
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+.shadcn-theme .bg-primary,
+.sidebar-link.is-active,
+.workspace-logo,
+.landing-brand-mark,
+.feature-icon {
+  background-color: hsl(var(--compose-surface-strong));
+  color: hsl(var(--compose-text-inverse));
+}
+
+.shadcn-theme .text-primary-foreground,
+.shadcn-theme .text-destructive-foreground {
+  color: hsl(var(--compose-text-inverse));
+}
+
+.shadcn-theme .bg-secondary,
+.shadcn-theme .bg-accent,
+.nav-badge,
+.stat-icon,
+.accent-green,
+.accent-blue,
+.accent-violet,
+.accent-orange {
+  background-color: hsl(var(--muted) / 0.42);
+  color: hsl(var(--compose-text-primary));
+}
+
+.shadcn-theme .text-foreground,
+.field-label,
+.page-heading h1,
+.stat-card strong,
+.workspace-mini-stats strong,
+.workspace-chip strong,
+td,
+th strong,
+.detail-grid strong,
+.event-item strong,
+.activity-log-head strong {
+  color: hsl(var(--compose-text-secondary));
+}
+
+.shadcn-theme .text-muted-foreground,
+.page-heading p,
+.last-updated,
+.workspace-switcher span,
+.user-meta small,
+.sidebar-link,
+.nav-group p,
+.card p,
+.stat-card span,
+.chart-footer,
+.workspace-chip span,
+.workspace-mini-stats span,
+.workspace-metrics span,
+.form-hint,
+.checkbox,
+th,
+td small,
+td span,
+td code,
+.detail-grid span,
+.empty-state,
+.pagination-controls,
+.support-contact-card span,
+.business-info-card span,
+.activity-log-main span,
+.activity-log-main small,
+.event-item span,
+.event-item small {
+  color: hsl(var(--compose-text-tertiary));
+}
+
+.sidebar-link.is-active,
+.sidebar-link.is-active span,
+.sidebar-link.is-active svg {
+  color: hsl(var(--compose-text-inverse));
+}
+
+.workspace-switcher,
+.search-box,
+input[class*="rounded-md"],
+select[class*="rounded-md"],
+.mapping-sample-input {
+  border-radius: var(--compose-radius-sm);
+}
+
+.card,
+.stat-card,
+.overview-card,
+.workspace-card,
+.form-card,
+.table-card,
+.events-card,
+.filter-card,
+.page-card,
+.placeholder-card,
+.detail-card,
+.list-shell-card,
+.workspace-chip,
+.workspace-mini-stats>div,
+.support-contact-card,
+.business-info-card,
+.comparison-item,
+.activity-log-item,
+.event-rule-card,
+.mapping-test-panel,
+.empty-state,
+.status {
+  border-radius: var(--compose-radius-md);
+}
+
+.sidebar-upgrade-card,
+.tracking-preview-card,
+.landing-feature-card,
+.desire-metrics-card,
+.landing-cta-panel,
+.hero-card,
+.landing-sidebar-preview {
+  border-radius: var(--compose-radius-lg);
+}
+
+.shadcn-theme .rounded-md {
+  border-radius: var(--compose-radius-sm);
+}
+
+.shadcn-theme .rounded-xl {
+  border-radius: var(--compose-radius-md);
+}
+
+.app-shell,
+.main-panel,
+.sidebar,
+.app-topbar,
+.card,
+.stat-card,
+.overview-card,
+.workspace-card,
+.form-card,
+.table-card,
+.events-card,
+.filter-card,
+.page-card,
+.placeholder-card,
+.detail-card,
+.list-shell-card {
+  background: hsl(var(--background));
+}
+
+.sidebar-upgrade-card,
+.workspace-chip,
+.workspace-mini-stats>div,
+.campaign-dataset-summary,
+.feature-card-toggle,
+.support-contact-card,
+.business-info-card,
+.comparison-item,
+.activity-log-item,
+.event-rule-builder,
+.mapping-test-panel,
+.empty-state,
+th,
+.detail-row td,
+.webhook-code-sample,
+.mapping-sample-input,
+.mapping-json-preview pre,
+.detail-grid pre,
+.activity-log-metadata pre {
+  background: hsl(var(--muted) / 0.28);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible,
+.sidebar-link:focus-visible,
+.workspace-switcher:focus-visible {
+  outline: 2px solid hsl(var(--compose-focus));
+  outline-offset: 2px;
+}
+
+.shadcn-theme .focus-visible\:ring-2:focus-visible,
+.search-box:focus-within,
+input[class*="rounded-md"]:focus-visible,
+select[class*="rounded-md"]:focus-visible,
+.mapping-sample-input:focus {
+  box-shadow: 0 0 0 2px hsl(var(--compose-focus) / 0.10);
+}
+
+.shadcn-theme .disabled\:opacity-50:disabled,
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.48;
+}
+
+.page-heading h1 {
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 2rem;
+}
+
+.page-heading p {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.stat-card strong {
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+}
+
+.stat-card h3,
+.table-card h3,
+.form-card h3,
+.events-card h3,
+.filter-card h3,
+.overview-card h3,
+.workspace-card h3,
+.page-card h3 {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5rem;
+}
+
+.field-label,
+th,
+.nav-group p,
+.last-updated,
+.workspace-switcher span,
+.workspace-mini-stats span,
+.nav-badge {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.nav-group p,
+th,
+.comparison-item span {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.user-meta span,
+.workspace-switcher strong,
+.workspace-chip strong,
+.workspace-mini-stats strong,
+.detail-grid strong,
+td,
+.event-item strong,
+.activity-log-head strong,
+.support-contact-card strong {
+  font-weight: 400;
+}
+
+.shadcn-theme .h-8 {
+  height: 2rem;
+}
+
+.shadcn-theme .h-9,
+.shadcn-theme .h-10 {
+  height: 2.25rem;
+}
+
+.shadcn-theme .px-3,
+.shadcn-theme .px-4,
+.shadcn-theme .px-8 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+
+.sidebar-link {
+  min-height: 2.1rem;
+  padding: 0 0.5rem;
+}
+
+.app-topbar {
+  min-height: 3.25rem;
+}
+
+.search-box {
+  min-height: 2.1rem;
+}
+
+input[class*="rounded-md"],
+select[class*="rounded-md"] {
+  font-size: 1rem;
+  min-height: 2.25rem;
+}
+
+.chart-bars div,
+.funnel-bar span,
+.preview-funnel-row>div span,
+.event-dot {
+  background: hsl(var(--compose-text-secondary) / 0.78);
+}
+
+.table-wrap {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--compose-border-subtle)) transparent;
+}
