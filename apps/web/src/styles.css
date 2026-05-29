@@ -3349,16 +3349,46 @@ tbody tr:last-child td {
   font: 0.8rem/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
 }
 
-.copy-icon-button.copy-icon-button {
+.copy-icon-button.copy-icon-button,
+.sidebar-toggle.sidebar-toggle {
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 999px;
-  color: hsl(var(--muted-foreground));
-  height: 1.75rem;
-  width: 1.75rem;
+  box-shadow: none;
+  color: hsl(var(--compose-text-tertiary));
+}
+
+.copy-icon-button.copy-icon-button {
+  height: 1.65rem;
+  width: 1.65rem;
+}
+
+.sidebar-toggle.sidebar-toggle {
+  height: 2rem;
+  width: 2rem;
+}
+
+.copy-icon-button.copy-icon-button:hover,
+.sidebar-toggle.sidebar-toggle:hover {
+  background: hsl(var(--muted) / 0.32);
+  border-color: hsl(var(--compose-border-muted));
+  color: hsl(var(--compose-text-primary));
+}
+
+.copy-icon-button.copy-icon-button:active,
+.sidebar-toggle.sidebar-toggle:active {
+  background: hsl(var(--muted) / 0.48);
+  color: hsl(var(--compose-text-secondary));
 }
 
 .copyable-code-block .copy-icon-button {
-  background: hsl(var(--background) / 0.9);
-  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background) / 0.54);
+  border-color: transparent;
+}
+
+.copyable-code-block .copy-icon-button:hover {
+  background: hsl(var(--muted) / 0.36);
+  border-color: hsl(var(--compose-border-muted));
 }
 
 .auth-shell,
@@ -3674,20 +3704,22 @@ body {
   stroke-width: 1.15;
 }
 
-.copy-icon-button.copy-icon-button svg {
-  opacity: 0.62;
-  stroke-width: 1.05;
+.copy-icon-button.copy-icon-button svg,
+.sidebar-toggle.sidebar-toggle svg {
+  opacity: 0.54;
+  stroke-width: 1;
 }
 
 .shadcn-theme button:hover svg,
 .sidebar-link:hover svg,
 .sidebar-link.is-active svg {
-  opacity: 0.84;
+  opacity: 0.78;
 }
 
-.copy-icon-button.copy-icon-button:hover svg {
-  opacity: 0.78;
-  stroke-width: 1.1;
+.copy-icon-button.copy-icon-button:hover svg,
+.sidebar-toggle.sidebar-toggle:hover svg {
+  opacity: 0.68;
+  stroke-width: 1.05;
 }
 
 .shadcn-theme .font-medium,
