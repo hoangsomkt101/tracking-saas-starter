@@ -2459,14 +2459,14 @@ body {
 }
 
 .sidebar-link.is-active {
-  background: hsl(var(--foreground));
-  color: hsl(var(--background));
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
 }
 
 .sidebar-link.is-active .nav-badge {
-  background: hsl(var(--background) / 0.14);
-  border-color: hsl(var(--background) / 0.22);
-  color: hsl(var(--background));
+  background: hsl(var(--background) / 0.8);
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
 }
 
 .nav-badge {
@@ -3841,12 +3841,17 @@ button,
 }
 
 .shadcn-theme .bg-primary,
-.sidebar-link.is-active,
 .workspace-logo,
 .landing-brand-mark,
 .feature-icon {
   background-color: hsl(var(--compose-surface-strong));
   color: hsl(var(--compose-text-inverse));
+}
+
+.sidebar-link.is-active {
+  background-color: hsl(var(--muted) / 0.62);
+  box-shadow: inset 0 0 0 1px hsl(var(--compose-border-subtle));
+  color: hsl(var(--compose-text-secondary));
 }
 
 .shadcn-theme .text-primary-foreground,
@@ -3914,7 +3919,7 @@ td code,
 .sidebar-link.is-active,
 .sidebar-link.is-active span,
 .sidebar-link.is-active svg {
-  color: hsl(var(--compose-text-inverse));
+  color: hsl(var(--compose-text-secondary));
 }
 
 .workspace-switcher,
