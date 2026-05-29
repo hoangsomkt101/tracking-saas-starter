@@ -93,7 +93,7 @@ export function CampaignsPage({ ctx }: { ctx: DashboardContext }) {
     <>
       <StatusBanner status={ctx.status} />
       <section className="resource-page">
-        <PageToolbar title={<><Megaphone size={18} /> Campaign list</>} description={`${ctx.tenantCampaigns.length} campaigns. Tạo campaign chỉ cần tên, sau đó gắn tracking link và chọn nhiều Dataset trong detail.`} createPath="/campaigns/new" createLabel="Thêm campaign" />
+        <PageToolbar title={<><Megaphone size={18} /> Campaign list</>} description={`${ctx.tenantCampaigns.length} campaigns. Tạo campaign chỉ cần tên, sau đó chọn nhiều Dataset trong detail.`} createPath="/campaigns/new" createLabel="Thêm campaign" />
         <Card className="table-card"><CardContent><div className="table-wrap"><table>
           <thead><tr><th>Name</th><th>Tracking links</th><th>Datasets</th><th>ID</th><th>Created</th><th>Actions</th></tr></thead>
           <tbody>{ctx.tenantCampaigns.map((campaign) => <tr key={campaign.id}><td><strong>{campaign.name}</strong></td><td>{getCampaignTrackingLinks(ctx, campaign).length}</td><td>{getCampaignDatasetSummary(campaign)}</td><td>{campaign.id}</td><td>{formatDate(campaign.createdAt)}</td><td><ActionButtons detailPath={`/campaigns/${campaign.id}`} editPath={`/campaigns/${campaign.id}/edit`} deletePath={`/campaigns/${campaign.id}/delete`} /></td></tr>)}{!ctx.tenantCampaigns.length && <tr><td colSpan={6}>Chưa có campaign.</td></tr>}</tbody>
@@ -115,8 +115,6 @@ export function CampaignDetailPage({ ctx }: { ctx: DashboardContext }) {
 
   const currentCampaign = campaign
   const assignedTrackingLinks = getCampaignTrackingLinks(ctx, currentCampaign)
-  const assignedTrackingLinkIds = new Set(assignedTrackingLinks.map((link) => link.id))
-  const availableTrackingLinks = ctx.tenantTrackingLinks.filter((link) => !assignedTrackingLinkIds.has(link.id) && !link.campaignId)
   const selectedDatasetIds = new Set(getCampaignDatasets(currentCampaign).map((entry) => entry.datasetId))
   const datasetLimit = ctx.selectedTenant?.billingPlan?.campaignDatasetLimit ?? 2
 
@@ -129,26 +127,8 @@ export function CampaignDetailPage({ ctx }: { ctx: DashboardContext }) {
     }, 'Đã cập nhật dataset cho campaign')
   }
 
-  async function handleAddTrackingLink(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const formElement = event.currentTarget
-    const form = new FormData(formElement)
-    const trackingLinkId = getFormString(form, 'trackingLinkId')
-    if (!trackingLinkId) return
-    await runEntityAction(ctx, async () => {
-      await ctx.fetchJson<Campaign>(`/campaigns/${currentCampaign.id}/tracking-links`, { method: 'POST', body: JSON.stringify({ trackingLinkId }) })
-      formElement.reset()
-    }, 'Đã thêm tracking link vào campaign')
-  }
-
-  async function handleRemoveTrackingLink(trackingLinkId: string) {
-    await runEntityAction(ctx, async () => {
-      await ctx.fetchJson<Campaign>(`/campaigns/${currentCampaign.id}/tracking-links/${trackingLinkId}`, { method: 'DELETE' })
-    }, 'Đã gỡ tracking link khỏi campaign')
-  }
-
   return (
-    <EntityDetailCard title={<><Megaphone size={18} /> {currentCampaign.name}</>} description="Quản lý campaign: gắn tracking link và chọn nhiều Dataset theo limit của gói tài khoản." backPath="/campaigns">
+    <EntityDetailCard title={<><Megaphone size={18} /> {currentCampaign.name}</>} description="Quản lý campaign: chọn nhiều Dataset theo limit của gói tài khoản." backPath="/campaigns">
       <DetailGrid>
         <DetailItem label="Campaign ID" value={currentCampaign.id} />
         <DetailItem label="Workspace ID" value={currentCampaign.tenantId} />
@@ -157,50 +137,34 @@ export function CampaignDetailPage({ ctx }: { ctx: DashboardContext }) {
         <DetailItem label="Created" value={formatDate(currentCampaign.createdAt)} />
       </DetailGrid>
 
-      <div className="single-page-grid">
-        <Card className="form-card">
-          <CardHeader>
-            <CardTitle><ShieldCheck size={18} /> Campaign datasets</CardTitle>
-            <CardDescription>Chọn dataset để worker gửi CAPI. Gói hiện tại cho phép tối đa {datasetLimit} dataset/campaign.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form key={[...selectedDatasetIds].sort().join(':')} className="campaign-dataset-form" onSubmit={(event) => void handleDatasetSubmit(event)}>
-              <div className="campaign-dataset-summary">
-                <strong>{selectedDatasetIds.size}/{datasetLimit} dataset đang gắn</strong>
-                <span>Tích chọn các dataset cần dùng rồi bấm Lưu datasets. Nếu vượt limit, API sẽ báo lỗi theo gói tài khoản.</span>
-              </div>
-              <div className="feature-card-grid campaign-dataset-list">
-                {ctx.tenantDatasets.map((dataset) => {
-                  const isSelected = selectedDatasetIds.has(dataset.id)
-                  return (
-                    <label key={dataset.id} className={`feature-card-toggle dataset-card-toggle ${isSelected ? 'is-selected' : ''}`}>
-                      <input name="datasetIds" type="checkbox" value={dataset.id} defaultChecked={isSelected} />
-                      <span className="dataset-card-copy"><strong>{dataset.platform.toUpperCase()} · {dataset.name}</strong><small>Pixel ID: {dataset.pixelId} · {dataset.isActive ? 'Active' : 'Inactive'}</small></span>
-                      <Badge variant={isSelected ? 'secondary' : 'outline'}>{isSelected ? 'Đã chọn' : 'Chọn'}</Badge>
-                    </label>
-                  )
-                })}
-              </div>
-              {!ctx.tenantDatasets.length && <p className="empty-state">Chưa có dataset. Hãy tạo Dataset trước.</p>}
-              <Button type="submit" disabled={!ctx.tenantDatasets.length}>Lưu datasets</Button>
-            </form>
-          </CardContent>
-        </Card>
-
-        <Card className="form-card">
-          <CardHeader><CardTitle><Link2 size={18} /> Campaign tracking links</CardTitle><CardDescription>Tracking link có thể chọn campaign khi tạo/sửa, hoặc gắn trực tiếp vào campaign tại đây.</CardDescription></CardHeader>
-          <CardContent>
-            <form onSubmit={(event) => void handleAddTrackingLink(event)}>
-              <label><FieldLabel>Tracking link chưa gắn campaign</FieldLabel><Select name="trackingLinkId" required disabled={!availableTrackingLinks.length}>{availableTrackingLinks.map((link) => <option key={link.id} value={link.id}>{link.slug} · {link.brand?.name ?? link.brandId}</option>)}</Select></label>
-              <Button type="submit" disabled={!availableTrackingLinks.length}>Thêm tracking link</Button>
-            </form>
-            <div className="table-wrap"><table>
-              <thead><tr><th>Slug</th><th>Brand / Offer</th><th>Network</th><th>Shortlink</th><th>Actions</th></tr></thead>
-              <tbody>{assignedTrackingLinks.map((link) => <tr key={link.id}><td><strong>{link.slug}</strong></td><td>{link.brand?.name ?? link.brandId}</td><td>{link.brand?.affiliatePlatform?.name ?? link.brand?.affiliatePlatformId ?? '—'}</td><td><CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkPath(link)} <ExternalLink size={13} /></a></CopyableValue></td><td><Button variant="outline" size="sm" type="button" onClick={() => void handleRemoveTrackingLink(link.id)}>Gỡ khỏi campaign</Button></td></tr>)}{!assignedTrackingLinks.length && <tr><td colSpan={5}>Campaign chưa có tracking link.</td></tr>}</tbody>
-            </table></div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="form-card">
+        <CardHeader>
+          <CardTitle><ShieldCheck size={18} /> Campaign datasets</CardTitle>
+          <CardDescription>Chọn dataset để worker gửi CAPI. Gói hiện tại cho phép tối đa {datasetLimit} dataset/campaign.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form key={[...selectedDatasetIds].sort().join(':')} className="campaign-dataset-form" onSubmit={(event) => void handleDatasetSubmit(event)}>
+            <div className="campaign-dataset-summary">
+              <strong>{selectedDatasetIds.size}/{datasetLimit} dataset đang gắn</strong>
+              <span>Tích chọn các dataset cần dùng rồi bấm Lưu datasets. Nếu vượt limit, API sẽ báo lỗi theo gói tài khoản.</span>
+            </div>
+            <div className="feature-card-grid campaign-dataset-list">
+              {ctx.tenantDatasets.map((dataset) => {
+                const isSelected = selectedDatasetIds.has(dataset.id)
+                return (
+                  <label key={dataset.id} className={`feature-card-toggle dataset-card-toggle ${isSelected ? 'is-selected' : ''}`}>
+                    <input name="datasetIds" type="checkbox" value={dataset.id} defaultChecked={isSelected} />
+                    <span className="dataset-card-copy"><strong>{dataset.platform.toUpperCase()} · {dataset.name}</strong><small>Pixel ID: {dataset.pixelId} · {dataset.isActive ? 'Active' : 'Inactive'}</small></span>
+                    <Badge variant={isSelected ? 'secondary' : 'outline'}>{isSelected ? 'Đã chọn' : 'Chọn'}</Badge>
+                  </label>
+                )
+              })}
+            </div>
+            {!ctx.tenantDatasets.length && <p className="empty-state">Chưa có dataset. Hãy tạo Dataset trước.</p>}
+            <Button type="submit" disabled={!ctx.tenantDatasets.length}>Lưu datasets</Button>
+          </form>
+        </CardContent>
+      </Card>
     </EntityDetailCard>
   )
 }
@@ -219,7 +183,7 @@ export function CampaignEditPage({ ctx }: { ctx: DashboardContext }) {
       navigate('/campaigns')
     }, 'Đã cập nhật campaign')
   }
-  return <EntityDetailCard title={<><Pencil size={18} /> Sửa campaign</>} description="Campaign chỉ quản lý tên ở form sửa; datasets và tracking link nằm trong trang detail campaign." backPath="/campaigns"><form className="route-form" onSubmit={(event) => void handleSubmit(event)}><label><FieldLabel>Name</FieldLabel><Input name="name" defaultValue={currentCampaign.name} required /></label><Button type="submit">Lưu campaign</Button></form></EntityDetailCard>
+  return <EntityDetailCard title={<><Pencil size={18} /> Sửa campaign</>} description="Campaign chỉ quản lý tên ở form sửa; datasets nằm trong trang detail campaign." backPath="/campaigns"><form className="route-form" onSubmit={(event) => void handleSubmit(event)}><label><FieldLabel>Name</FieldLabel><Input name="name" defaultValue={currentCampaign.name} required /></label><Button type="submit">Lưu campaign</Button></form></EntityDetailCard>
 }
 
 export function CampaignDeletePage({ ctx }: { ctx: DashboardContext }) {
@@ -229,7 +193,7 @@ export function CampaignDeletePage({ ctx }: { ctx: DashboardContext }) {
   if (!campaign) return <NotFoundEntity name="Campaign" backPath="/campaigns" />
   const currentCampaign = campaign
   async function handleDelete() { await runEntityAction(ctx, async () => { await ctx.fetchJson<{ ok: boolean }>(`/campaigns/${currentCampaign.id}`, { method: 'DELETE' }); navigate('/campaigns') }, 'Đã xóa campaign') }
-  return <EntityDetailCard title={<><Trash2 size={18} /> Xóa campaign</>} description="Xác nhận xóa campaign ở URL riêng." backPath="/campaigns"><div className="danger-zone"><p>Bạn sắp xóa <strong>{currentCampaign.name}</strong>. Các link/click liên quan có thể bị xóa theo.</p><Button variant="destructive" onClick={() => void handleDelete()}><Trash2 size={16} /> Xác nhận xóa</Button></div></EntityDetailCard>
+  return <EntityDetailCard title={<><Trash2 size={18} /> Xóa campaign</>} description="Xác nhận xóa campaign ở URL riêng." backPath="/campaigns"><div className="danger-zone"><p>Bạn sắp xóa <strong>{currentCampaign.name}</strong>. Dataset assignments sẽ bị xóa và link/click liên quan sẽ được gỡ campaign.</p><Button variant="destructive" onClick={() => void handleDelete()}><Trash2 size={16} /> Xác nhận xóa</Button></div></EntityDetailCard>
 }
 
 export function PlatformsPage({ ctx }: { ctx: DashboardContext }) {

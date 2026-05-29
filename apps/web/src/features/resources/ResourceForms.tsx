@@ -47,12 +47,12 @@ export function CreateCampaignCard({ ctx, onCreated }: CreateResourceCardProps) 
     <Card id="campaigns" className="form-card">
       <CardHeader>
         <CardTitle><Megaphone size={18} /> Create Campaign</CardTitle>
-        <CardDescription>Nhóm tracking link theo chiến dịch, chọn dataset Meta/TikTok đã tạo.</CardDescription>
+        <CardDescription>Tạo chiến dịch để nhóm dữ liệu và chọn dataset Meta/TikTok đã tạo.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleCreateCampaign}>
           <label><FieldLabel>Campaign name</FieldLabel><Input name="campaignName" placeholder="Facebook VN" required disabled={!ctx.selectedTenant} /></label>
-          <p className="form-hint">Tạo campaign chỉ cần tên. Sau đó vào chi tiết campaign để thêm tracking link và chọn nhiều Dataset theo giới hạn gói tài khoản.</p>
+          <p className="form-hint">Tạo campaign chỉ cần tên. Sau đó vào chi tiết campaign để chọn nhiều Dataset theo giới hạn gói tài khoản.</p>
           <Button type="submit" disabled={!ctx.selectedTenant}><Plus size={16} /> Create campaign</Button>
         </form>
       </CardContent>
