@@ -55,7 +55,7 @@ export function AnalyticsPage({ ctx }: { ctx: DashboardContext }) {
   ]
 
   return (
-    <>
+    <div className="analytics-page-stack">
       <EventFiltersForm ctx={ctx} showStatus />
       <Card className="table-card"><CardHeader className="section-heading"><div><CardTitle><Download size={18} /> Export reports</CardTitle><CardDescription>Xuất CSV theo bộ lọc hiện tại.</CardDescription></div><div className="button-row"><Button type="button" variant="outline" size="sm" onClick={() => exportCsv('conversions')}>Conversions CSV</Button><Button type="button" variant="outline" size="sm" onClick={() => exportCsv('clicks')}>Clicks CSV</Button><Button type="button" variant="outline" size="sm" onClick={() => exportCsv('breakdown')}>Breakdown CSV</Button></div></CardHeader></Card>
       <section className="stats-grid analytics-stats-grid">{cards.map((card) => { const Icon = card.icon; return <Card key={card.label} className="stat-card"><CardHeader><CardDescription>{card.label}</CardDescription><div className="stat-icon accent-blue"><Icon size={17} /></div></CardHeader><CardContent><strong>{card.value}</strong><span>{card.hint}</span></CardContent></Card> })}</section>
@@ -70,6 +70,6 @@ export function AnalyticsPage({ ctx }: { ctx: DashboardContext }) {
         <ReportSchedulesPanel ctx={ctx} />
         <Card className="table-card"><CardHeader><CardTitle><CircleDollarSign size={18} /> Conversion attribution</CardTitle><CardDescription>{ctx.conversionEventsPagination.total} affiliate/EAPI conversions · trang này {ctx.tenantConversionEvents.length} records.</CardDescription></CardHeader><CardContent><div className="table-wrap"><table><thead><tr><th>Network</th><th>Event</th><th>Click UUID</th><th>Attribution</th><th>Payout</th><th>Requests</th><th>Method</th><th>Created</th></tr></thead><tbody>{ctx.tenantConversionEvents.map((event) => <tr key={event.id}><td>{event.affiliatePlatform?.name ?? event.affiliatePlatformId}</td><td>{event.eventName ?? '—'}</td><td>{event.clickUuid ?? '—'}</td><td>{event.attribution?.matched ? <><Badge variant="secondary">Matched</Badge><br /><small>{event.attribution.campaign?.name ?? '—'} · {event.attribution.trackingLink?.slug ?? '—'} · {event.attribution.affiliatePlatform?.name ?? event.affiliatePlatform?.name ?? '—'}</small></> : <Badge variant="outline">Unattributed</Badge>}</td><td>{formatCurrencyAmount(event.payoutAmount ?? event.commissionAmount ?? event.spendAmount, event.currency ?? 'USD')}</td><td>{event.requestCount ?? 1}<br /><small>{event.idempotencyKey ? event.idempotencyKey.slice(0, 14) : '—'}</small></td><td>{event.receivedMethod}</td><td>{formatDate(event.createdAt)}</td></tr>)}{!ctx.tenantConversionEvents.length && <tr><td colSpan={8}>Chưa có conversion.</td></tr>}</tbody></table></div><PaginationControls meta={ctx.conversionEventsPagination} isLoading={ctx.isLoading} onPageChange={ctx.setConversionEventsPage} /></CardContent></Card>
       </section>
-    </>
+    </div>
   )
 }

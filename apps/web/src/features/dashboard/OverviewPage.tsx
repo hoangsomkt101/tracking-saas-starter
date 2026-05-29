@@ -28,7 +28,7 @@ export function OverviewPage({ ctx }: { ctx: DashboardContext }) {
   return (
     <>
       <StatusBanner status={ctx.status} />
-      <section className="stats-grid">
+      <section className="stats-grid dashboard-stats-grid">
         {stats.map((stat) => {
           const Icon = stat.icon
           return (
