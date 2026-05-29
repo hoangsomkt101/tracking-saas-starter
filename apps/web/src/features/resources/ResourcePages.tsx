@@ -1,6 +1,6 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { type FormEvent, type ReactNode } from 'react'
 import { NavLink, useNavigate, useParams } from 'react-router'
-import { Building2, Copy, ExternalLink, Globe2, Layers3, Link2, Megaphone, Pencil, ShieldCheck, Trash2 } from 'lucide-react'
+import { Building2, Copy, ExternalLink, Globe2, Link2, Megaphone, Pencil, ShieldCheck, Trash2 } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -9,12 +9,12 @@ import { Select } from '../../components/ui/select'
 import { ActionButtons, DetailGrid, DetailItem, EntityDetailCard, NotFoundEntity, PageToolbar } from '../../components/common/EntityScaffold'
 import { FieldLabel } from '../../components/common/FieldLabel'
 import { StatusBanner } from '../../components/common/StatusBanner'
-import { CreateAffiliatePlatformCard, CreateBrandCard, CreateCampaignCard, CreateDatasetCard, CreatePrelanderCard, CreateTrackingLinkCard } from './ResourceForms'
+import { CreateAffiliatePlatformCard, CreateBrandCard, CreateCampaignCard, CreateDatasetCard, CreateTrackingLinkCard } from './ResourceForms'
 import { apiBaseUrl, redirectBaseUrl } from '../../config/env'
 import { formatDate, getDatasetLabel } from '../../lib/format'
 import { getFormString } from '../../lib/forms'
 import { runEntityAction } from '../../lib/entity-actions'
-import type { AffiliatePlatform, Brand, Campaign, DashboardContext, Dataset, Prelander, Tenant, TrackingLink } from '../../types/domain'
+import type { AffiliatePlatform, Brand, Campaign, DashboardContext, Dataset, Tenant, TrackingLink } from '../../types/domain'
 
 function getCampaignDatasets(campaign: Campaign) {
   return campaign.datasets ?? []
@@ -301,79 +301,10 @@ function getTrackingLinkWebhookFetchSample(link: TrackingLink) {
 }
 
 export function TrackingLinksPage({ ctx }: { ctx: DashboardContext }) {
-  return (<><StatusBanner status={ctx.status} /><section className="resource-page"><PageToolbar title={<><Link2 size={18} /> Tracking links</>} description={`${ctx.tenantTrackingLinks.length} shortlinks · ${ctx.tenantPrelanders.length} bridge pages. Quản lý link và bridge page tại đây.`} createPath="/tracking-links/new" createLabel="Thêm link" /><TrackingLinksTable ctx={ctx} /><TrackingLinkBridgePagesPanel ctx={ctx} /></section></>)
+  return (<><StatusBanner status={ctx.status} /><section className="resource-page"><PageToolbar title={<><Link2 size={18} /> Tracking links</>} description={`${ctx.tenantTrackingLinks.length} shortlinks. Bridge page nằm trực tiếp trong từng tracking link.`} createPath="/tracking-links/new" createLabel="Thêm link" /><TrackingLinksTable ctx={ctx} /></section></>)
 }
-export function TrackingLinksTable({ ctx }: { ctx: DashboardContext }) { return <Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Slug</th><th>Campaign</th><th>Affiliate platform</th><th>Affiliate URL</th><th>Bridge page</th><th>Shortlink</th><th>Click webhook</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantTrackingLinks.map((link) => <tr key={link.id}><td><strong>{link.slug}</strong></td><td>{link.campaign?.name ?? getCampaignName(ctx, link.campaignId)}</td><td>{link.affiliatePlatform?.name ?? link.affiliatePlatformId}</td><td><CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">Open <ExternalLink size={13} /></a></CopyableValue></td><td>{link.prelander?.name ?? (link.prelanderEnabled ? 'Không chọn' : 'Disabled')}</td><td><CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkPath(link)} <ExternalLink size={13} /></a></CopyableValue></td><td><CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookPath(link)}</code></CopyableValue></td><td><Badge variant={link.isActive ? 'secondary' : 'outline'}>{link.isActive ? 'Active' : 'Inactive'}</Badge></td><td><ActionButtons detailPath={`/tracking-links/${link.id}`} editPath={`/tracking-links/${link.id}/edit`} deletePath={`/tracking-links/${link.id}/delete`} /></td></tr>)}{!ctx.tenantTrackingLinks.length && <tr><td colSpan={9}>Chưa có tracking link.</td></tr>}</tbody></table></div></CardContent></Card> }
+export function TrackingLinksTable({ ctx }: { ctx: DashboardContext }) { return <Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Slug</th><th>Campaign</th><th>Affiliate platform</th><th>Affiliate URL</th><th>Bridge page</th><th>Shortlink</th><th>Click webhook</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantTrackingLinks.map((link) => <tr key={link.id}><td><strong>{link.slug}</strong></td><td>{link.campaign?.name ?? getCampaignName(ctx, link.campaignId)}</td><td>{link.affiliatePlatform?.name ?? link.affiliatePlatformId}</td><td><CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">Open <ExternalLink size={13} /></a></CopyableValue></td><td>{link.prelanderEnabled ? (link.prelanderTitle || link.prelanderHeadline || 'Enabled') : 'Disabled'}</td><td><CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkPath(link)} <ExternalLink size={13} /></a></CopyableValue></td><td><CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookPath(link)}</code></CopyableValue></td><td><Badge variant={link.isActive ? 'secondary' : 'outline'}>{link.isActive ? 'Active' : 'Inactive'}</Badge></td><td><ActionButtons detailPath={`/tracking-links/${link.id}`} editPath={`/tracking-links/${link.id}/edit`} deletePath={`/tracking-links/${link.id}/delete`} /></td></tr>)}{!ctx.tenantTrackingLinks.length && <tr><td colSpan={9}>Chưa có tracking link.</td></tr>}</tbody></table></div></CardContent></Card> }
 
-function TrackingLinkBridgePagesPanel({ ctx }: { ctx: DashboardContext }) {
-  const [editingPrelanderId, setEditingPrelanderId] = useState<string | null>(null)
-  const editingPrelander = ctx.tenantPrelanders.find((item) => item.id === editingPrelanderId) ?? null
-  const getUsageCount = (prelanderId: string) => ctx.tenantTrackingLinks.filter((link) => link.prelanderId === prelanderId).length
-
-  async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (!editingPrelander) return
-    const form = new FormData(event.currentTarget)
-
-    await runEntityAction(ctx, async () => {
-      await ctx.fetchJson<Prelander>(`/prelanders/${editingPrelander.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          name: getFormString(form, 'name'),
-          headline: getFormString(form, 'headline'),
-          body: getFormString(form, 'body'),
-          ctaText: getFormString(form, 'ctaText'),
-          ctaDelaySeconds: Number(form.get('ctaDelaySeconds') ?? 0),
-          theme: getFormString(form, 'theme'),
-          isActive: form.get('isActive') === 'on'
-        })
-      })
-      setEditingPrelanderId(null)
-    }, 'Đã cập nhật bridge page')
-  }
-
-  async function handleDelete(prelander: Prelander) {
-    if (!window.confirm(`Xóa bridge page "${prelander.name}"? Tracking links đang dùng sẽ chuyển về redirect thẳng.`)) return
-    await runEntityAction(ctx, async () => {
-      await ctx.fetchJson<{ ok: boolean }>(`/prelanders/${prelander.id}`, { method: 'DELETE' })
-      if (editingPrelanderId === prelander.id) setEditingPrelanderId(null)
-    }, 'Đã xóa bridge page')
-  }
-
-  return (
-    <div className="content-grid tracking-link-bridge-pages">
-      <CreatePrelanderCard ctx={ctx} />
-      <Card className="table-card">
-        <CardHeader className="section-heading">
-          <div>
-            <CardTitle><Layers3 size={18} /> Bridge pages</CardTitle>
-            <CardDescription>Tạo và quản lý bridge page/prelander để chọn trong từng tracking link.</CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="table-wrap"><table><thead><tr><th>Name</th><th>Headline</th><th>Theme</th><th>Delay</th><th>Used by</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantPrelanders.map((prelander) => <tr key={prelander.id}><td><strong>{prelander.name}</strong></td><td>{prelander.headline}</td><td>{prelander.theme}</td><td>{prelander.ctaDelaySeconds}s</td><td>{getUsageCount(prelander.id)} links</td><td><Badge variant={prelander.isActive ? 'secondary' : 'outline'}>{prelander.isActive ? 'Active' : 'Inactive'}</Badge></td><td><div className="row-actions"><Button variant="secondary" size="sm" type="button" onClick={() => setEditingPrelanderId(editingPrelanderId === prelander.id ? null : prelander.id)}><Pencil size={14} /> {editingPrelanderId === prelander.id ? 'Hủy' : 'Sửa'}</Button><Button variant="destructive" size="sm" type="button" onClick={() => void handleDelete(prelander)}><Trash2 size={14} /> Xóa</Button></div></td></tr>)}{!ctx.tenantPrelanders.length && <tr><td colSpan={7}>Chưa có bridge page.</td></tr>}</tbody></table></div>
-        </CardContent>
-      </Card>
-      {editingPrelander && (
-        <Card className="form-card">
-          <CardHeader><CardTitle><Pencil size={18} /> Sửa bridge page</CardTitle><CardDescription>Cập nhật bridge page đang được dùng trong Tracking Links.</CardDescription></CardHeader>
-          <CardContent>
-            <form key={editingPrelander.id} onSubmit={(event) => void handleEditSubmit(event)}>
-              <label><FieldLabel>Name</FieldLabel><Input name="name" defaultValue={editingPrelander.name} required /></label>
-              <label><FieldLabel>Headline</FieldLabel><Input name="headline" defaultValue={editingPrelander.headline} required /></label>
-              <label><FieldLabel>Body</FieldLabel><Input name="body" defaultValue={editingPrelander.body} required /></label>
-              <label><FieldLabel>CTA text</FieldLabel><Input name="ctaText" defaultValue={editingPrelander.ctaText} /></label>
-              <label><FieldLabel>Delay seconds</FieldLabel><Input name="ctaDelaySeconds" type="number" min="0" defaultValue={editingPrelander.ctaDelaySeconds} /></label>
-              <label><FieldLabel>Theme</FieldLabel><Select name="theme" defaultValue={editingPrelander.theme}><option value="clean">Clean</option><option value="dark">Dark</option><option value="warm">Warm</option></Select></label>
-              <label className="checkbox"><input name="isActive" type="checkbox" defaultChecked={editingPrelander.isActive} /> Active</label>
-              <Button type="submit">Lưu bridge page</Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  )
-}
 export function TrackingLinkCreatePage({ ctx }: { ctx: DashboardContext }) { const navigate = useNavigate(); return <section className="form-route"><CreateTrackingLinkCard ctx={ctx} onCreated={() => navigate('/tracking-links')} /><Button asChild variant="outline"><NavLink to="/tracking-links">Quay lại danh sách</NavLink></Button></section> }
 export function TrackingLinkDetailPage({ ctx }: { ctx: DashboardContext }) {
   const { id = '' } = useParams()
@@ -387,7 +318,12 @@ export function TrackingLinkDetailPage({ ctx }: { ctx: DashboardContext }) {
         <DetailItem label="Campaign" value={link.campaign?.name ?? getCampaignName(ctx, link.campaignId)} />
         <DetailItem label="Affiliate platform" value={link.affiliatePlatform?.name ?? link.affiliatePlatformId} />
         <DetailItem label="Affiliate URL" value={<CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">{link.affiliateUrl}</a></CopyableValue>} />
-        <DetailItem label="Bridge page" value={link.prelander?.name ?? (link.prelanderEnabled ? 'Không chọn' : 'Disabled')} />
+        <DetailItem label="Bridge page" value={link.prelanderEnabled ? 'Enabled' : 'Disabled'} />
+        <DetailItem label="Bridge title" value={link.prelanderTitle || 'Chưa nhập'} />
+        <DetailItem label="Headline" value={link.prelanderHeadline || 'Chưa nhập'} />
+        <DetailItem label="Body" value={link.prelanderBody || 'Chưa nhập'} />
+        <DetailItem label="CTA" value={link.prelanderCtaText || 'Continue'} />
+        <DetailItem label="Delay seconds" value={`${link.prelanderCtaDelaySeconds ?? 2}s`} />
         <DetailItem label="Shortlink" value={<CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkUrl(link)}</a></CopyableValue>} />
         <DetailItem label="Click webhook" value={<CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookUrl(link)}</code></CopyableValue>} />
         <DetailItem label="Webhook method" value="POST JSON" />
@@ -432,9 +368,14 @@ export function TrackingLinkEditPage({ ctx }: { ctx: DashboardContext }) {
           campaignId: getFormString(form, 'campaignId'),
           affiliatePlatformId: getFormString(form, 'affiliatePlatformId'),
           affiliateUrl: getFormString(form, 'affiliateUrl'),
-          prelanderId: getFormString(form, 'prelanderId'),
           slug: getFormString(form, 'slug'),
           prelanderEnabled: form.get('prelanderEnabled') === 'on',
+          prelanderTitle: getFormString(form, 'prelanderTitle'),
+          prelanderHeadline: getFormString(form, 'prelanderHeadline'),
+          prelanderBody: getFormString(form, 'prelanderBody'),
+          prelanderCtaText: getFormString(form, 'prelanderCtaText') || 'Continue',
+          prelanderCtaDelaySeconds: Number(form.get('prelanderCtaDelaySeconds') ?? 2),
+          prelanderTheme: getFormString(form, 'prelanderTheme') || 'clean',
           isActive: form.get('isActive') === 'on'
         })
       })
@@ -474,23 +415,40 @@ export function TrackingLinkEditPage({ ctx }: { ctx: DashboardContext }) {
         </label>
 
         <label>
-          <FieldLabel>Bridge page (optional)</FieldLabel>
-          <Select name="prelanderId" defaultValue={current.prelanderId ?? ''}>
-            <option value="">Không chọn bridge page</option>
-            {ctx.tenantPrelanders.map((prelander) => (
-              <option key={prelander.id} value={prelander.id}>{prelander.name}</option>
-            ))}
-          </Select>
-        </label>
-
-        <label>
           <FieldLabel>Slug</FieldLabel>
           <Input name="slug" defaultValue={current.slug} required />
         </label>
 
         <label className="checkbox">
-          <input name="prelanderEnabled" type="checkbox" defaultChecked={current.prelanderEnabled} /> Enable bridge page
+          <input name="prelanderEnabled" type="checkbox" defaultChecked={current.prelanderEnabled} /> Kích hoạt bridge page
         </label>
+
+        <div className="bridge-fields">
+          <label>
+            <FieldLabel>Bridge title</FieldLabel>
+            <Input name="prelanderTitle" defaultValue={current.prelanderTitle ?? ''} />
+          </label>
+          <label>
+            <FieldLabel>Headline</FieldLabel>
+            <Input name="prelanderHeadline" defaultValue={current.prelanderHeadline ?? ''} />
+          </label>
+          <label>
+            <FieldLabel>Body</FieldLabel>
+            <Input name="prelanderBody" defaultValue={current.prelanderBody ?? ''} />
+          </label>
+          <label>
+            <FieldLabel>CTA text</FieldLabel>
+            <Input name="prelanderCtaText" defaultValue={current.prelanderCtaText ?? 'Continue'} />
+          </label>
+          <label>
+            <FieldLabel>Delay seconds</FieldLabel>
+            <Input name="prelanderCtaDelaySeconds" type="number" min="0" defaultValue={current.prelanderCtaDelaySeconds ?? 2} />
+          </label>
+          <label>
+            <FieldLabel>Theme</FieldLabel>
+            <Select name="prelanderTheme" defaultValue={current.prelanderTheme ?? 'clean'}><option value="clean">Clean</option><option value="dark">Dark</option><option value="warm">Warm</option></Select>
+          </label>
+        </div>
         <label className="checkbox">
           <input name="isActive" type="checkbox" defaultChecked={current.isActive} /> Active
         </label>

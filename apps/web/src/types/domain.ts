@@ -128,36 +128,27 @@ export type Dataset = {
   createdAt: string
 }
 
-export type Prelander = {
-  id: string
-  tenantId: string
-  name: string
-  headline: string
-  body: string
-  ctaText: string
-  ctaDelaySeconds: number
-  theme: string
-  isActive: boolean
-  createdAt: string
-}
-
 export type TrackingLink = {
   id: string
   tenantId: string
   campaignId?: string | null
   affiliatePlatformId: string
   brandId?: string | null
-  prelanderId?: string | null
   slug: string
   affiliateUrl: string
   prelanderEnabled: boolean
+  prelanderTitle?: string | null
+  prelanderHeadline?: string | null
+  prelanderBody?: string | null
+  prelanderCtaText: string
+  prelanderCtaDelaySeconds: number
+  prelanderTheme: string
   isActive: boolean
   createdAt: string
   tenant?: Tenant
   campaign?: Campaign
   affiliatePlatform?: AffiliatePlatform
   brand?: Brand | null
-  prelander?: Prelander | null
 }
 
 export type ClickEvent = {
@@ -388,7 +379,6 @@ export type AppData = {
   brands: Brand[]
   affiliatePlatforms: AffiliatePlatform[]
   datasets: Dataset[]
-  prelanders: Prelander[]
   trackingLinks: TrackingLink[]
   clickEvents: ClickEvent[]
   capiEvents: CapiEvent[]
@@ -437,7 +427,6 @@ export type DashboardContext = {
   tenantBrands: Brand[]
   tenantAffiliatePlatforms: AffiliatePlatform[]
   tenantDatasets: Dataset[]
-  tenantPrelanders: Prelander[]
   tenantTrackingLinks: TrackingLink[]
   tenantCapiEvents: CapiEvent[]
   tenantConversionEvents: ConversionEvent[]

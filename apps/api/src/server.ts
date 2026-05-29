@@ -44,8 +44,9 @@ function requireString(value: unknown, field: string) {
   return value.trim()
 }
 function optionalString(value: unknown) { return typeof value === 'string' && value.trim() ? value.trim() : undefined }
+function nullableString(value: unknown, fallback: string | null = null) { return typeof value === 'string' ? optionalString(value) ?? null : fallback }
 function optionalBoolean(value: unknown, fallback: boolean) { return typeof value === 'boolean' ? value : fallback }
-function optionalInteger(value: unknown, fallback: number) { return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : fallback }
+function optionalInteger(value: unknown, fallback: number) { const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN; return Number.isInteger(n) && n >= 0 ? n : fallback }
 function normalizePrelanderTheme(value: unknown) { const v = typeof value === 'string' ? value.trim().toLowerCase() : 'clean'; return ['clean', 'dark', 'warm'].includes(v) ? v : 'clean' }
 function normalizeDatasetPlatform(value: unknown) { const p = requireString(value, 'platform').toLowerCase(); if (!['meta', 'tiktok'].includes(p)) throw new Error('platform must be meta or tiktok'); return p }
 function toSlug(value: string) { return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) }
@@ -209,7 +210,7 @@ async function buildConversionEventWhere(userId: string, q: AnyRecord) { const f
 function buildActivityLogSql(userId: string, q: AnyRecord) { const clauses = ['tenant."ownerUserId" = $1']; const params: unknown[] = [userId]; const add = (sql: string, value: unknown) => { params.push(value); clauses.push(sql.replace('?', `$${params.length}`)) }; const tenantId = optionalQueryString(q.tenantId); const source = optionalQueryString(q.source); const eventType = optionalQueryString(q.eventType); const entityType = optionalQueryString(q.entityType); const entityId = optionalQueryString(q.entityId); const search = optionalQueryString(q.search); const level = normalizeActivityLogLevel(q.level); const createdAt = getCreatedAtFilter(q); if (tenantId) add('log."tenantId" = ?', tenantId); if (source) add('log."source" = ?', source); if (eventType) add('log."eventType" = ?', eventType); if (entityType) add('log."entityType" = ?', entityType); if (entityId) add('log."entityId" = ?', entityId); if (level) add('log."level" = ?::"ActivityLogLevel"', level); if (createdAt?.gte) add('log."createdAt" >= ?', createdAt.gte); if (createdAt?.lte) add('log."createdAt" <= ?', createdAt.lte); if (search) { params.push(`%${search}%`); const ref = `$${params.length}`; clauses.push(`(log."message" ILIKE ${ref} OR log."eventType" ILIKE ${ref} OR log."source" ILIKE ${ref} OR log."entityType" ILIKE ${ref} OR log."entityId" ILIKE ${ref})`) } return { whereSql: `WHERE ${clauses.join(' AND ')}`, params } }
 function serializeTrackingLinkForAttribution(link: AnyRecord | null | undefined): AnyRecord | null { if (!link) return null; const brand = link.brand ? { ...link.brand, affiliatePlatform: link.brand.affiliatePlatform ? serializeAffiliatePlatform(link.brand.affiliatePlatform) : link.brand.affiliatePlatform } : null; const affiliatePlatform = link.affiliatePlatform ? serializeAffiliatePlatform(link.affiliatePlatform) : brand?.affiliatePlatform ?? null; return { ...link, brand, affiliatePlatform } }
 function serializeConversion(e: AnyRecord, click?: AnyRecord) { const storedSnapshot = e.attributionSnapshot && typeof e.attributionSnapshot === 'object' ? e.attributionSnapshot as AnyRecord : null; return { ...e, id: e.id.toString(), clickEventId: e.clickEventId ? e.clickEventId.toString() : null, spendAmount: serializeMoneyValue(e.spendAmount), payoutAmount: serializeMoneyValue(e.payoutAmount), commissionAmount: serializeMoneyValue(e.commissionAmount), affiliatePlatform: e.affiliatePlatform ? serializeAffiliatePlatform(e.affiliatePlatform) : null, attribution: storedSnapshot ?? buildAttributionSnapshot(click, e.affiliatePlatform), capiEnrichment: e.capiEnrichment ?? null } }
-async function attachAttributionToConversions(rows: AnyRecord[]) { const rowsNeedingFallback = rows.filter((row) => !row.attributionSnapshot && typeof row.clickUuid === 'string' && row.clickUuid.length > 0); const uuids = [...new Set(rowsNeedingFallback.map((row) => row.clickUuid as string))]; const tenantIds = [...new Set(rowsNeedingFallback.map((row) => row.tenantId).filter((value): value is string => typeof value === 'string'))]; const clicks = uuids.length ? await prisma.clickEvent.findMany({ where: { clickUuid: { in: uuids }, ...(tenantIds.length ? { tenantId: { in: tenantIds } } : {}) }, include: { campaign: true, trackingLink: { include: { campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } }, prelander: true } } } }) : []; const byUuid = new Map(clicks.map((click) => [click.clickUuid, click])); return rows.map((row) => serializeConversion(row, !row.attributionSnapshot && row.clickUuid ? byUuid.get(row.clickUuid) : undefined)) }
+async function attachAttributionToConversions(rows: AnyRecord[]) { const rowsNeedingFallback = rows.filter((row) => !row.attributionSnapshot && typeof row.clickUuid === 'string' && row.clickUuid.length > 0); const uuids = [...new Set(rowsNeedingFallback.map((row) => row.clickUuid as string))]; const tenantIds = [...new Set(rowsNeedingFallback.map((row) => row.tenantId).filter((value): value is string => typeof value === 'string'))]; const clicks = uuids.length ? await prisma.clickEvent.findMany({ where: { clickUuid: { in: uuids }, ...(tenantIds.length ? { tenantId: { in: tenantIds } } : {}) }, include: { campaign: true, trackingLink: { include: { campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } } }) : []; const byUuid = new Map(clicks.map((click) => [click.clickUuid, click])); return rows.map((row) => serializeConversion(row, !row.attributionSnapshot && row.clickUuid ? byUuid.get(row.clickUuid) : undefined)) }
 function emptyAnalyticsRow(id: string, name: string) { return { id, name, clicks: 0, conversions: 0, revenue: 0, payout: 0, commission: 0, spend: 0, conversionRate: 0 } }
 function addConversionMoney(row: AnyRecord, conversion: AnyRecord) { const payout = toNumberAmount(conversion.payoutAmount); const commission = toNumberAmount(conversion.commissionAmount); const spend = toNumberAmount(conversion.spendAmount); row.payout += payout; row.commission += commission; row.spend += spend; row.revenue += payout || commission }
 function finalizeAnalyticsRows(map: Map<string, AnyRecord>, limit = 20): AnyRecord[] { const rows: AnyRecord[] = ([...map.values()] as AnyRecord[]).map((row) => ({ ...row, conversionRate: row.clicks ? row.conversions / row.clicks : 0 })); return rows.sort((a: AnyRecord, b: AnyRecord) => b.conversions - a.conversions || b.clicks - a.clicks || String(a.name).localeCompare(String(b.name))).slice(0, limit) }
@@ -316,7 +317,8 @@ app.get('/tenants', async (req) => { const u = requireAuthenticated(req); const 
 app.get('/tenants/:id/click-webhook-token', async (req) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; const tenant = await assertTenantAccess(u.id, id); return { clickWebhookToken: tenant.clickWebhookToken } })
 app.post('/tenants/:id/click-webhook-token/rotate', async (req) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; await assertTenantAccess(u.id, id); const tenant = serializeTenant(await prisma.tenant.update({ where: { id }, data: { clickWebhookToken: randomUUID() } })); await createActivityLog({ tenantId: id, source: 'api', eventType: 'tenant.click_webhook_token_rotated', message: 'Click webhook token was rotated', entityType: 'tenant', entityId: id, metadata: { actorUserId: u.id } }); return tenant })
 
-const campaignInclude = { tenant: true, datasets: { include: { dataset: true }, orderBy: { createdAt: 'asc' as const } }, trackingLinks: { include: { affiliatePlatform: true, brand: { include: { affiliatePlatform: true } }, prelander: true }, orderBy: { createdAt: 'desc' as const } } }
+const trackingLinkInclude = { tenant: true, campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } as const
+const campaignInclude = { tenant: true, datasets: { include: { dataset: true }, orderBy: { createdAt: 'asc' as const } }, trackingLinks: { include: trackingLinkInclude, orderBy: { createdAt: 'desc' as const } } }
 async function assertCampaignDatasetLimit(tenantId: string, desiredCount: number) { const plan = await getTenantPlanOrDefault(tenantId); const limit = plan?.campaignDatasetLimit ?? 2; if (desiredCount > limit) throw new Error(`Dataset limit exceeded: ${desiredCount}/${limit} for plan ${plan?.name ?? 'current'}`); return limit }
 async function validateCampaignDatasetIds(tenantId: string, datasetIds: string[]) { if (!datasetIds.length) return; const count = await prisma.dataset.count({ where: { tenantId, id: { in: datasetIds }, isActive: true } }); if (count !== datasetIds.length) throw new Error('One or more datasets were not found in this workspace') }
 
@@ -371,14 +373,101 @@ app.post('/datasets', async (req, reply) => { const u = requireAuthenticated(req
 app.put('/datasets/:id', async (req, reply) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; const b = req.body as AnyRecord; const row = await prisma.dataset.findFirst({ where: { id, tenant: { ownerUserId: u.id } } }); if (!row) return reply.code(404).send({ error: 'Dataset not found' }); const updated = await prisma.dataset.update({ where: { id }, data: { platform: b.platform ? normalizeDatasetPlatform(b.platform) : row.platform, name: optionalString(b.name) ?? row.name, pixelId: optionalString(b.pixelId) ?? row.pixelId, accessToken: optionalString(b.accessToken) ?? row.accessToken, isActive: optionalBoolean(b.isActive, row.isActive) } }); await createActivityLog({ tenantId: row.tenantId, source: 'api', eventType: 'dataset.updated', message: `Dataset / pixel "${updated.name}" was updated`, entityType: 'dataset', entityId: id, metadata: { actorUserId: u.id, datasetId: id, platform: updated.platform, pixelId: updated.pixelId, isActive: updated.isActive, changedAccessToken: Boolean(optionalString(b.accessToken)) } }); return serializeDataset(updated) })
 app.delete('/datasets/:id', async (req, reply) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; if (!await prisma.dataset.findFirst({ where: { id, tenant: { ownerUserId: u.id } } })) return reply.code(404).send({ error: 'Dataset not found' }); await prisma.dataset.delete({ where: { id } }); return { ok: true } })
 
-app.get('/prelanders', async (req) => { const u = requireAuthenticated(req); const q = req.query as AnyRecord; if (q.tenantId) await assertTenantAccess(u.id, q.tenantId); return prisma.prelander.findMany({ where: { tenantId: q.tenantId, tenant: { ownerUserId: u.id } }, orderBy: { createdAt: 'desc' } }) })
-app.post('/prelanders', async (req, reply) => { const u = requireAuthenticated(req); const b = req.body as AnyRecord; const tenantId = requireString(b.tenantId, 'tenantId'); await assertTenantAccess(u.id, tenantId); const prelander = await prisma.prelander.create({ data: { tenantId, name: requireString(b.name, 'name'), headline: requireString(b.headline, 'headline'), body: requireString(b.body, 'body'), ctaText: optionalString(b.ctaText) ?? 'Continue', ctaDelaySeconds: optionalInteger(b.ctaDelaySeconds, 2), theme: normalizePrelanderTheme(b.theme), isActive: optionalBoolean(b.isActive, true) } }); await createActivityLog({ tenantId, source: 'api', eventType: 'prelander.created', message: `Prelander "${prelander.name}" was created`, entityType: 'prelander', entityId: prelander.id, metadata: { actorUserId: u.id, prelanderId: prelander.id, theme: prelander.theme, ctaDelaySeconds: prelander.ctaDelaySeconds, isActive: prelander.isActive } }); return reply.code(201).send(prelander) })
-app.put('/prelanders/:id', async (req, reply) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; const b = req.body as AnyRecord; const row = await prisma.prelander.findFirst({ where: { id, tenant: { ownerUserId: u.id } } }); if (!row) return reply.code(404).send({ error: 'Prelander not found' }); const updated = await prisma.prelander.update({ where: { id }, data: { name: optionalString(b.name) ?? row.name, headline: optionalString(b.headline) ?? row.headline, body: optionalString(b.body) ?? row.body, ctaText: optionalString(b.ctaText) ?? row.ctaText, ctaDelaySeconds: optionalInteger(b.ctaDelaySeconds, row.ctaDelaySeconds), theme: b.theme ? normalizePrelanderTheme(b.theme) : row.theme, isActive: optionalBoolean(b.isActive, row.isActive) } }); await createActivityLog({ tenantId: row.tenantId, source: 'api', eventType: 'prelander.updated', message: `Prelander "${updated.name}" was updated`, entityType: 'prelander', entityId: id, metadata: { actorUserId: u.id, prelanderId: id, theme: updated.theme, ctaDelaySeconds: updated.ctaDelaySeconds, isActive: updated.isActive } }); return updated })
-app.delete('/prelanders/:id', async (req, reply) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; if (!await prisma.prelander.findFirst({ where: { id, tenant: { ownerUserId: u.id } } })) return reply.code(404).send({ error: 'Prelander not found' }); await prisma.prelander.delete({ where: { id } }); return { ok: true } })
+app.get('/tracking-links', async (req) => {
+  const u = requireAuthenticated(req)
+  const q = req.query as AnyRecord
+  const tenantId = optionalQueryString(q.tenantId)
+  if (tenantId) await assertTenantAccess(u.id, tenantId)
+  const where = {
+    tenantId,
+    campaignId: optionalQueryString(q.campaignId),
+    brandId: optionalQueryString(q.brandId),
+    affiliatePlatformId: optionalQueryString(q.affiliatePlatformId) ?? optionalQueryString(q.platformId),
+    tenant: { ownerUserId: u.id }
+  }
+  if (!wantsPaginatedResponse(q)) return prisma.trackingLink.findMany({ where, include: trackingLinkInclude, orderBy: { createdAt: 'desc' } })
+  const pagination = parsePagination(q)
+  const [items, total] = await Promise.all([
+    prisma.trackingLink.findMany({ where, include: trackingLinkInclude, orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.take }),
+    prisma.trackingLink.count({ where })
+  ])
+  return makePaginatedResponse(items, total, pagination)
+})
 
-app.get('/tracking-links', async (req) => { const u = requireAuthenticated(req); const q = req.query as AnyRecord; const tenantId = optionalQueryString(q.tenantId); if (tenantId) await assertTenantAccess(u.id, tenantId); const where = { tenantId, campaignId: optionalQueryString(q.campaignId), brandId: optionalQueryString(q.brandId), affiliatePlatformId: optionalQueryString(q.affiliatePlatformId) ?? optionalQueryString(q.platformId), tenant: { ownerUserId: u.id } }; const include = { tenant: true, campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } }, prelander: true }; if (!wantsPaginatedResponse(q)) return prisma.trackingLink.findMany({ where, include, orderBy: { createdAt: 'desc' } }); const pagination = parsePagination(q); const [items, total] = await Promise.all([prisma.trackingLink.findMany({ where, include, orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.take }), prisma.trackingLink.count({ where })]); return makePaginatedResponse(items, total, pagination) })
-app.post('/tracking-links', async (req, reply) => { const u = requireAuthenticated(req); const b = req.body as AnyRecord; const tenantId = requireString(b.tenantId, 'tenantId'); await assertTenantAccess(u.id, tenantId); const slug = requireString(b.slug, 'slug'); if (await prisma.trackingLink.findUnique({ where: { tenantId_slug: { tenantId, slug } } })) return reply.code(409).send({ error: `Slug "${slug}" đã tồn tại trong workspace này` }); const affiliatePlatformId = requireString(b.affiliatePlatformId, 'affiliatePlatformId'); const affiliatePlatform = await prisma.affiliatePlatform.findFirst({ where: { id: affiliatePlatformId, tenantId } }); if (!affiliatePlatform) return reply.code(404).send({ error: 'Affiliate platform not found in this workspace' }); const campaignId = optionalString(b.campaignId) ?? null; if (campaignId && !await prisma.campaign.findFirst({ where: { id: campaignId, tenantId } })) return reply.code(404).send({ error: 'Campaign not found in this workspace' }); const prelanderId = optionalString(b.prelanderId); if (prelanderId && !await prisma.prelander.findFirst({ where: { id: prelanderId, tenantId, isActive: true } })) return reply.code(404).send({ error: 'Prelander not found in this workspace' }); const brandId = optionalString(b.brandId); if (brandId && !await prisma.brand.findFirst({ where: { id: brandId, tenantId } })) return reply.code(404).send({ error: 'Brand not found in this workspace' }); const link = await prisma.trackingLink.create({ data: { tenantId, campaignId, brandId: brandId ?? null, affiliatePlatformId: affiliatePlatform.id, affiliateUrl: validateHttpUrl(requireString(b.affiliateUrl, 'affiliateUrl'), 'affiliateUrl'), prelanderId, slug, prelanderEnabled: optionalBoolean(b.prelanderEnabled, true), isActive: optionalBoolean(b.isActive, true) }, include: { tenant: true, campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } }, prelander: true } }); await createActivityLog({ tenantId, source: 'api', eventType: 'tracking_link.created', message: `Tracking link "${link.slug}" was created`, entityType: 'trackingLink', entityId: link.id, metadata: { actorUserId: u.id, trackingLinkId: link.id, slug: link.slug, campaignId, affiliatePlatformId: affiliatePlatform.id, affiliateUrl: link.affiliateUrl, brandId: brandId ?? null, prelanderId, prelanderEnabled: link.prelanderEnabled, isActive: link.isActive } }); return reply.code(201).send(link) })
-app.put('/tracking-links/:id', async (req, reply) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; const b = req.body as AnyRecord; const row = await prisma.trackingLink.findFirst({ where: { id, tenant: { ownerUserId: u.id } } }); if (!row) return reply.code(404).send({ error: 'Tracking link not found' }); const affiliatePlatformId = optionalString(b.affiliatePlatformId) ?? row.affiliatePlatformId; if (!await prisma.affiliatePlatform.findFirst({ where: { id: affiliatePlatformId, tenantId: row.tenantId } })) return reply.code(404).send({ error: 'Affiliate platform not found in this workspace' }); const brandId = typeof b.brandId === 'string' ? optionalString(b.brandId) ?? null : row.brandId; const prelanderId = typeof b.prelanderId === 'string' ? optionalString(b.prelanderId) ?? null : row.prelanderId; if (brandId && !await prisma.brand.findFirst({ where: { id: brandId, tenantId: row.tenantId } })) return reply.code(404).send({ error: 'Brand not found in this workspace' }); const campaignId = typeof b.campaignId === 'string' ? optionalString(b.campaignId) ?? null : row.campaignId; if (campaignId && !await prisma.campaign.findFirst({ where: { id: campaignId, tenantId: row.tenantId } })) return reply.code(404).send({ error: 'Campaign not found in this workspace' }); if (prelanderId && !await prisma.prelander.findFirst({ where: { id: prelanderId, tenantId: row.tenantId } })) return reply.code(404).send({ error: 'Prelander not found in this workspace' }); const nextSlug = optionalString(b.slug) ?? row.slug; if (nextSlug !== row.slug && await prisma.trackingLink.findUnique({ where: { tenantId_slug: { tenantId: row.tenantId, slug: nextSlug } } })) return reply.code(409).send({ error: `Slug "${nextSlug}" đã tồn tại trong workspace này` }); const updated = await prisma.trackingLink.update({ where: { id }, data: { brandId, affiliatePlatformId, affiliateUrl: b.affiliateUrl ? validateHttpUrl(requireString(b.affiliateUrl, 'affiliateUrl'), 'affiliateUrl') : row.affiliateUrl, prelanderId, campaignId, slug: nextSlug, prelanderEnabled: optionalBoolean(b.prelanderEnabled, row.prelanderEnabled), isActive: optionalBoolean(b.isActive, row.isActive) }, include: { tenant: true, campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } }, prelander: true } }); await createActivityLog({ tenantId: row.tenantId, source: 'api', eventType: 'tracking_link.updated', message: `Tracking link "${updated.slug}" was updated`, entityType: 'trackingLink', entityId: id, metadata: { actorUserId: u.id, trackingLinkId: id, slug: updated.slug, campaignId, affiliatePlatformId, affiliateUrl: updated.affiliateUrl, brandId, prelanderId: updated.prelanderId, prelanderEnabled: updated.prelanderEnabled, isActive: updated.isActive } }); return updated })
+app.post('/tracking-links', async (req, reply) => {
+  const u = requireAuthenticated(req)
+  const b = req.body as AnyRecord
+  const tenantId = requireString(b.tenantId, 'tenantId')
+  await assertTenantAccess(u.id, tenantId)
+  const slug = requireString(b.slug, 'slug')
+  if (await prisma.trackingLink.findUnique({ where: { tenantId_slug: { tenantId, slug } } })) return reply.code(409).send({ error: 'Slug "' + slug + '" đã tồn tại trong workspace này' })
+  const affiliatePlatformId = requireString(b.affiliatePlatformId, 'affiliatePlatformId')
+  const affiliatePlatform = await prisma.affiliatePlatform.findFirst({ where: { id: affiliatePlatformId, tenantId } })
+  if (!affiliatePlatform) return reply.code(404).send({ error: 'Affiliate platform not found in this workspace' })
+  const campaignId = optionalString(b.campaignId) ?? null
+  if (campaignId && !await prisma.campaign.findFirst({ where: { id: campaignId, tenantId } })) return reply.code(404).send({ error: 'Campaign not found in this workspace' })
+  const brandId = optionalString(b.brandId)
+  if (brandId && !await prisma.brand.findFirst({ where: { id: brandId, tenantId } })) return reply.code(404).send({ error: 'Brand not found in this workspace' })
+  const link = await prisma.trackingLink.create({
+    data: {
+      tenantId,
+      campaignId,
+      brandId: brandId ?? null,
+      affiliatePlatformId: affiliatePlatform.id,
+      affiliateUrl: validateHttpUrl(requireString(b.affiliateUrl, 'affiliateUrl'), 'affiliateUrl'),
+      slug,
+      prelanderEnabled: optionalBoolean(b.prelanderEnabled, false),
+      prelanderTitle: nullableString(b.prelanderTitle),
+      prelanderHeadline: nullableString(b.prelanderHeadline),
+      prelanderBody: nullableString(b.prelanderBody),
+      prelanderCtaText: optionalString(b.prelanderCtaText) ?? 'Continue',
+      prelanderCtaDelaySeconds: optionalInteger(b.prelanderCtaDelaySeconds, 2),
+      prelanderTheme: normalizePrelanderTheme(b.prelanderTheme),
+      isActive: optionalBoolean(b.isActive, true)
+    },
+    include: trackingLinkInclude
+  })
+  await createActivityLog({ tenantId, source: 'api', eventType: 'tracking_link.created', message: 'Tracking link "' + link.slug + '" was created', entityType: 'trackingLink', entityId: link.id, metadata: { actorUserId: u.id, trackingLinkId: link.id, slug: link.slug, campaignId, affiliatePlatformId: affiliatePlatform.id, affiliateUrl: link.affiliateUrl, brandId: brandId ?? null, prelanderEnabled: link.prelanderEnabled, prelanderTitle: link.prelanderTitle, prelanderHeadline: link.prelanderHeadline, prelanderCtaDelaySeconds: link.prelanderCtaDelaySeconds, isActive: link.isActive } })
+  return reply.code(201).send(link)
+})
+
+app.put('/tracking-links/:id', async (req, reply) => {
+  const u = requireAuthenticated(req)
+  const { id } = req.params as { id: string }
+  const b = req.body as AnyRecord
+  const row = await prisma.trackingLink.findFirst({ where: { id, tenant: { ownerUserId: u.id } } })
+  if (!row) return reply.code(404).send({ error: 'Tracking link not found' })
+  const affiliatePlatformId = optionalString(b.affiliatePlatformId) ?? row.affiliatePlatformId
+  if (!await prisma.affiliatePlatform.findFirst({ where: { id: affiliatePlatformId, tenantId: row.tenantId } })) return reply.code(404).send({ error: 'Affiliate platform not found in this workspace' })
+  const brandId = typeof b.brandId === 'string' ? optionalString(b.brandId) ?? null : row.brandId
+  if (brandId && !await prisma.brand.findFirst({ where: { id: brandId, tenantId: row.tenantId } })) return reply.code(404).send({ error: 'Brand not found in this workspace' })
+  const campaignId = typeof b.campaignId === 'string' ? optionalString(b.campaignId) ?? null : row.campaignId
+  if (campaignId && !await prisma.campaign.findFirst({ where: { id: campaignId, tenantId: row.tenantId } })) return reply.code(404).send({ error: 'Campaign not found in this workspace' })
+  const nextSlug = optionalString(b.slug) ?? row.slug
+  if (nextSlug !== row.slug && await prisma.trackingLink.findUnique({ where: { tenantId_slug: { tenantId: row.tenantId, slug: nextSlug } } })) return reply.code(409).send({ error: 'Slug "' + nextSlug + '" đã tồn tại trong workspace này' })
+  const updated = await prisma.trackingLink.update({
+    where: { id },
+    data: {
+      brandId,
+      affiliatePlatformId,
+      affiliateUrl: b.affiliateUrl ? validateHttpUrl(requireString(b.affiliateUrl, 'affiliateUrl'), 'affiliateUrl') : row.affiliateUrl,
+      campaignId,
+      slug: nextSlug,
+      prelanderEnabled: optionalBoolean(b.prelanderEnabled, row.prelanderEnabled),
+      prelanderTitle: nullableString(b.prelanderTitle, row.prelanderTitle),
+      prelanderHeadline: nullableString(b.prelanderHeadline, row.prelanderHeadline),
+      prelanderBody: nullableString(b.prelanderBody, row.prelanderBody),
+      prelanderCtaText: optionalString(b.prelanderCtaText) ?? row.prelanderCtaText,
+      prelanderCtaDelaySeconds: optionalInteger(b.prelanderCtaDelaySeconds, row.prelanderCtaDelaySeconds),
+      prelanderTheme: typeof b.prelanderTheme === 'string' ? normalizePrelanderTheme(b.prelanderTheme) : row.prelanderTheme,
+      isActive: optionalBoolean(b.isActive, row.isActive)
+    },
+    include: trackingLinkInclude
+  })
+  await createActivityLog({ tenantId: row.tenantId, source: 'api', eventType: 'tracking_link.updated', message: 'Tracking link "' + updated.slug + '" was updated', entityType: 'trackingLink', entityId: id, metadata: { actorUserId: u.id, trackingLinkId: id, slug: updated.slug, campaignId, affiliatePlatformId, affiliateUrl: updated.affiliateUrl, brandId, prelanderEnabled: updated.prelanderEnabled, prelanderTitle: updated.prelanderTitle, prelanderHeadline: updated.prelanderHeadline, prelanderCtaDelaySeconds: updated.prelanderCtaDelaySeconds, isActive: updated.isActive } })
+  return updated
+})
+
 app.delete('/tracking-links/:id', async (req, reply) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; if (!await prisma.trackingLink.findFirst({ where: { id, tenant: { ownerUserId: u.id } } })) return reply.code(404).send({ error: 'Tracking link not found' }); await prisma.trackingLink.delete({ where: { id } }); return { ok: true } })
 
 async function enqueueClick(clickEvent: { id: bigint; clickUuid: string; tenantId: string; trackingLinkId: string }, eventName?: string, source: 'click' | 'affiliate_conversion' = 'click', sourceId?: string) { await clickEventsQueue.add('click.created', { clickEventId: clickEvent.id.toString(), clickUuid: clickEvent.clickUuid, tenantId: clickEvent.tenantId, trackingLinkId: clickEvent.trackingLinkId, eventName, source, sourceId }, { jobId: sourceId ? `${clickEvent.clickUuid}-${sourceId}` : clickEvent.clickUuid }) }
@@ -504,7 +593,7 @@ app.route({
     const capiEnrichment = buildCapiEnrichment(payload, money, clickUuid, eventMatch.eventName)
     const idempotencyKey = buildAffiliatePostbackIdempotencyKey(req, platform.id, payload, clickUuid, eventMatch.eventName)
     const now = new Date()
-    const clickEvent = clickUuid ? await prisma.clickEvent.findFirst({ where: { tenantId: platform.tenantId, clickUuid }, include: { campaign: true, trackingLink: { include: { campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } }, prelander: true } } } }) : null
+    const clickEvent = clickUuid ? await prisma.clickEvent.findFirst({ where: { tenantId: platform.tenantId, clickUuid }, include: { campaign: true, trackingLink: { include: { campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } } }) : null
     const attributionSnapshot = buildAttributionSnapshot(clickEvent, platform)
     const baseData = {
       tenantId: platform.tenantId,

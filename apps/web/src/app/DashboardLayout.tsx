@@ -14,7 +14,7 @@ import { navGroups, pageMeta } from '../config/navigation'
 import { buildQueryString, parseApiResponse } from '../lib/api'
 import { activityLogFilterParams, eventFilterParams } from '../lib/event-filters'
 import { formatLastUpdated } from '../lib/format'
-import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, BillingPlan, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, Prelander, ReportSchedule, SuperAdminUser, Tenant, ThemeMode, TrackingLink } from '../types/domain'
+import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, BillingPlan, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, ReportSchedule, SuperAdminUser, Tenant, ThemeMode, TrackingLink } from '../types/domain'
 
 export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; onToggleTheme: () => void }) {
   const { getToken } = useAuth()
@@ -61,14 +61,13 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
       const conversionEventsQuery = buildQueryString({ ...filters, page: conversionEventsPage, limit: eventPageSize })
       const analyticsQuery = buildQueryString(filters)
       const activityLogsQuery = buildQueryString({ ...activityLogFilterParams(activityLogFilters), page: activityLogsPage, limit: eventPageSize })
-      const [currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, prelanders, trackingLinks, reportSchedules, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData, analyticsBreakdown] = await Promise.all([
+      const [currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, trackingLinks, reportSchedules, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData, analyticsBreakdown] = await Promise.all([
         fetchJson<CurrentUser>('/me'),
         fetchJson<Tenant[]>('/tenants'),
         fetchJson<Campaign[]>('/campaigns'),
         fetchJson<Brand[]>('/brands'),
         fetchJson<AffiliatePlatform[]>('/affiliate-platforms'),
         fetchJson<Dataset[]>('/datasets'),
-        fetchJson<Prelander[]>('/prelanders'),
         fetchJson<TrackingLink[]>('/tracking-links'),
         fetchJson<ReportSchedule[]>('/report-schedules'),
         fetchJson<PaginatedResponse<ClickEvent>>(`/click-events${clickEventsQuery}`),
@@ -85,7 +84,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
         ])
         : [[], [], []]
 
-      return { currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, prelanders, trackingLinks, reportSchedules, clickEvents: clickEventsPageData.items, capiEvents: capiEventsPageData.items, conversionEvents: conversionEventsPageData.items, activityLogs: activityLogsPageData.items, analyticsSummary: analyticsBreakdown.summary, analyticsBreakdown, superAdminUsers, billingPlans, menuFeatures, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData }
+      return { currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, trackingLinks, reportSchedules, clickEvents: clickEventsPageData.items, capiEvents: capiEventsPageData.items, conversionEvents: conversionEventsPageData.items, activityLogs: activityLogsPageData.items, analyticsSummary: analyticsBreakdown.summary, analyticsBreakdown, superAdminUsers, billingPlans, menuFeatures, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData }
     },
     staleTime: 30_000,
     refetchInterval: 5 * 60 * 1000,
@@ -123,11 +122,6 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   const tenantDatasets = useMemo(
     () => data.datasets.filter((dataset) => dataset.tenantId === selectedTenant?.id),
     [data.datasets, selectedTenant]
-  )
-
-  const tenantPrelanders = useMemo(
-    () => data.prelanders.filter((prelander) => prelander.tenantId === selectedTenant?.id),
-    [data.prelanders, selectedTenant]
   )
 
   const tenantTrackingLinks = useMemo(
@@ -255,7 +249,6 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     tenantBrands,
     tenantAffiliatePlatforms,
     tenantDatasets,
-    tenantPrelanders,
     tenantTrackingLinks,
     tenantCapiEvents,
     tenantConversionEvents,

@@ -149,7 +149,7 @@ function buildBrowserPixelScripts(pixels: BrowserPixelDataset[], clickUuid: stri
   return `${metaScript}${tiktokScript}`
 }
 
-function buildRedirectHtml(url: string, prelander?: { headline: string; body: string; ctaText: string; ctaDelaySeconds: number; theme: string } | null, options: { pixelScripts?: string; directRedirectDelayMs?: number } = {}) {
+function buildRedirectHtml(url: string, prelander?: { title?: string | null; headline: string; body: string; ctaText: string; ctaDelaySeconds: number; theme: string } | null, options: { pixelScripts?: string; directRedirectDelayMs?: number } = {}) {
   const encodedUrl = jsonForHtml(url)
   const pixelScripts = options.pixelScripts ?? ''
   const directRedirectDelay = options.directRedirectDelayMs ?? 250
@@ -180,10 +180,12 @@ function buildRedirectHtml(url: string, prelander?: { headline: string; body: st
   const foreground = isDark ? '#fafafa' : '#111827'
   const card = isDark ? '#18181b' : '#ffffff'
 
+  const title = prelander.title || prelander.headline
+
   return `
     <html>
       <head>
-        <title>${escapeHtml(prelander.headline)}</title>
+        <title>${escapeHtml(title)}</title>
         <meta name="robots" content="noindex,nofollow" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         ${pixelScripts}
@@ -245,7 +247,6 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
       affiliatePlatform: true,
       brand: { include: { affiliatePlatform: true } },
       campaign: { include: { datasets: { include: { dataset: true } } } },
-      prelander: true,
       tenant: true
     }
   })
@@ -285,8 +286,16 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
   }, { jobId: getPixelEventId(eventName, clickEvent.clickUuid), delay: capiDelayMs })))
 
   const redirectUrl = buildAffiliateRedirectUrl(trackingLink.affiliateUrl, trackingLink.affiliatePlatform.trackingParamKey, clickEvent.clickUuid)
-  const usesPrelander = Boolean(trackingLink.prelanderEnabled && trackingLink.prelander?.isActive)
-  const contentName = trackingLink.brand?.name ?? trackingLink.slug
+  const inlinePrelander = trackingLink.prelanderEnabled && trackingLink.prelanderHeadline && trackingLink.prelanderBody ? {
+    title: trackingLink.prelanderTitle,
+    headline: trackingLink.prelanderHeadline,
+    body: trackingLink.prelanderBody,
+    ctaText: trackingLink.prelanderCtaText || 'Continue',
+    ctaDelaySeconds: trackingLink.prelanderCtaDelaySeconds ?? 2,
+    theme: trackingLink.prelanderTheme || 'clean'
+  } : null
+  const usesPrelander = Boolean(inlinePrelander)
+  const contentName = trackingLink.brand?.name ?? trackingLink.prelanderTitle ?? trackingLink.slug
   const pixelScripts = buildBrowserPixelScripts(browserPixels, clickEvent.clickUuid, contentName)
   await createActivityLog({
     tenantId: trackingLink.tenantId,
@@ -305,7 +314,8 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
       brandId: trackingLink.brandId,
       brand: trackingLink.brand?.name,
       affiliatePlatform: trackingLink.affiliatePlatform.slug,
-      prelanderId: trackingLink.prelander?.id,
+      prelanderTitle: trackingLink.prelanderTitle,
+      prelanderHeadline: trackingLink.prelanderHeadline,
       usesPrelander,
       ip: clickEvent.ip,
       referrer: clickEvent.referrer,
@@ -315,7 +325,7 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
     }
   })
   if (!usesPrelander && !browserPixels.length) return reply.redirect(redirectUrl, 302)
-  return reply.type('text/html').send(buildRedirectHtml(redirectUrl, usesPrelander ? trackingLink.prelander : null, { pixelScripts, directRedirectDelayMs: browserPixels.length ? browserPixelRedirectDelayMs : 250 }))
+  return reply.type('text/html').send(buildRedirectHtml(redirectUrl, inlinePrelander, { pixelScripts, directRedirectDelayMs: browserPixels.length ? browserPixelRedirectDelayMs : 250 }))
 })
 
 app.addHook('onClose', async () => { await clickEventsQueue.close(); await readinessRedis.quit() })

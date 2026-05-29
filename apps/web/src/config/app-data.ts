@@ -17,7 +17,6 @@ export const emptyData: LoadedAppData = {
   brands: [],
   affiliatePlatforms: [],
   datasets: [],
-  prelanders: [],
   trackingLinks: [],
   clickEvents: [],
   capiEvents: [],
