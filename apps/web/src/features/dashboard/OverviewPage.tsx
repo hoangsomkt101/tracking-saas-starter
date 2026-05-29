@@ -91,6 +91,12 @@ export function OverviewPage({ ctx }: { ctx: DashboardContext }) {
               <strong>{ctx.selectedTenant?.name ?? 'Đang khởi tạo workspace...'}</strong>
               {ctx.selectedTenant && <span>{ctx.selectedTenant.id}</span>}
             </div>
+            <div className="workspace-mini-stats">
+              <div><span>Campaigns</span><strong>{ctx.tenantCampaigns.length}</strong></div>
+              <div><span>Datasets</span><strong>{ctx.tenantDatasets.length}</strong></div>
+              <div><span>Platforms</span><strong>{ctx.tenantAffiliatePlatforms.length}</strong></div>
+              <div><span>Links</span><strong>{ctx.tenantTrackingLinks.length}</strong></div>
+            </div>
             <div className="workspace-metrics">
               <span>Mã workspace</span><strong>{ctx.selectedTenant?.slug ?? 'workspace'}</strong>
               <span>Status</span><Badge variant="secondary">Active</Badge>

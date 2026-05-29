@@ -2,7 +2,7 @@ import { UserButton, useAuth, useUser } from '@clerk/clerk-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router'
-import { Bell, ChevronDown, Command, Globe2, Loader2, Plus, RefreshCw, Search, Sparkles } from 'lucide-react'
+import { Bell, ChevronDown, Command, Globe2, Loader2, PanelLeft, Plus, RefreshCw, Search, Sparkles } from 'lucide-react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -329,10 +329,13 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
 
       <section className="main-panel">
         <header className="app-topbar">
-          <div className="search-box">
-            <Search size={16} />
-            <input placeholder="Search campaigns, links, platforms..." />
-            <kbd>⌘K</kbd>
+          <div className="topbar-left">
+            <Button variant="ghost" size="icon" type="button" aria-label="Toggle sidebar"><PanelLeft size={16} /></Button>
+            <div className="search-box">
+              <Search size={16} />
+              <input placeholder="Search campaigns, links, platforms..." />
+              <kbd>⌘K</kbd>
+            </div>
           </div>
           <div className="topbar-actions">
             <ThemeToggle theme={theme} onToggle={onToggleTheme} />
