@@ -3565,8 +3565,8 @@ body {
 }
 
 .shadcn-theme svg {
-  stroke-width: 1.65;
   color: currentColor;
+  stroke-width: 1.25;
 }
 
 .shadcn-theme button svg,
@@ -3577,14 +3577,24 @@ body {
 .stat-icon svg,
 .workspace-logo svg,
 .upgrade-icon svg {
-  opacity: 0.76;
-  stroke-width: 1.55;
+  opacity: 0.68;
+  stroke-width: 1.15;
+}
+
+.copy-icon-button.copy-icon-button svg {
+  opacity: 0.62;
+  stroke-width: 1.05;
 }
 
 .shadcn-theme button:hover svg,
 .sidebar-link:hover svg,
 .sidebar-link.is-active svg {
-  opacity: 0.92;
+  opacity: 0.84;
+}
+
+.copy-icon-button.copy-icon-button:hover svg {
+  opacity: 0.78;
+  stroke-width: 1.1;
 }
 
 .shadcn-theme .font-medium,
