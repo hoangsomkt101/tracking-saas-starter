@@ -38,11 +38,11 @@ function getTrackingTenantKey(link: TrackingLink) {
 }
 
 function getTrackingLinkUrl(link: TrackingLink) {
-  return `${redirectBaseUrl}/r/${getTrackingTenantKey(link)}/${link.slug}`
+  return `${redirectBaseUrl}/${link.slug}/${getTrackingTenantKey(link)}`
 }
 
 function getTrackingLinkPath(link: TrackingLink) {
-  return `/r/${getTrackingTenantKey(link)}/${link.slug}`
+  return `/${link.slug}/${getTrackingTenantKey(link)}`
 }
 
 function getTrackingLinkWebhookUrl(link: TrackingLink) {

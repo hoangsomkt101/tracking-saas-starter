@@ -234,7 +234,7 @@ app.get('/metrics', async () => {
   return { service: 'redirect', queue: { clickEvents: { waiting, active, delayed, failed } } }
 })
 
-app.get('/r/:tenantKey/:slug', async (req, reply) => {
+app.get('/:slug/:tenantKey', async (req, reply) => {
   const { tenantKey, slug } = req.params as RedirectParams
   const query = req.query as RedirectQuery
   const cookies = req.cookies
