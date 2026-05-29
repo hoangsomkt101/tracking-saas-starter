@@ -139,7 +139,7 @@ function buildMetaPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent>>
   if (!clickEvent) throw new Error('Missing click event')
   const enrichment = getConversionEnrichment(conversion, clickEvent.clickUuid, eventName)
   const eventTime = enrichment.eventTime instanceof Date ? enrichment.eventTime : clickEvent.createdAt
-  const contentIds = normalizeContentIds(enrichment.contentIds) ?? normalizeContentIds(enrichment.contentId) ?? normalizeContentIds(clickEvent.trackingLink.brand.name)
+  const contentIds = normalizeContentIds(enrichment.contentIds) ?? normalizeContentIds(enrichment.contentId) ?? normalizeContentIds(clickEvent.trackingLink.brand?.name ?? clickEvent.trackingLink.slug)
   const contentId = normalizeContentId(enrichment.contentId) ?? contentIds?.[0]
 
   return {
@@ -176,7 +176,7 @@ function buildMetaPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent>>
           campaign_id: clickEvent.campaignId,
           tracking_link_id: clickEvent.trackingLinkId,
           brand_id: clickEvent.trackingLink.brandId,
-          affiliate_network: clickEvent.trackingLink.brand.affiliatePlatform.name
+          affiliate_network: clickEvent.trackingLink.affiliatePlatform.name
         })
       }
     ]
@@ -187,7 +187,7 @@ function buildTikTokPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent
   if (!clickEvent) throw new Error('Missing click event')
   const enrichment = getConversionEnrichment(conversion, clickEvent.clickUuid, eventName)
   const eventTime = enrichment.eventTime instanceof Date ? enrichment.eventTime : clickEvent.createdAt
-  const contentIds = normalizeContentIds(enrichment.contentIds) ?? normalizeContentIds(enrichment.contentId) ?? normalizeContentIds(clickEvent.trackingLink.brand.name)
+  const contentIds = normalizeContentIds(enrichment.contentIds) ?? normalizeContentIds(enrichment.contentId) ?? normalizeContentIds(clickEvent.trackingLink.brand?.name ?? clickEvent.trackingLink.slug)
   const contentId = normalizeContentId(enrichment.contentId) ?? contentIds?.[0]
 
   return {
@@ -218,7 +218,7 @@ function buildTikTokPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent
           campaign_id: clickEvent.campaignId,
           tracking_link_id: clickEvent.trackingLinkId,
           brand_id: clickEvent.trackingLink.brandId,
-          affiliate_network: clickEvent.trackingLink.brand.affiliatePlatform.name
+          affiliate_network: clickEvent.trackingLink.affiliatePlatform.name
         })
       }
     ]
@@ -274,6 +274,7 @@ async function loadClickEvent(clickEventId: bigint) {
       trackingLink: {
         include: {
           campaign: { include: { datasets: { include: { dataset: true } } } },
+          affiliatePlatform: true,
           brand: { include: { affiliatePlatform: true } }
         }
       }

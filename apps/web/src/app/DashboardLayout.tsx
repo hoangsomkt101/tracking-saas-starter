@@ -233,7 +233,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   }, [appDataQuery.error])
 
   const grantedMenuFeatureIds = useMemo(() => {
-    const coreFeatures = ['dashboard', 'campaigns', 'brands', 'platforms', 'datasets', 'prelanders', 'tracking-links', 'click-events', 'activity-logs', 'billing', 'api-keys', 'settings', 'support']
+    const coreFeatures = ['dashboard', 'campaigns', 'platforms', 'datasets', 'prelanders', 'tracking-links', 'click-events', 'activity-logs', 'billing', 'api-keys', 'settings', 'support']
     if (data.currentUser?.isSuperAdmin) {
       return new Set(navGroups.flatMap((group) => group.items.map((item) => item.featureKey).filter(Boolean) as string[]))
     }
@@ -338,7 +338,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
         <header className="app-topbar">
           <div className="search-box">
             <Search size={16} />
-            <input placeholder="Search campaigns, offers, links..." />
+            <input placeholder="Search campaigns, links, platforms..." />
             <kbd>⌘K</kbd>
           </div>
           <div className="topbar-actions">

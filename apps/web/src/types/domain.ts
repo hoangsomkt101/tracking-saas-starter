@@ -145,15 +145,18 @@ export type TrackingLink = {
   id: string
   tenantId: string
   campaignId?: string | null
-  brandId: string
+  affiliatePlatformId: string
+  brandId?: string | null
   prelanderId?: string | null
   slug: string
+  affiliateUrl: string
   prelanderEnabled: boolean
   isActive: boolean
   createdAt: string
   tenant?: Tenant
   campaign?: Campaign
-  brand?: Brand
+  affiliatePlatform?: AffiliatePlatform
+  brand?: Brand | null
   prelander?: Prelander | null
 }
 
@@ -284,7 +287,6 @@ export type EventFilters = {
   startDate: string
   endDate: string
   campaignId: string
-  brandId: string
   trackingLinkId: string
   affiliatePlatformId: string
   status: string

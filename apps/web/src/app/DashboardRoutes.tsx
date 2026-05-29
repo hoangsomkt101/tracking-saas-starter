@@ -8,7 +8,7 @@ import { ClickEventsPage } from '../features/events/EventPages'
 import { ActivityLogsPage } from '../features/logs/ActivityLogsPage'
 import { ApiKeysPage } from '../features/account/ApiKeysPage'
 import { SupportPage } from '../features/support/SupportPage'
-import { BrandCreatePage, BrandDeletePage, BrandDetailPage, BrandEditPage, BrandsPage, CampaignCreatePage, CampaignDeletePage, CampaignDetailPage, CampaignEditPage, CampaignsPage, DatasetCreatePage, DatasetDeletePage, DatasetDetailPage, DatasetEditPage, DatasetsPage, PlatformCreatePage, PlatformDeletePage, PlatformDetailPage, PlatformEditPage, PlatformsPage, PrelanderCreatePage, PrelanderDeletePage, PrelanderDetailPage, PrelanderEditPage, PrelandersPage, TrackingLinkCreatePage, TrackingLinkDeletePage, TrackingLinkDetailPage, TrackingLinkEditPage, TrackingLinksPage } from '../features/resources/ResourcePages'
+import { CampaignCreatePage, CampaignDeletePage, CampaignDetailPage, CampaignEditPage, CampaignsPage, DatasetCreatePage, DatasetDeletePage, DatasetDetailPage, DatasetEditPage, DatasetsPage, PlatformCreatePage, PlatformDeletePage, PlatformDetailPage, PlatformEditPage, PlatformsPage, PrelanderCreatePage, PrelanderDeletePage, PrelanderDetailPage, PrelanderEditPage, PrelandersPage, TrackingLinkCreatePage, TrackingLinkDeletePage, TrackingLinkDetailPage, TrackingLinkEditPage, TrackingLinksPage } from '../features/resources/ResourcePages'
 import type { DashboardContext } from '../types/domain'
 
 export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
@@ -21,11 +21,6 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/campaigns/:id" element={<FeatureGate ctx={ctx} featureKey="campaigns"><CampaignDetailPage ctx={ctx} /></FeatureGate>} />
       <Route path="/campaigns/:id/edit" element={<FeatureGate ctx={ctx} featureKey="campaigns"><CampaignEditPage ctx={ctx} /></FeatureGate>} />
       <Route path="/campaigns/:id/delete" element={<FeatureGate ctx={ctx} featureKey="campaigns"><CampaignDeletePage ctx={ctx} /></FeatureGate>} />
-      <Route path="/brands" element={<FeatureGate ctx={ctx} featureKey="brands"><BrandsPage ctx={ctx} /></FeatureGate>} />
-      <Route path="/brands/new" element={<FeatureGate ctx={ctx} featureKey="brands"><BrandCreatePage ctx={ctx} /></FeatureGate>} />
-      <Route path="/brands/:id" element={<FeatureGate ctx={ctx} featureKey="brands"><BrandDetailPage ctx={ctx} /></FeatureGate>} />
-      <Route path="/brands/:id/edit" element={<FeatureGate ctx={ctx} featureKey="brands"><BrandEditPage ctx={ctx} /></FeatureGate>} />
-      <Route path="/brands/:id/delete" element={<FeatureGate ctx={ctx} featureKey="brands"><BrandDeletePage ctx={ctx} /></FeatureGate>} />
       <Route path="/platforms" element={<FeatureGate ctx={ctx} featureKey="platforms"><PlatformsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/platforms/new" element={<FeatureGate ctx={ctx} featureKey="platforms"><PlatformCreatePage ctx={ctx} /></FeatureGate>} />
       <Route path="/platforms/:id" element={<FeatureGate ctx={ctx} featureKey="platforms"><PlatformDetailPage ctx={ctx} /></FeatureGate>} />

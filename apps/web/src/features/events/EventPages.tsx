@@ -22,7 +22,6 @@ export function EventFiltersForm({ ctx, showStatus = false }: { ctx: DashboardCo
       startDate: getFormString(form, 'startDate'),
       endDate: getFormString(form, 'endDate'),
       campaignId: getFormString(form, 'campaignId'),
-      brandId: getFormString(form, 'brandId'),
       trackingLinkId: getFormString(form, 'trackingLinkId'),
       affiliatePlatformId: getFormString(form, 'affiliatePlatformId'),
       status: getFormString(form, 'status')
@@ -41,7 +40,6 @@ export function EventFiltersForm({ ctx, showStatus = false }: { ctx: DashboardCo
           <label><FieldLabel>Start date</FieldLabel><Input name="startDate" type="date" defaultValue={filters.startDate} /></label>
           <label><FieldLabel>End date</FieldLabel><Input name="endDate" type="date" defaultValue={filters.endDate} /></label>
           <label><FieldLabel>Campaign</FieldLabel><Select name="campaignId" defaultValue={filters.campaignId}><option value="">All campaigns</option>{ctx.tenantCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}</Select></label>
-          <label><FieldLabel>Brand / Offer</FieldLabel><Select name="brandId" defaultValue={filters.brandId}><option value="">All brands</option>{ctx.tenantBrands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</Select></label>
           <label><FieldLabel>Tracking link</FieldLabel><Select name="trackingLinkId" defaultValue={filters.trackingLinkId}><option value="">All links</option>{ctx.tenantTrackingLinks.map((link) => <option key={link.id} value={link.id}>{link.slug}</option>)}</Select></label>
           <label><FieldLabel>Affiliate platform</FieldLabel><Select name="affiliatePlatformId" defaultValue={filters.affiliatePlatformId}><option value="">All platforms</option>{ctx.tenantAffiliatePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{platform.name}</option>)}</Select></label>
           {showStatus && <label><FieldLabel>CAPI status</FieldLabel><Select name="status" defaultValue={filters.status}><option value="">All statuses</option><option value="PENDING">Pending</option><option value="PROCESSING">Processing</option><option value="DELIVERED">Delivered</option><option value="FAILED">Failed</option></Select></label>}
@@ -78,7 +76,7 @@ export function ClickEventsPage({ ctx }: { ctx: DashboardContext }) {
                 <div className="event-dot" />
                 <div>
                   <strong>{event.trackingLink?.slug ?? event.trackingLinkId}</strong>
-                  <span>{formatDate(event.createdAt)} · {event.trackingLink?.brand?.name ?? 'No brand'}</span>
+                  <span>{formatDate(event.createdAt)} · {event.trackingLink?.affiliatePlatform?.name ?? 'No affiliate platform'}</span>
                   <small>{event.fbclid ? `fbclid: ${event.fbclid}` : event.ttclid ? `ttclid: ${event.ttclid}` : event.clickUuid}</small>
                 </div>
               </article>

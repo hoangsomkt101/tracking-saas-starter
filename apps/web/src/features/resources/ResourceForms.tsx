@@ -252,7 +252,8 @@ export function CreateTrackingLinkCard({ ctx, onCreated }: CreateResourceCardPro
         body: JSON.stringify({
           tenantId: ctx.selectedTenant.id,
           campaignId: String(form.get('campaignId') ?? ''),
-          brandId: String(form.get('brandId') ?? ''),
+          affiliatePlatformId: String(form.get('affiliatePlatformId') ?? ''),
+          affiliateUrl: String(form.get('affiliateUrl') ?? ''),
           prelanderId: String(form.get('prelanderId') ?? ''),
           slug: String(form.get('slug') ?? ''),
           prelanderEnabled: form.get('prelanderEnabled') === 'on',
@@ -272,16 +273,17 @@ export function CreateTrackingLinkCard({ ctx, onCreated }: CreateResourceCardPro
     <Card id="links" className="form-card">
       <CardHeader>
         <CardTitle><Link2 size={18} /> Create Tracking Link</CardTitle>
-        <CardDescription>Shortlink ghi click rồi redirect sang affiliate URL của brand/offer đã chọn.</CardDescription>
+        <CardDescription>Shortlink ghi click rồi redirect sang Affiliate URL nhập trực tiếp trên link này.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleCreateTrackingLink}>
           <label><FieldLabel>Campaign (optional)</FieldLabel><Select name="campaignId" defaultValue=""><option value="">Không chọn campaign</option>{ctx.tenantCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}</Select></label>
-          <label><FieldLabel>Brand / Offer</FieldLabel><Select name="brandId" required disabled={!ctx.tenantBrands.length}>{ctx.tenantBrands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name} · {brand.affiliatePlatform?.name ?? brand.affiliatePlatformId}</option>)}</Select></label>
+          <label><FieldLabel>Affiliate platform</FieldLabel><Select name="affiliatePlatformId" required disabled={!ctx.tenantAffiliatePlatforms.length}>{ctx.tenantAffiliatePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{platform.name}</option>)}</Select></label>
+          <label><FieldLabel>Affiliate URL</FieldLabel><Input name="affiliateUrl" placeholder="https://example.com/campaign" required /></label>
           <label><FieldLabel>Prelander</FieldLabel><Select name="prelanderId" defaultValue=""><option value="">Auto redirect / default bridge</option>{ctx.tenantPrelanders.map((prelander) => <option key={prelander.id} value={prelander.id}>{prelander.name}</option>)}</Select></label>
           <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="demo" required /></label>
           <label className="checkbox"><input name="prelanderEnabled" type="checkbox" defaultChecked /> Enable prelander</label>
-          <Button type="submit" disabled={!ctx.tenantBrands.length}><Plus size={16} /> Create link</Button>
+          <Button type="submit" disabled={!ctx.tenantAffiliatePlatforms.length}><Plus size={16} /> Create link</Button>
         </form>
       </CardContent>
     </Card>

@@ -27,7 +27,6 @@ export function eventFilterParams(filters: EventFilters) {
     startDate: filters.startDate || undefined,
     endDate: filters.endDate || undefined,
     campaignId: filters.campaignId || undefined,
-    brandId: filters.brandId || undefined,
     trackingLinkId: filters.trackingLinkId || undefined,
     affiliatePlatformId: filters.affiliatePlatformId || undefined,
     status: filters.status || undefined

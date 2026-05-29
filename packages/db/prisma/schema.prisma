@@ -178,6 +178,7 @@ model AffiliatePlatform {
 
   tenant           Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   brands           Brand[]
+  trackingLinks    TrackingLink[]
   conversionEvents AffiliateConversionEvent[]
 
   @@index([tenantId])
@@ -246,25 +247,29 @@ model Prelander {
 }
 
 model TrackingLink {
-  id               String         @id @default(uuid())
-  tenantId         String
-  campaignId       String?
-  brandId          String
-  prelanderId      String?
-  slug             String
-  prelanderEnabled Boolean        @default(true)
-  isActive         Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  id                  String            @id @default(uuid())
+  tenantId            String
+  campaignId          String?
+  affiliatePlatformId String
+  brandId             String?
+  prelanderId         String?
+  slug                String
+  affiliateUrl        String
+  prelanderEnabled    Boolean           @default(true)
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
-  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  campaign         Campaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  brand            Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  prelander        Prelander?     @relation(fields: [prelanderId], references: [id], onDelete: SetNull)
-  clickEvents      ClickEvent[]
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaign            Campaign?         @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  affiliatePlatform   AffiliatePlatform @relation(fields: [affiliatePlatformId], references: [id], onDelete: Restrict)
+  brand               Brand?            @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  prelander           Prelander?        @relation(fields: [prelanderId], references: [id], onDelete: SetNull)
+  clickEvents         ClickEvent[]
 
   @@index([tenantId])
   @@index([campaignId])
+  @@index([affiliatePlatformId])
   @@index([brandId])
   @@index([prelanderId])
   @@index([isActive])

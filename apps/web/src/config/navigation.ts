@@ -1,4 +1,4 @@
-import { BarChart3, Building2, Crown, Globe2, HelpCircle, Home, KeyRound, Layers3, Link2, Megaphone, MousePointerClick, ScrollText, ShieldCheck } from 'lucide-react'
+import { BarChart3, Crown, Globe2, HelpCircle, Home, KeyRound, Layers3, Link2, Megaphone, MousePointerClick, ScrollText, ShieldCheck } from 'lucide-react'
 import type { NavGroup } from '../types/domain'
 
 export const navGroups: NavGroup[] = [
@@ -8,7 +8,6 @@ export const navGroups: NavGroup[] = [
       { path: '/dashboard', label: 'Overview', icon: Home, featureKey: 'dashboard' },
       { path: '/campaigns', label: 'Campaigns', icon: Megaphone, featureKey: 'campaigns' },
       { path: '/platforms', label: 'Affiliate Platforms', icon: Globe2, featureKey: 'platforms' },
-      { path: '/brands', label: 'Brands / Offers', icon: Building2, featureKey: 'brands' },
       { path: '/datasets', label: 'Datasets', icon: ShieldCheck, featureKey: 'datasets' }
     ]
   },
@@ -40,11 +39,10 @@ export const navGroups: NavGroup[] = [
 export const pageMeta: Record<string, { title: string; description: string }> = {
   '/dashboard': { title: 'Dashboard', description: 'Monitor affiliate performance and workspace activity.' },
   '/campaigns': { title: 'Campaigns', description: 'Create campaigns and select configured dataset.' },
-  '/brands': { title: 'Brands / Offers', description: 'Manage campaign offers and their affiliate URLs.' },
   '/platforms': { title: 'Affiliate Platforms', description: 'Manage supported affiliate networks and webhooks.' },
   '/datasets': { title: 'Datasets', description: 'Manage Meta/TikTok datasets in one place.' },
   '/prelanders': { title: 'Prelanders', description: 'Create branded bridge pages before redirecting visitors to offers.' },
-  '/tracking-links': { title: 'Tracking Links', description: 'Create shortlinks that record clicks before redirecting to offers.' },
+  '/tracking-links': { title: 'Tracking Links', description: 'Create shortlinks with direct Affiliate URL and platform selection.' },
   '/click-events': { title: 'Click Events', description: 'Review latest captured click events.' },
   '/logs': { title: 'Activity Logs', description: 'Theo dõi click, prelanding, webhook affiliate, CAPI và thay đổi cấu hình.' },
   '/analytics': { title: 'Analytics', description: 'Attribution and traffic insights.' },

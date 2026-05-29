@@ -242,6 +242,7 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
   const trackingLink = await prisma.trackingLink.findFirst({
     where: { slug, tenant: { OR: [{ id: tenantKey }, { publicKey: tenantKey }] } },
     include: {
+      affiliatePlatform: true,
       brand: { include: { affiliatePlatform: true } },
       campaign: { include: { datasets: { include: { dataset: true } } } },
       prelander: true,
@@ -283,9 +284,10 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
     eventName
   }, { jobId: getPixelEventId(eventName, clickEvent.clickUuid), delay: capiDelayMs })))
 
-  const redirectUrl = buildAffiliateRedirectUrl(trackingLink.brand.affiliateUrl, trackingLink.brand.affiliatePlatform.trackingParamKey, clickEvent.clickUuid)
+  const redirectUrl = buildAffiliateRedirectUrl(trackingLink.affiliateUrl, trackingLink.affiliatePlatform.trackingParamKey, clickEvent.clickUuid)
   const usesPrelander = Boolean(trackingLink.prelanderEnabled && trackingLink.prelander?.isActive)
-  const pixelScripts = buildBrowserPixelScripts(browserPixels, clickEvent.clickUuid, trackingLink.brand.name)
+  const contentName = trackingLink.brand?.name ?? trackingLink.slug
+  const pixelScripts = buildBrowserPixelScripts(browserPixels, clickEvent.clickUuid, contentName)
   await createActivityLog({
     tenantId: trackingLink.tenantId,
     source: 'redirect',
@@ -301,8 +303,8 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
       trackingLinkId: trackingLink.id,
       campaignId: trackingLink.campaignId,
       brandId: trackingLink.brandId,
-      brand: trackingLink.brand.name,
-      affiliatePlatform: trackingLink.brand.affiliatePlatform.slug,
+      brand: trackingLink.brand?.name,
+      affiliatePlatform: trackingLink.affiliatePlatform.slug,
       prelanderId: trackingLink.prelander?.id,
       usesPrelander,
       ip: clickEvent.ip,

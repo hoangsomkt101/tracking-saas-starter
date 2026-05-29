@@ -311,7 +311,7 @@ function getTrackingLinkWebhookFetchSample(link: TrackingLink) {
 export function TrackingLinksPage({ ctx }: { ctx: DashboardContext }) {
   return (<><StatusBanner status={ctx.status} /><section className="resource-page"><PageToolbar title={<><Link2 size={18} /> Tracking links</>} description={`${ctx.tenantTrackingLinks.length} shortlinks. Quản lý ở các URL riêng.`} createPath="/tracking-links/new" createLabel="Thêm link" /><TrackingLinksTable ctx={ctx} /></section></>)
 }
-export function TrackingLinksTable({ ctx }: { ctx: DashboardContext }) { return <Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Slug</th><th>Campaign</th><th>Brand</th><th>Network</th><th>Shortlink</th><th>Click webhook</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantTrackingLinks.map((link) => <tr key={link.id}><td><strong>{link.slug}</strong></td><td>{link.campaign?.name ?? getCampaignName(ctx, link.campaignId)}</td><td>{link.brand?.name ?? link.brandId}</td><td>{link.brand?.affiliatePlatform?.name ?? link.brand?.affiliatePlatformId ?? '—'}</td><td><CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkPath(link)} <ExternalLink size={13} /></a></CopyableValue></td><td><CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookPath(link)}</code></CopyableValue></td><td><Badge variant={link.isActive ? 'secondary' : 'outline'}>{link.isActive ? 'Active' : 'Inactive'}</Badge></td><td><ActionButtons detailPath={`/tracking-links/${link.id}`} editPath={`/tracking-links/${link.id}/edit`} deletePath={`/tracking-links/${link.id}/delete`} /></td></tr>)}{!ctx.tenantTrackingLinks.length && <tr><td colSpan={8}>Chưa có tracking link.</td></tr>}</tbody></table></div></CardContent></Card> }
+export function TrackingLinksTable({ ctx }: { ctx: DashboardContext }) { return <Card className="table-card"><CardContent><div className="table-wrap"><table><thead><tr><th>Slug</th><th>Campaign</th><th>Affiliate platform</th><th>Affiliate URL</th><th>Shortlink</th><th>Click webhook</th><th>Status</th><th>Actions</th></tr></thead><tbody>{ctx.tenantTrackingLinks.map((link) => <tr key={link.id}><td><strong>{link.slug}</strong></td><td>{link.campaign?.name ?? getCampaignName(ctx, link.campaignId)}</td><td>{link.affiliatePlatform?.name ?? link.affiliatePlatformId}</td><td><CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">Open <ExternalLink size={13} /></a></CopyableValue></td><td><CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkPath(link)} <ExternalLink size={13} /></a></CopyableValue></td><td><CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookPath(link)}</code></CopyableValue></td><td><Badge variant={link.isActive ? 'secondary' : 'outline'}>{link.isActive ? 'Active' : 'Inactive'}</Badge></td><td><ActionButtons detailPath={`/tracking-links/${link.id}`} editPath={`/tracking-links/${link.id}/edit`} deletePath={`/tracking-links/${link.id}/delete`} /></td></tr>)}{!ctx.tenantTrackingLinks.length && <tr><td colSpan={8}>Chưa có tracking link.</td></tr>}</tbody></table></div></CardContent></Card> }
 export function TrackingLinkCreatePage({ ctx }: { ctx: DashboardContext }) { const navigate = useNavigate(); return <section className="form-route"><CreateTrackingLinkCard ctx={ctx} onCreated={() => navigate('/tracking-links')} /><Button asChild variant="outline"><NavLink to="/tracking-links">Quay lại danh sách</NavLink></Button></section> }
 export function TrackingLinkDetailPage({ ctx }: { ctx: DashboardContext }) {
   const { id = '' } = useParams()
@@ -319,11 +319,12 @@ export function TrackingLinkDetailPage({ ctx }: { ctx: DashboardContext }) {
   if (!link) return <NotFoundEntity name="Tracking link" backPath="/tracking-links" />
 
   return (
-    <EntityDetailCard title={<><Link2 size={18} /> {link.slug}</>} description="Chi tiết tracking link. Mỗi link có endpoint webhook riêng, tự map đúng brand/offer như luồng /r." backPath="/tracking-links">
+    <EntityDetailCard title={<><Link2 size={18} /> {link.slug}</>} description="Chi tiết tracking link. Mỗi link tự lưu Affiliate URL và affiliate platform." backPath="/tracking-links">
       <DetailGrid>
         <DetailItem label="Tracking Link ID" value={link.id} />
         <DetailItem label="Campaign" value={link.campaign?.name ?? getCampaignName(ctx, link.campaignId)} />
-        <DetailItem label="Brand" value={link.brand?.name ?? link.brandId} />
+        <DetailItem label="Affiliate platform" value={link.affiliatePlatform?.name ?? link.affiliatePlatformId} />
+        <DetailItem label="Affiliate URL" value={<CopyableValue ctx={ctx} value={link.affiliateUrl} label="affiliate URL"><a href={link.affiliateUrl} target="_blank" rel="noreferrer">{link.affiliateUrl}</a></CopyableValue>} />
         <DetailItem label="Prelander" value={link.prelander?.name ?? (link.prelanderEnabled ? 'Default bridge' : 'Disabled')} />
         <DetailItem label="Shortlink" value={<CopyableValue ctx={ctx} value={getTrackingLinkUrl(link)} label="shortlink"><a href={getTrackingLinkUrl(link)} target="_blank" rel="noreferrer">{getTrackingLinkUrl(link)}</a></CopyableValue>} />
         <DetailItem label="Click webhook" value={<CopyableValue ctx={ctx} value={getTrackingLinkWebhookUrl(link)} label="click webhook URL"><code>{getTrackingLinkWebhookUrl(link)}</code></CopyableValue>} />
@@ -350,5 +351,92 @@ export function TrackingLinkDetailPage({ ctx }: { ctx: DashboardContext }) {
     </EntityDetailCard>
   )
 }
-export function TrackingLinkEditPage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const link = ctx.tenantTrackingLinks.find((item) => item.id === id); if (!link) return <NotFoundEntity name="Tracking link" backPath="/tracking-links" />; const current = link; async function handleSubmit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); const form = new FormData(event.currentTarget); await runEntityAction(ctx, async () => { await ctx.fetchJson<TrackingLink>(`/tracking-links/${current.id}`, { method: 'PUT', body: JSON.stringify({ campaignId: getFormString(form, 'campaignId'), brandId: getFormString(form, 'brandId'), prelanderId: getFormString(form, 'prelanderId'), slug: getFormString(form, 'slug'), prelanderEnabled: form.get('prelanderEnabled') === 'on', isActive: form.get('isActive') === 'on' }) }); navigate('/tracking-links') }, 'Đã cập nhật tracking link') } return <EntityDetailCard title={<><Pencil size={18} /> Sửa tracking link</>} description="Cập nhật link ở trang riêng." backPath="/tracking-links"><form className="route-form" onSubmit={(event) => void handleSubmit(event)}><label><FieldLabel>Campaign (optional)</FieldLabel><Select name="campaignId" defaultValue={current.campaignId ?? ''}><option value="">Không chọn campaign</option>{ctx.tenantCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}</Select></label><label><FieldLabel>Brand / Offer</FieldLabel><Select name="brandId" defaultValue={current.brandId}>{ctx.tenantBrands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</Select></label><label><FieldLabel>Prelander</FieldLabel><Select name="prelanderId" defaultValue={current.prelanderId ?? ''}><option value="">Không chọn</option>{ctx.tenantPrelanders.map((prelander) => <option key={prelander.id} value={prelander.id}>{prelander.name}</option>)}</Select></label><label><FieldLabel>Slug</FieldLabel><Input name="slug" defaultValue={current.slug} required /></label><label className="checkbox"><input name="prelanderEnabled" type="checkbox" defaultChecked={current.prelanderEnabled} /> Enable prelander</label><label className="checkbox"><input name="isActive" type="checkbox" defaultChecked={current.isActive} /> Active</label><Button type="submit">Lưu tracking link</Button></form></EntityDetailCard> }
+export function TrackingLinkEditPage({ ctx }: { ctx: DashboardContext }) {
+  const { id = '' } = useParams()
+  const navigate = useNavigate()
+  const link = ctx.tenantTrackingLinks.find((item) => item.id === id)
+  if (!link) return <NotFoundEntity name="Tracking link" backPath="/tracking-links" />
+
+  const current = link
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+
+    await runEntityAction(ctx, async () => {
+      await ctx.fetchJson<TrackingLink>('/tracking-links/' + current.id, {
+        method: 'PUT',
+        body: JSON.stringify({
+          campaignId: getFormString(form, 'campaignId'),
+          affiliatePlatformId: getFormString(form, 'affiliatePlatformId'),
+          affiliateUrl: getFormString(form, 'affiliateUrl'),
+          prelanderId: getFormString(form, 'prelanderId'),
+          slug: getFormString(form, 'slug'),
+          prelanderEnabled: form.get('prelanderEnabled') === 'on',
+          isActive: form.get('isActive') === 'on'
+        })
+      })
+      navigate('/tracking-links')
+    }, 'Đã cập nhật tracking link')
+  }
+
+  return (
+    <EntityDetailCard
+      title={<><Pencil size={18} /> Sửa tracking link</>}
+      description="Cập nhật Affiliate URL/platform trực tiếp trên link."
+      backPath="/tracking-links"
+    >
+      <form className="route-form" onSubmit={(event) => void handleSubmit(event)}>
+        <label>
+          <FieldLabel>Campaign (optional)</FieldLabel>
+          <Select name="campaignId" defaultValue={current.campaignId ?? ''}>
+            <option value="">Không chọn campaign</option>
+            {ctx.tenantCampaigns.map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
+            ))}
+          </Select>
+        </label>
+
+        <label>
+          <FieldLabel>Affiliate platform</FieldLabel>
+          <Select name="affiliatePlatformId" defaultValue={current.affiliatePlatformId} required>
+            {ctx.tenantAffiliatePlatforms.map((platform) => (
+              <option key={platform.id} value={platform.id}>{platform.name}</option>
+            ))}
+          </Select>
+        </label>
+
+        <label>
+          <FieldLabel>Affiliate URL</FieldLabel>
+          <Input name="affiliateUrl" defaultValue={current.affiliateUrl} required />
+        </label>
+
+        <label>
+          <FieldLabel>Prelander</FieldLabel>
+          <Select name="prelanderId" defaultValue={current.prelanderId ?? ''}>
+            <option value="">Default bridge</option>
+            {ctx.tenantPrelanders.map((prelander) => (
+              <option key={prelander.id} value={prelander.id}>{prelander.name}</option>
+            ))}
+          </Select>
+        </label>
+
+        <label>
+          <FieldLabel>Slug</FieldLabel>
+          <Input name="slug" defaultValue={current.slug} required />
+        </label>
+
+        <label className="checkbox">
+          <input name="prelanderEnabled" type="checkbox" defaultChecked={current.prelanderEnabled} /> Prelander enabled
+        </label>
+        <label className="checkbox">
+          <input name="isActive" type="checkbox" defaultChecked={current.isActive} /> Active
+        </label>
+
+        <Button type="submit" disabled={!ctx.tenantAffiliatePlatforms.length}>Lưu tracking link</Button>
+      </form>
+    </EntityDetailCard>
+  )
+}
+
 export function TrackingLinkDeletePage({ ctx }: { ctx: DashboardContext }) { const { id = '' } = useParams(); const navigate = useNavigate(); const link = ctx.tenantTrackingLinks.find((item) => item.id === id); if (!link) return <NotFoundEntity name="Tracking link" backPath="/tracking-links" />; const current = link; async function handleDelete() { await runEntityAction(ctx, async () => { await ctx.fetchJson<{ ok: boolean }>(`/tracking-links/${current.id}`, { method: 'DELETE' }); navigate('/tracking-links') }, 'Đã xóa tracking link') } return <EntityDetailCard title={<><Trash2 size={18} /> Xóa tracking link</>} description="Xác nhận xóa ở URL riêng." backPath="/tracking-links"><div className="danger-zone"><p>Bạn sắp xóa shortlink <strong>{current.slug}</strong>. Click events liên quan có thể bị xóa theo.</p><Button variant="destructive" onClick={() => void handleDelete()}><Trash2 size={16} /> Xác nhận xóa</Button></div></EntityDetailCard> }
