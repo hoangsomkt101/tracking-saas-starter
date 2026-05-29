@@ -2,10 +2,9 @@ import { UserButton, useAuth, useUser } from '@clerk/clerk-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router'
-import { Bell, ChevronDown, Command, Globe2, Loader2, PanelLeft, Plus, RefreshCw, Search, Sparkles } from 'lucide-react'
+import { Bell, ChevronDown, Command, Globe2, Loader2, PanelLeft, Plus, RefreshCw, Search } from 'lucide-react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { ThemeToggle } from '../components/common/ThemeToggle'
 import { DashboardRoutes } from './DashboardRoutes'
 import { apiBaseUrl } from '../config/env'
@@ -316,16 +315,6 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
           ))}
         </nav>
 
-        <Card className="sidebar-upgrade-card">
-          <CardHeader>
-            <div className="upgrade-icon"><Sparkles size={16} /></div>
-            <CardTitle>Upgrade plan</CardTitle>
-            <CardDescription>Mở khóa advanced attribution, CAPI delivery và quota cao hơn.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button size="sm" className="w-full">Upgrade now</Button>
-          </CardContent>
-        </Card>
       </aside>
 
       <section className="main-panel">
