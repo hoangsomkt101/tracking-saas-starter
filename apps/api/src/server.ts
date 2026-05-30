@@ -54,7 +54,7 @@ function getAffiliatePlatformChoice(input: AnyRecord, fallback?: { name?: string
 function getAffiliatePlatformBaseData(definition: SupportedAffiliatePlatformDefinition) { return { trackingParamKey: definition.trackingParamKey, webhookMethod: definition.webhookMethod, defaultEventName: definition.defaultEventName, eventMapping: [] as Prisma.InputJsonValue } }
 function getBearerToken(req: FastifyRequest) { const h = req.headers.authorization; return h?.startsWith('Bearer ') ? h.slice('Bearer '.length).trim() : null }
 function isClerkConfigured() { return Boolean(process.env.CLERK_SECRET_KEY && !process.env.CLERK_SECRET_KEY.includes('your_clerk_secret_key') && !process.env.CLERK_SECRET_KEY.includes('replace_me')) }
-function isPublicRoute(req: FastifyRequest) { return req.url === '/health' || req.url === '/health/live' || req.url === '/health/ready' || req.url === '/metrics' || req.method === 'OPTIONS' || req.url.startsWith('/affiliate-webhooks/') }
+function isPublicRoute(req: FastifyRequest) { const path = req.url.split('?')[0]; return path === '/health' || path === '/health/live' || path === '/health/ready' || path === '/metrics' || path === '/atp.js' || req.method === 'OPTIONS' || path.startsWith('/affiliate-webhooks/') }
 
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_LIMIT = 25
@@ -64,6 +64,9 @@ type PaginationInput = { page: number; limit: number; skip: number; take: number
 
 function getQueryValue(value: unknown) { return Array.isArray(value) ? value[0] : value }
 function optionalQueryString(value: unknown) { const normalized = getQueryValue(value); return typeof normalized === 'string' && normalized.trim() ? normalized.trim() : undefined }
+const TRACKING_PROPERTY_PREFIX = 'DBG-'
+const trackingTenantKeyPattern = /^[a-zA-Z0-9_-]{1,128}$/
+function parseTrackingPropertyId(value: unknown) { const propertyId = optionalQueryString(value); if (!propertyId?.startsWith(TRACKING_PROPERTY_PREFIX)) return null; const tenantKey = propertyId.slice(TRACKING_PROPERTY_PREFIX.length).trim(); return tenantKey && trackingTenantKeyPattern.test(tenantKey) ? { propertyId, tenantKey } : null }
 function parseStringList(value: unknown) { const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []; return [...new Set(raw.map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))] }
 function parsePositiveInteger(value: unknown, fallback: number, max?: number) { const normalized = getQueryValue(value); const parsed = typeof normalized === 'number' ? normalized : typeof normalized === 'string' ? Number.parseInt(normalized, 10) : Number.NaN; if (!Number.isFinite(parsed) || parsed < 1) return fallback; const integer = Math.floor(parsed); return max ? Math.min(integer, max) : integer }
 function parsePagination(q: AnyRecord): PaginationInput { const page = parsePositiveInteger(q.page, DEFAULT_PAGE); const limit = parsePositiveInteger(q.limit, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT); return { page, limit, skip: (page - 1) * limit, take: limit } }
@@ -91,6 +94,7 @@ async function ensureTenantCoreMenuGrants(tenantId: string) { await ensureMenuFe
 
 function getDefaultTenantName(clerkUser: Awaited<ReturnType<typeof clerk.users.getUser>>) { const fullName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ').trim(); const email = clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId); return fullName || email?.emailAddress || `User ${clerkUser.id}` }
 function getDefaultTenantSlug(clerkUser: Awaited<ReturnType<typeof clerk.users.getUser>>) { return toSlug(getDefaultTenantName(clerkUser)) || toSlug(clerkUser.id) || 'tenant' }
+function getUserDisplayName(user: Pick<User, 'firstName' | 'lastName' | 'email'> | null | undefined, fallback = 'Unknown user') { const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim(); return fullName || user?.email || fallback }
 async function getDefaultBillingPlanId() { const existing = await prisma.billingPlan.findFirst({ where: { isDefault: true, isActive: true }, orderBy: { createdAt: 'asc' } }); if (existing) return existing.id; const plan = await prisma.billingPlan.upsert({ where: { slug: 'free' }, update: { isDefault: true, isActive: true }, create: { slug: 'free', name: 'Free', description: 'Default free plan for newly registered accounts', monthlyPriceCents: 0, currency: 'USD', clickLimit: 1000, capiEventLimit: 1000, eapiEventLimit: 1000, campaignDatasetLimit: 2, isDefault: true, isActive: true } }); return plan.id }
 async function getTenantPlanOrDefault(tenantId: string) { const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { billingPlan: true } }); if (!tenant) return null; if (tenant.billingPlan) return tenant.billingPlan; const billingPlanId = await getDefaultBillingPlanId(); return (await prisma.tenant.update({ where: { id: tenantId }, data: { billingPlanId }, include: { billingPlan: true } })).billingPlan }
 async function getCurrentBillingUsage(tenantId: string) { const periodStart = new Date(); periodStart.setUTCDate(1); periodStart.setUTCHours(0, 0, 0, 0); const [clicks, capiEvents, eapiEvents] = await Promise.all([prisma.clickEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } }), prisma.capiEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } }), prisma.affiliateConversionEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } })]); return { periodStart, clicks, capiEvents, eapiEvents } }
@@ -301,6 +305,17 @@ app.get('/metrics', async () => {
     clickEventsQueue.getFailedCount()
   ])
   return { service: 'api', queue: { clickEvents: { waiting, active, delayed, failed } } }
+})
+app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIPT_RATE_LIMIT_MAX ?? 600), timeWindow: process.env.PUBLIC_SCRIPT_RATE_LIMIT_WINDOW ?? '1 minute' } } }, async (req, reply) => {
+  const parsed = parseTrackingPropertyId((req.query as AnyRecord).property_id)
+  const scriptHeaders = () => reply.header('content-type', 'application/javascript; charset=utf-8').header('cache-control', 'no-store')
+  if (!parsed) return scriptHeaders().code(400).send('console.warn("[AffTrackPro] Invalid property_id. Expected DBG-{tenantKey}.");\n')
+
+  const tenant = await prisma.tenant.findFirst({ where: { OR: [{ publicKey: parsed.tenantKey }, { id: parsed.tenantKey }] }, include: { ownerUser: true } })
+  if (!tenant) return scriptHeaders().code(404).send('console.warn("[AffTrackPro] Unknown property_id.");\n')
+
+  const userName = getUserDisplayName(tenant.ownerUser, tenant.name)
+  return scriptHeaders().send(`(() => {\n  console.log(${JSON.stringify(userName)});\n})();\n`)
 })
 app.get('/me', async (req) => ({ ...requireAuthenticated(req), isSuperAdmin: isSuperAdmin(requireAuthenticated(req)) }))
 

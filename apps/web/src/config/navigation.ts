@@ -1,4 +1,4 @@
-import { BarChart3, Crown, Globe2, HelpCircle, Home, Link2, Megaphone, MousePointerClick, ScrollText, ShieldCheck } from 'lucide-react'
+import { BarChart3, Crown, Globe2, HelpCircle, Home, Link2, Megaphone, MousePointerClick, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import type { NavGroup } from '../types/domain'
 
 export const navGroups: NavGroup[] = [
@@ -29,6 +29,7 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Account',
     items: [
+      { path: '/settings', label: 'Settings', icon: Settings, featureKey: 'settings' },
       { path: '/support', label: 'Support', icon: HelpCircle, featureKey: 'support' }
     ]
   }

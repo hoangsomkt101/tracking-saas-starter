@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router'
-import { Settings, WalletCards } from 'lucide-react'
+import { WalletCards } from 'lucide-react'
 import { FeatureGate, PlaceholderPage } from '../components/common/FeatureGate'
 import { OverviewPage } from '../features/dashboard/OverviewPage'
+import { SettingsPage } from '../features/account/SettingsPage'
 import { AnalyticsPage } from '../features/analytics/AnalyticsPage'
 import { SuperAdminPage, SuperAdminUserManagePage } from '../features/admin/SuperAdminPages'
 import { ClickEventsPage } from '../features/events/EventPages'
@@ -39,7 +40,7 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/logs" element={<FeatureGate ctx={ctx} featureKey="activity-logs"><ActivityLogsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/analytics" element={<FeatureGate ctx={ctx} featureKey="analytics"><AnalyticsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/billing" element={<FeatureGate ctx={ctx} featureKey="billing"><PlaceholderPage icon={WalletCards} title="Billing" description="Plan, usage quota và invoices." /></FeatureGate>} />
-      <Route path="/settings" element={<FeatureGate ctx={ctx} featureKey="settings"><PlaceholderPage icon={Settings} title="Settings" description="Workspace settings và tracking integrations." /></FeatureGate>} />
+      <Route path="/settings" element={<FeatureGate ctx={ctx} featureKey="settings"><SettingsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/support" element={<FeatureGate ctx={ctx} featureKey="support"><SupportPage /></FeatureGate>} />
       <Route path="/superadmin" element={<SuperAdminPage ctx={ctx} />} />
       <Route path="/superadmin/users/:id/manage" element={<SuperAdminUserManagePage ctx={ctx} />} />
