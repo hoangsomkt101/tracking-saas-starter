@@ -318,8 +318,135 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
   const tenant = await prisma.tenant.findFirst({ where: { OR: [{ publicKey: parsed.tenantKey }, { id: parsed.tenantKey }] }, include: { ownerUser: true } })
   if (!tenant) return scriptHeaders().code(404).send('console.warn("[AffTrackPro] Unknown property_id.");\n')
 
-  const userName = getUserDisplayName(tenant.ownerUser, tenant.name)
-  return scriptHeaders().send(`(() => {\n  console.log(${JSON.stringify(userName)});\n})();\n`)
+  const [trackingLinks, userName] = await Promise.all([
+    prisma.trackingLink.findMany({ where: { tenantId: tenant.id, isActive: true }, select: { id: true, slug: true, affiliateUrl: true } }),
+    Promise.resolve(getUserDisplayName(tenant.ownerUser, tenant.name))
+  ])
+  const payload = {
+    propertyId: parsed.propertyId,
+    tenantKey: tenant.publicKey,
+    tenantId: tenant.id,
+    userName,
+    trackingLinks: trackingLinks.map((link) => ({
+      id: link.id,
+      slug: link.slug,
+      affiliateUrl: link.affiliateUrl,
+      shortlinkPaths: [`/${link.slug}/${tenant.publicKey}`, `/${link.slug}/${tenant.id}`]
+    }))
+  }
+
+  return scriptHeaders().send(`(() => {
+  const config = ${JSON.stringify(payload)};
+  const detectedKeys = new Set();
+  let loggedEmpty = false;
+  let mutationTimer = null;
+
+  console.log(config.userName);
+
+  function toUrl(value) {
+    try {
+      return new URL(value, window.location.href);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function cleanPath(pathname) {
+    return (pathname || '/').replace(/\\/+$/, '') || '/';
+  }
+
+  function shortlinkPathMatches(href, shortlinkPaths) {
+    const url = toUrl(href);
+    if (!url) return false;
+    const currentPath = cleanPath(url.pathname);
+    return shortlinkPaths.some((path) => cleanPath(path) === currentPath);
+  }
+
+  function affiliateUrlMatches(href, affiliateUrl) {
+    const current = toUrl(href);
+    const expected = toUrl(affiliateUrl);
+    if (!current || !expected) return false;
+    current.hash = '';
+    expected.hash = '';
+    if (current.origin !== expected.origin) return false;
+    if (cleanPath(current.pathname) !== cleanPath(expected.pathname)) return false;
+    for (const [key, value] of expected.searchParams.entries()) {
+      if (current.searchParams.get(key) !== value) return false;
+    }
+    return true;
+  }
+
+  function getCandidates() {
+    const links = Array.from(document.querySelectorAll('a[href], area[href]')).map((element, index) => ({
+      source: element.tagName.toLowerCase(),
+      index,
+      text: (element.textContent || '').trim().slice(0, 120),
+      href: element.getAttribute('href') || element.href || ''
+    }));
+    const forms = Array.from(document.querySelectorAll('form[action]')).map((element, index) => ({
+      source: 'form',
+      index,
+      text: '',
+      href: element.getAttribute('action') || element.action || ''
+    }));
+    return links.concat(forms);
+  }
+
+  function scanTrackingLinks() {
+    const detections = [];
+    const candidates = getCandidates();
+
+    for (const candidate of candidates) {
+      if (!candidate.href) continue;
+      for (const trackingLink of config.trackingLinks) {
+        const matchType = affiliateUrlMatches(candidate.href, trackingLink.affiliateUrl)
+          ? 'affiliate_url'
+          : shortlinkPathMatches(candidate.href, trackingLink.shortlinkPaths)
+            ? 'shortlink'
+            : null;
+        if (!matchType) continue;
+        const key = trackingLink.id + ':' + matchType + ':' + candidate.href;
+        if (detectedKeys.has(key)) continue;
+        detectedKeys.add(key);
+        detections.push({
+          detected: true,
+          type: matchType,
+          source: candidate.source,
+          index: candidate.index,
+          text: candidate.text,
+          href: candidate.href,
+          trackingLinkId: trackingLink.id,
+          slug: trackingLink.slug,
+          affiliateUrl: trackingLink.affiliateUrl,
+          shortlinkPaths: trackingLink.shortlinkPaths
+        });
+      }
+    }
+
+    if (detections.length) {
+      console.log('[AffTrackPro] Đã phát hiện Affiliate URL hoặc Shortlink', detections);
+    } else if (!loggedEmpty) {
+      loggedEmpty = true;
+      console.log('[AffTrackPro] Chưa phát hiện Affiliate URL hoặc Shortlink trên trang này.');
+    }
+  }
+
+  function scheduleScan() {
+    if (mutationTimer) window.clearTimeout(mutationTimer);
+    mutationTimer = window.setTimeout(scanTrackingLinks, 250);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scanTrackingLinks, { once: true });
+  } else {
+    scanTrackingLinks();
+  }
+
+  if (document.documentElement && window.MutationObserver) {
+    new MutationObserver(scheduleScan).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['href', 'action'] });
+  }
+})();
+`)
 })
 app.get('/me', async (req) => ({ ...requireAuthenticated(req), isSuperAdmin: isSuperAdmin(requireAuthenticated(req)) }))
 
