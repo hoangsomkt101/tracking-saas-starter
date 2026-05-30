@@ -308,7 +308,11 @@ app.get('/metrics', async () => {
 })
 app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIPT_RATE_LIMIT_MAX ?? 600), timeWindow: process.env.PUBLIC_SCRIPT_RATE_LIMIT_WINDOW ?? '1 minute' } } }, async (req, reply) => {
   const parsed = parseTrackingPropertyId((req.query as AnyRecord).property_id)
-  const scriptHeaders = () => reply.header('content-type', 'application/javascript; charset=utf-8').header('cache-control', 'no-store')
+  const scriptHeaders = () => reply
+    .header('content-type', 'application/javascript; charset=utf-8')
+    .header('cache-control', 'no-store')
+    .header('access-control-allow-origin', '*')
+    .header('cross-origin-resource-policy', 'cross-origin')
   if (!parsed) return scriptHeaders().code(400).send('console.warn("[AffTrackPro] Invalid property_id. Expected DBG-{tenantKey}.");\n')
 
   const tenant = await prisma.tenant.findFirst({ where: { OR: [{ publicKey: parsed.tenantKey }, { id: parsed.tenantKey }] }, include: { ownerUser: true } })
