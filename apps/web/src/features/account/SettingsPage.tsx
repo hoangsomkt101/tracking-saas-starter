@@ -28,10 +28,7 @@ async function copyTrackingScript(ctx: DashboardContext, script: string) {
 }
 
 export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
-    const tenant = ctx.selectedTenant
-    const tenantKey = getTenantKey(tenant)
-    const propertyId = tenantKey ? `${TRACKING_PROPERTY_PREFIX}${tenantKey}` : ''
-    const trackingScript = getTrackingScript(tenant)
+    const trackingScript = getTrackingScript(ctx.selectedTenant)
 
     return (
         <>
@@ -40,22 +37,16 @@ export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
                 <Card className="page-card settings-card">
                     <CardHeader>
                         <CardTitle><KeyRound size={18} /> Tracking code</CardTitle>
-                        <CardDescription>Dán mã này vào website cần test. Property ID có tiền tố cố định DBG- và tenantKey là publicKey workspace.</CardDescription>
+                        <CardDescription>Dán mã này vào website hoặc landing để quét link tracking đã gắn trên trang.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="detail-grid settings-detail-grid">
-                            <div className="detail-item"><span>Workspace</span><strong>{tenant?.name ?? 'Chưa có workspace'}</strong></div>
-                            <div className="detail-item"><span>tenantKey</span><strong>{tenantKey || 'Chưa có tenantKey'}</strong></div>
-                            <div className="detail-item"><span>property_id</span><strong>{propertyId || 'Chưa có property_id'}</strong></div>
-                        </div>
-
                         <div className="tracking-code-box">
                             <div className="tracking-code-heading">
                                 <strong>Mã tracking</strong>
                                 <Button type="button" variant="outline" size="sm" disabled={!trackingScript} onClick={() => void copyTrackingScript(ctx, trackingScript)}><Copy size={14} /> Copy</Button>
                             </div>
                             <pre className="webhook-code-sample"><code>{trackingScript || 'Không tìm thấy workspace để tạo mã tracking.'}</code></pre>
-                            <p className="form-hint">Hiện tại script gọi API /atp.js và console.log ra tên người dùng sở hữu tenantKey.</p>
+                            <p className="form-hint">Chức năng hiện tại: quét các Affiliate URL hoặc Shortlink thuộc Tracking Links trên website đã gắn mã và console.log khi phát hiện.</p>
                         </div>
                     </CardContent>
                 </Card>
