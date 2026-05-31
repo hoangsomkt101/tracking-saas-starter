@@ -71,7 +71,7 @@ export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
                     <CardContent>
                         <div className="tracking-code-box">
                             <pre className="webhook-code-sample"><code>{trackingScript || 'Không tìm thấy workspace để tạo mã tracking.'}</code></pre>
-                            <p className="form-hint">Mã sẽ quét Affiliate URL hoặc Shortlink thuộc Tracking Links và console.log khi phát hiện.</p>
+                            <p className="form-hint">Mã sẽ quét Affiliate URL hoặc Shortlink thuộc Tracking Links và gửi ViewContent (CAPI) khi campaign có dataset.</p>
                         </div>
                     </CardContent>
                 </Card>

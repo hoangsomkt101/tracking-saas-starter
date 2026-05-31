@@ -9,7 +9,7 @@ export type ClickEventJob = {
   tenantId: string
   trackingLinkId: string
   eventName?: string
-  source?: 'click' | 'affiliate_conversion'
+  source?: 'click' | 'affiliate_conversion' | 'tracking_script'
   sourceId?: string
 }
 

@@ -6,7 +6,7 @@ import rateLimit from '@fastify/rate-limit'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import { Prisma, prisma, type User } from '@repo/db'
-import { createClickEventsQueue, createRedisConnection, getSupportedAffiliatePlatform, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, parseEnvList, requireSupportedAffiliatePlatform, resolveAffiliateEventName, validateHttpUrl, type AffiliateEventMatch, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
+import { createClickEventsQueue, createFbc, createRedisConnection, getSupportedAffiliatePlatform, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, parseEnvList, requireSupportedAffiliatePlatform, resolveAffiliateEventName, validateHttpUrl, type AffiliateEventMatch, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
 
 const app = Fastify({ logger: true })
 await app.register(helmet, { contentSecurityPolicy: false })
@@ -27,7 +27,7 @@ const allowedCorsOrigins = new Set([
 ])
 
 function applyCorsHeaders(req: FastifyRequest, reply: FastifyReply) {
-  if (req.url.split('?')[0] === '/atp.js') return
+  if (['/atp.js', '/atp/events'].includes(req.url.split('?')[0])) return
   const origin = req.headers.origin
   reply
     .header('vary', 'Origin')
@@ -51,11 +51,13 @@ function optionalInteger(value: unknown, fallback: number) { const n = typeof va
 function normalizePrelanderTheme(value: unknown) { const v = typeof value === 'string' ? value.trim().toLowerCase() : 'clean'; return ['clean', 'dark', 'warm'].includes(v) ? v : 'clean' }
 function normalizeDatasetPlatform(value: unknown) { const p = requireString(value, 'platform').toLowerCase(); if (!['meta', 'tiktok'].includes(p)) throw new Error('platform must be meta or tiktok'); return p }
 function toSlug(value: string) { return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) }
+function stableStringify(value: unknown): string { if (value === null || value === undefined) return JSON.stringify(value); if (typeof value === 'bigint') return JSON.stringify(value.toString()); if (value instanceof Date) return JSON.stringify(value.toISOString()); if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`; if (typeof value === 'object') { const record = value as AnyRecord; return `{${Object.keys(record).sort().filter((key) => record[key] !== undefined).map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}` } return JSON.stringify(value) }
+function sha256Hex(value: string) { return createHash('sha256').update(value).digest('hex') }
 function getAffiliatePlatformChoice(input: AnyRecord, fallback?: { name?: string | null; slug?: string | null; trackingParamKey?: string | null }) { const candidates = [input.platform, input.platformKey, input.network, input.slug, input.trackingParamKey, fallback?.slug, fallback?.trackingParamKey, fallback?.name, input.name]; for (const candidate of candidates) { const platform = getSupportedAffiliatePlatform(candidate); if (platform) return platform } return requireSupportedAffiliatePlatform(input.platform ?? input.platformKey ?? input.network ?? input.slug ?? input.trackingParamKey ?? input.name) }
 function getAffiliatePlatformBaseData(definition: SupportedAffiliatePlatformDefinition) { return { trackingParamKey: definition.trackingParamKey, webhookMethod: definition.webhookMethod, defaultEventName: definition.defaultEventName, eventMapping: [] as Prisma.InputJsonValue } }
 function getBearerToken(req: FastifyRequest) { const h = req.headers.authorization; return h?.startsWith('Bearer ') ? h.slice('Bearer '.length).trim() : null }
 function isClerkConfigured() { return Boolean(process.env.CLERK_SECRET_KEY && !process.env.CLERK_SECRET_KEY.includes('your_clerk_secret_key') && !process.env.CLERK_SECRET_KEY.includes('replace_me')) }
-function isPublicRoute(req: FastifyRequest) { const path = req.url.split('?')[0]; return path === '/health' || path === '/health/live' || path === '/health/ready' || path === '/metrics' || path === '/atp.js' || req.method === 'OPTIONS' || path.startsWith('/affiliate-webhooks/') }
+function isPublicRoute(req: FastifyRequest) { const path = req.url.split('?')[0]; return path === '/health' || path === '/health/live' || path === '/health/ready' || path === '/metrics' || path === '/atp.js' || path === '/atp/events' || req.method === 'OPTIONS' || path.startsWith('/affiliate-webhooks/') }
 
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_LIMIT = 25
@@ -99,6 +101,32 @@ function getRequestWebsiteOrigin(req: FastifyRequest) {
   if (referer) { const url = parseHttpUrl(referer); if (url) return { origin: url.origin, host: normalizeUrlHost(url), source: 'referer' as const } }
   return null
 }
+async function getAllowedWebsiteOrigin(req: FastifyRequest, tenantId: string) {
+  const requestWebsite = getRequestWebsiteOrigin(req)
+  if (!requestWebsite) return null
+  const allowedDomains = await prisma.websiteDomain.findMany({ where: { tenantId }, select: { domain: true } })
+  return allowedDomains.some((entry) => websiteHostMatches(requestWebsite.host, entry.domain)) ? requestWebsite.origin : null
+}
+function trackingEventHeaders(reply: FastifyReply, allowedOrigin?: string | null) {
+  const response = reply
+    .header('content-type', 'application/json; charset=utf-8')
+    .header('vary', 'Origin, Referer')
+    .header('access-control-allow-methods', 'POST,OPTIONS')
+    .header('access-control-allow-headers', 'content-type')
+    .header('access-control-max-age', '86400')
+  if (allowedOrigin) response.header('access-control-allow-origin', allowedOrigin)
+  return response
+}
+function getClientIp(req: FastifyRequest) { return getHeaderString(req, 'x-forwarded-for')?.split(',')[0]?.trim() || req.ip }
+function getPublicRequestOrigin(req: FastifyRequest) {
+  const proto = (getHeaderString(req, 'x-forwarded-proto') ?? 'http').split(',')[0]?.trim().toLowerCase() === 'https' ? 'https' : 'http'
+  const host = (getHeaderString(req, 'x-forwarded-host') ?? getHeaderString(req, 'host') ?? '').split(',')[0]?.trim()
+  return host ? `${proto}://${host}` : undefined
+}
+function optionalLimitedString(value: unknown, maxLength = 1024) { const text = optionalString(value); return text ? text.slice(0, maxLength) : undefined }
+function getUrlSearchParam(value: string | undefined, key: string) { if (!value) return undefined; const url = parseHttpUrl(value); return optionalLimitedString(url?.searchParams.get(key), 512) }
+function normalizeTrackingEventId(value: unknown) { const raw = optionalLimitedString(value, 160) ?? randomUUID(); const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 160); return normalized || randomUUID() }
+function buildTrackingScriptClickUuid(input: { tenantId: string; trackingLinkId: string; eventId: string }) { return `atp_${sha256Hex(stableStringify(input)).slice(0, 32)}` }
 function parseStringList(value: unknown) { const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []; return [...new Set(raw.map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))] }
 function parsePositiveInteger(value: unknown, fallback: number, max?: number) { const normalized = getQueryValue(value); const parsed = typeof normalized === 'number' ? normalized : typeof normalized === 'string' ? Number.parseInt(normalized, 10) : Number.NaN; if (!Number.isFinite(parsed) || parsed < 1) return fallback; const integer = Math.floor(parsed); return max ? Math.min(integer, max) : integer }
 function parsePagination(q: AnyRecord): PaginationInput { const page = parsePositiveInteger(q.page, DEFAULT_PAGE); const limit = parsePositiveInteger(q.limit, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT); return { page, limit, skip: (page - 1) * limit, take: limit } }
@@ -165,8 +193,6 @@ function toJsonSafe(value: unknown): unknown { if (value === null || value === u
 function normalizeActivityLogLevel(value: unknown) { const level = typeof value === 'string' ? value.trim().toUpperCase() : ''; return activityLogLevels.has(level as ActivityLogLevelInput) ? level as ActivityLogLevelInput : undefined }
 function serializeActivityLog(e: AnyRecord) { return { ...e, id: e.id.toString() } }
 async function createActivityLog(input: { tenantId: string; level?: ActivityLogLevelInput; source: string; eventType: string; message: string; entityType?: string; entityId?: string | number | bigint | null; metadata?: unknown }) { try { await prisma.$executeRawUnsafe('INSERT INTO "ActivityLog" ("tenantId", "level", "source", "eventType", "message", "entityType", "entityId", "metadata") VALUES ($1, $2::"ActivityLogLevel", $3, $4, $5, $6, $7, $8::jsonb)', input.tenantId, input.level ?? 'INFO', input.source, input.eventType, input.message, input.entityType ?? null, input.entityId === null || input.entityId === undefined ? null : String(input.entityId), input.metadata === undefined ? null : JSON.stringify(toJsonSafe(input.metadata))) } catch (error) { app.log.warn({ error, tenantId: input.tenantId, eventType: input.eventType }, 'Failed to write activity log') } }
-function stableStringify(value: unknown): string { if (value === null || value === undefined) return JSON.stringify(value); if (typeof value === 'bigint') return JSON.stringify(value.toString()); if (value instanceof Date) return JSON.stringify(value.toISOString()); if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`; if (typeof value === 'object') { const record = value as AnyRecord; return `{${Object.keys(record).sort().filter((key) => record[key] !== undefined).map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}` } return JSON.stringify(value) }
-function sha256Hex(value: string) { return createHash('sha256').update(value).digest('hex') }
 function getHeaderString(req: FastifyRequest, name: string) { const value = req.headers[name.toLowerCase()]; return Array.isArray(value) ? value[0] : typeof value === 'string' && value.trim() ? value.trim() : undefined }
 function isFilledPayloadValue(value: unknown): boolean { if (value === undefined || value === null) return false; if (typeof value === 'string') return value.trim().length > 0; if (Array.isArray(value)) return value.some(isFilledPayloadValue); return true }
 function normalizePayloadLookupKey(value: string) { return value.toLowerCase().replace(/[^a-z0-9]/g, '') }
@@ -315,7 +341,19 @@ async function buildAnalyticsBreakdown(userId: string, q: AnyRecord) {
 }
 
 app.addHook('onSend', async (req, reply, payload) => { applyCorsHeaders(req, reply); return payload })
-app.options('/*', async (req, reply) => { applyCorsHeaders(req, reply); return reply.code(204).send() })
+app.options('/*', async (req, reply) => {
+  if (req.url.split('?')[0] === '/atp/events') {
+    const parsed = parseTrackingPropertyId((req.query as AnyRecord).property_id)
+    if (parsed) {
+      const tenant = await prisma.tenant.findFirst({ where: { OR: [{ publicKey: parsed.tenantKey }, { id: parsed.tenantKey }] }, select: { id: true } })
+      const allowedOrigin = tenant ? await getAllowedWebsiteOrigin(req, tenant.id) : null
+      if (allowedOrigin) return trackingEventHeaders(reply, allowedOrigin).code(204).send()
+    }
+    return trackingEventHeaders(reply).code(403).send()
+  }
+  applyCorsHeaders(req, reply)
+  return reply.code(204).send()
+})
 app.addHook('preHandler', async (req) => { if (isPublicRoute(req)) return; (req as AuthenticatedRequest).currentUser = await requireUser(req) })
 
 app.get('/health', async () => ({ status: 'ok', service: 'api' }))
@@ -354,13 +392,19 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
   const tenant = await prisma.tenant.findFirst({ where: { OR: [{ publicKey: parsed.tenantKey }, { id: parsed.tenantKey }] }, include: { ownerUser: true } })
   if (!tenant) return scriptHeaders().code(404).send('console.warn("[AffTrackPro] Unknown property_id.");\n')
 
-  const requestWebsite = getRequestWebsiteOrigin(req)
-  const allowedDomains = await prisma.websiteDomain.findMany({ where: { tenantId: tenant.id }, select: { domain: true } })
-  const allowedOrigin = requestWebsite && allowedDomains.some((entry) => websiteHostMatches(requestWebsite.host, entry.domain)) ? requestWebsite.origin : undefined
+  const allowedOrigin = await getAllowedWebsiteOrigin(req, tenant.id)
   if (!allowedOrigin) return scriptHeaders().code(403).send('console.warn("[AffTrackPro] Website domain is not allowed for this tracking code.");\n')
 
   const [trackingLinks, userName] = await Promise.all([
-    prisma.trackingLink.findMany({ where: { tenantId: tenant.id, isActive: true }, select: { id: true, slug: true, affiliateUrl: true } }),
+    prisma.trackingLink.findMany({
+      where: { tenantId: tenant.id, isActive: true },
+      select: {
+        id: true,
+        slug: true,
+        affiliateUrl: true,
+        campaign: { select: { datasets: { select: { dataset: { select: { isActive: true } } } } } }
+      }
+    }),
     Promise.resolve(getUserDisplayName(tenant.ownerUser, tenant.name))
   ])
   const payload = {
@@ -368,10 +412,12 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     tenantKey: tenant.publicKey,
     tenantId: tenant.id,
     userName,
+    eventEndpointPath: `/atp/events?property_id=${encodeURIComponent(parsed.propertyId)}`,
     trackingLinks: trackingLinks.map((link) => ({
       id: link.id,
       slug: link.slug,
       affiliateUrl: link.affiliateUrl,
+      hasCapiDatasets: Boolean(link.campaign?.datasets.some((entry) => entry.dataset.isActive)),
       shortlinkPaths: [`/${link.slug}/${tenant.publicKey}`, `/${link.slug}/${tenant.id}`]
     }))
   }
@@ -379,10 +425,32 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
   return scriptHeaders(allowedOrigin).send(`(() => {
   const config = ${JSON.stringify(payload)};
   const detectedKeys = new Set();
+  const sentEventKeys = new Set();
   let loggedEmpty = false;
   let mutationTimer = null;
+  const scriptBaseUrl = document.currentScript && document.currentScript.src ? document.currentScript.src : window.location.href;
+  const eventEndpointUrl = resolveEventEndpoint();
+  const pageInstanceId = createId();
 
   console.log(config.userName);
+
+  function createId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16);
+      window.crypto.getRandomValues(bytes);
+      return Array.from(bytes).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+    }
+    return String(Date.now()) + '_' + Math.random().toString(36).slice(2);
+  }
+
+  function resolveEventEndpoint() {
+    try {
+      return config.eventEndpointPath ? new URL(config.eventEndpointPath, scriptBaseUrl).href : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   function toUrl(value) {
     try {
@@ -417,6 +485,84 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     return true;
   }
 
+  function getSearchParam(urlValue, name) {
+    const url = toUrl(urlValue);
+    return url ? url.searchParams.get(name) || '' : '';
+  }
+
+  function readCookie(name) {
+    const prefix = name + '=';
+    const item = (document.cookie || '').split(';').map((part) => part.trim()).find((part) => part.indexOf(prefix) === 0);
+    if (!item) return '';
+    const value = item.slice(prefix.length);
+    try {
+      return decodeURIComponent(value);
+    } catch (_) {
+      return value;
+    }
+  }
+
+  function getKnownCookies() {
+    return {
+      fbp: readCookie('_fbp'),
+      fbc: readCookie('_fbc'),
+      ttp: readCookie('_ttp'),
+      ga: readCookie('_ga'),
+      gid: readCookie('_gid'),
+      gclAu: readCookie('_gcl_au')
+    };
+  }
+
+  function safeIdentifier(value) {
+    return String(value || '').replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 80) || createId();
+  }
+
+  function sendViewContentEvent(detection, trackingLink) {
+    if (!trackingLink.hasCapiDatasets || !eventEndpointUrl || !window.fetch) return;
+    const eventKey = trackingLink.id + ':' + window.location.href;
+    if (sentEventKeys.has(eventKey)) return;
+    sentEventKeys.add(eventKey);
+
+    const cookies = getKnownCookies();
+    const fbclid = getSearchParam(window.location.href, 'fbclid') || getSearchParam(detection.href, 'fbclid');
+    const ttclid = getSearchParam(window.location.href, 'ttclid') || getSearchParam(detection.href, 'ttclid');
+    const eventId = 'ViewContent_atp_' + safeIdentifier(pageInstanceId) + '_' + safeIdentifier(trackingLink.id);
+    const payload = {
+      eventName: 'ViewContent',
+      eventId,
+      trackingLinkId: trackingLink.id,
+      slug: trackingLink.slug,
+      matchType: detection.type,
+      href: detection.href,
+      source: detection.source,
+      index: detection.index,
+      text: detection.text,
+      pageUrl: window.location.href,
+      pageTitle: document.title || '',
+      referrer: document.referrer || '',
+      fbp: cookies.fbp,
+      fbc: cookies.fbc,
+      ttp: cookies.ttp,
+      fbclid,
+      ttclid,
+      cookies
+    };
+
+    window.fetch(eventEndpointUrl, {
+      method: 'POST',
+      mode: 'cors',
+      credentials: 'omit',
+      keepalive: true,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then((response) => {
+      if (!response.ok) console.warn('[AffTrackPro] Không gửi được ViewContent CAPI', response.status);
+      else console.log('[AffTrackPro] Đã gửi ViewContent CAPI', { trackingLinkId: trackingLink.id, slug: trackingLink.slug });
+    }).catch((error) => {
+      console.warn('[AffTrackPro] Không gửi được ViewContent CAPI', error);
+    });
+  }
+
   function getCandidates() {
     const links = Array.from(document.querySelectorAll('a[href], area[href]')).map((element, index) => ({
       source: element.tagName.toLowerCase(),
@@ -449,7 +595,7 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
         const key = trackingLink.id + ':' + matchType + ':' + candidate.href;
         if (detectedKeys.has(key)) continue;
         detectedKeys.add(key);
-        detections.push({
+        const detection = {
           detected: true,
           type: matchType,
           source: candidate.source,
@@ -459,8 +605,11 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
           trackingLinkId: trackingLink.id,
           slug: trackingLink.slug,
           affiliateUrl: trackingLink.affiliateUrl,
+          hasCapiDatasets: trackingLink.hasCapiDatasets,
           shortlinkPaths: trackingLink.shortlinkPaths
-        });
+        };
+        detections.push(detection);
+        sendViewContentEvent(detection, trackingLink);
       }
     }
 
@@ -489,6 +638,137 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
 })();
 `)
 })
+
+app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_TRACKING_EVENT_RATE_LIMIT_MAX ?? 300), timeWindow: process.env.PUBLIC_TRACKING_EVENT_RATE_LIMIT_WINDOW ?? '1 minute' } } }, async (req, reply) => {
+  const parsed = parseTrackingPropertyId((req.query as AnyRecord).property_id)
+  let allowedOrigin: string | null = null
+  const send = (code: number, payload: AnyRecord) => trackingEventHeaders(reply, allowedOrigin).code(code).send(payload)
+
+  if (!parsed) return send(400, { error: 'Invalid property_id' })
+
+  const tenant = await prisma.tenant.findFirst({ where: { OR: [{ publicKey: parsed.tenantKey }, { id: parsed.tenantKey }] }, select: { id: true, publicKey: true } })
+  if (!tenant) return send(404, { error: 'Unknown property_id' })
+
+  allowedOrigin = await getAllowedWebsiteOrigin(req, tenant.id)
+  if (!allowedOrigin) return send(403, { error: 'Website domain is not allowed for this tracking code' })
+
+  const body = getPlainRecord(req.body) ?? {}
+  const cookies = getPlainRecord(body.cookies) ?? {}
+  const trackingLinkId = optionalLimitedString(body.trackingLinkId, 128)
+  if (!trackingLinkId) return send(400, { error: 'trackingLinkId is required' })
+
+  const trackingLink = await prisma.trackingLink.findFirst({
+    where: { id: trackingLinkId, tenantId: tenant.id, isActive: true },
+    select: {
+      id: true,
+      slug: true,
+      affiliateUrl: true,
+      campaignId: true,
+      brandId: true,
+      campaign: { select: { id: true, datasets: { select: { dataset: { select: { id: true, isActive: true } } } } } },
+      affiliatePlatform: { select: { id: true, name: true, slug: true, trackingParamKey: true } }
+    }
+  })
+  if (!trackingLink) return send(404, { error: 'Tracking link not found' })
+
+  const activeDatasetIds = trackingLink.campaign?.datasets.map((entry) => entry.dataset).filter((dataset) => dataset.isActive).map((dataset) => dataset.id) ?? []
+  if (!activeDatasetIds.length) return send(202, { ok: true, skipped: true, reason: 'No active datasets selected for campaign', trackingLinkId: trackingLink.id, slug: trackingLink.slug })
+
+  const pageUrl = optionalLimitedString(body.pageUrl, 2048)
+  const pageTitle = optionalLimitedString(body.pageTitle, 512)
+  const matchedHref = optionalLimitedString(body.href, 2048)
+  const requestReferer = getHeaderString(req, 'referer') ?? getHeaderString(req, 'referrer')
+  const pageReferrer = optionalLimitedString(body.referrer, 2048)
+  const fbclid = optionalLimitedString(body.fbclid, 512) ?? getUrlSearchParam(pageUrl, 'fbclid') ?? getUrlSearchParam(matchedHref, 'fbclid') ?? getUrlSearchParam(requestReferer, 'fbclid')
+  const ttclid = optionalLimitedString(body.ttclid, 512) ?? getUrlSearchParam(pageUrl, 'ttclid') ?? getUrlSearchParam(matchedHref, 'ttclid') ?? getUrlSearchParam(requestReferer, 'ttclid')
+  const fbp = optionalLimitedString(body.fbp, 512) ?? optionalLimitedString(cookies.fbp, 512) ?? optionalLimitedString(cookies._fbp, 512)
+  const fbc = optionalLimitedString(body.fbc, 512) ?? optionalLimitedString(cookies.fbc, 512) ?? optionalLimitedString(cookies._fbc, 512) ?? createFbc(fbclid)
+  const ttp = optionalLimitedString(body.ttp, 512) ?? optionalLimitedString(cookies.ttp, 512) ?? optionalLimitedString(cookies._ttp, 512)
+  const eventId = normalizeTrackingEventId(body.eventId)
+  const clickUuid = buildTrackingScriptClickUuid({ tenantId: tenant.id, trackingLinkId: trackingLink.id, eventId })
+  const metadata = compactRecord({
+    source: 'atp.js',
+    eventName: 'ViewContent',
+    eventId,
+    propertyId: parsed.propertyId,
+    tenantKey: tenant.publicKey,
+    contentId: trackingLink.slug,
+    contentIds: [trackingLink.slug],
+    contentName: trackingLink.slug,
+    contentType: 'product',
+    slug: trackingLink.slug,
+    matchType: optionalLimitedString(body.matchType, 64),
+    matchedHref,
+    elementSource: optionalLimitedString(body.source, 64),
+    elementIndex: typeof body.index === 'number' && Number.isFinite(body.index) ? Math.max(0, Math.floor(body.index)) : undefined,
+    elementText: optionalLimitedString(body.text, 512),
+    pageUrl,
+    pageTitle,
+    pageReferrer,
+    requestOrigin: allowedOrigin,
+    requestReferer,
+    affiliateUrl: trackingLink.affiliateUrl,
+    activeDatasetIds,
+    affiliatePlatform: trackingLink.affiliatePlatform,
+    cookies: compactRecord({
+      fbp,
+      fbc,
+      ttp,
+      ga: optionalLimitedString(cookies.ga ?? cookies._ga, 512),
+      gid: optionalLimitedString(cookies.gid ?? cookies._gid, 512),
+      gclAu: optionalLimitedString(cookies.gclAu ?? cookies._gcl_au, 512)
+    })
+  })
+
+  try {
+    let duplicate = false
+    let clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
+
+    if (clickEvent) {
+      duplicate = true
+      if (clickEvent.tenantId !== tenant.id || clickEvent.trackingLinkId !== trackingLink.id) return send(409, { error: 'Duplicate tracking event id conflict' })
+    } else {
+      await assertBillingLimit(tenant.id, 'clicks')
+      try {
+        clickEvent = await prisma.clickEvent.create({
+          data: {
+            tenantId: tenant.id,
+            campaignId: trackingLink.campaignId ?? null,
+            trackingLinkId: trackingLink.id,
+            clickUuid,
+            ip: getClientIp(req),
+            userAgent: getHeaderString(req, 'user-agent'),
+            referrer: pageReferrer ?? requestReferer,
+            fbp,
+            fbc,
+            ttp,
+            ttclid,
+            fbclid,
+            metadata: metadata as Prisma.InputJsonValue
+          }
+        })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          duplicate = true
+          clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
+        } else {
+          throw error
+        }
+      }
+    }
+
+    if (!clickEvent) throw new Error('Tracking event was not created')
+    if (!duplicate) await enqueueClick(clickEvent, 'ViewContent', 'tracking_script', eventId)
+
+    return send(duplicate ? 200 : 201, { ok: true, duplicate, eventName: 'ViewContent', eventId, clickUuid: clickEvent.clickUuid, trackingLinkId: trackingLink.id, slug: trackingLink.slug })
+  } catch (error) {
+    req.log.error({ error, tenantId: tenant.id, trackingLinkId: trackingLink.id }, 'Failed to process atp ViewContent event')
+    const message = error instanceof Error ? error.message : 'Internal server error'
+    const statusCode = message.toLowerCase().includes('billing limit exceeded') ? 429 : 500
+    return send(statusCode, { error: statusCode === 500 ? 'Internal server error' : message })
+  }
+})
+
 app.get('/me', async (req) => ({ ...requireAuthenticated(req), isSuperAdmin: isSuperAdmin(requireAuthenticated(req)) }))
 
 app.get('/superadmin/users', async (req) => { requireSuperAdmin(req); const users = await prisma.user.findMany({ include: { tenant: { include: { billingPlan: true, menuGrants: { include: { menuFeature: true }, orderBy: { menuFeature: { sortOrder: 'asc' } } }, _count: { select: { campaigns: true, brands: true, affiliatePlatforms: true, datasets: true, trackingLinks: true, clickEvents: true, conversionEvents: true, capiEvents: true } } } } }, orderBy: { createdAt: 'desc' } }); return users.map((u) => ({ ...u, tenant: u.tenant ? serializeTenant(u.tenant) : u.tenant })) })
@@ -681,7 +961,8 @@ app.put('/tracking-links/:id', async (req, reply) => {
 
 app.delete('/tracking-links/:id', async (req, reply) => { const u = requireAuthenticated(req); const { id } = req.params as { id: string }; if (!await prisma.trackingLink.findFirst({ where: { id, tenant: { ownerUserId: u.id } } })) return reply.code(404).send({ error: 'Tracking link not found' }); await prisma.trackingLink.delete({ where: { id } }); return { ok: true } })
 
-async function enqueueClick(clickEvent: { id: bigint; clickUuid: string; tenantId: string; trackingLinkId: string }, eventName?: string, source: 'click' | 'affiliate_conversion' = 'click', sourceId?: string) { await clickEventsQueue.add('click.created', { clickEventId: clickEvent.id.toString(), clickUuid: clickEvent.clickUuid, tenantId: clickEvent.tenantId, trackingLinkId: clickEvent.trackingLinkId, eventName, source, sourceId }, { jobId: sourceId ? `${clickEvent.clickUuid}-${sourceId}` : clickEvent.clickUuid }) }
+type ClickEventSource = 'click' | 'affiliate_conversion' | 'tracking_script'
+async function enqueueClick(clickEvent: { id: bigint; clickUuid: string; tenantId: string; trackingLinkId: string }, eventName?: string, source: ClickEventSource = 'click', sourceId?: string) { await clickEventsQueue.add('click.created', { clickEventId: clickEvent.id.toString(), clickUuid: clickEvent.clickUuid, tenantId: clickEvent.tenantId, trackingLinkId: clickEvent.trackingLinkId, eventName, source, sourceId }, { jobId: sourceId ? `${clickEvent.clickUuid}-${sourceId}` : clickEvent.clickUuid }) }
 
 app.get('/click-events', async (req) => { const u = requireAuthenticated(req); const q = req.query as AnyRecord; const tenantId = optionalQueryString(q.tenantId); if (tenantId) await assertTenantAccess(u.id, tenantId); const where = buildClickEventWhere(u.id, q); const include = { campaign: true, trackingLink: { include: { affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } }; if (!wantsPaginatedResponse(q)) return (await prisma.clickEvent.findMany({ where, include, orderBy: { createdAt: 'desc' }, take: 100 })).map(serializeClick); const pagination = parsePagination(q); const [rows, total] = await Promise.all([prisma.clickEvent.findMany({ where, include, orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.take }), prisma.clickEvent.count({ where })]); return makePaginatedResponse(rows.map(serializeClick), total, pagination) })
 app.get('/capi-events', async (req) => { const u = requireAuthenticated(req); const q = req.query as AnyRecord; const tenantId = optionalQueryString(q.tenantId); if (tenantId) await assertTenantAccess(u.id, tenantId); const where = buildCapiEventWhere(u.id, q); const include = { clickEvent: { include: { campaign: true, trackingLink: { include: { affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } } } }; if (!wantsPaginatedResponse(q)) return (await prisma.capiEvent.findMany({ where, include, orderBy: { createdAt: 'desc' }, take: 100 })).map(serializeCapi); const pagination = parsePagination(q); const [rows, total] = await Promise.all([prisma.capiEvent.findMany({ where, include, orderBy: { createdAt: 'desc' }, skip: pagination.skip, take: pagination.take }), prisma.capiEvent.count({ where })]); return makePaginatedResponse(rows.map(serializeCapi), total, pagination) })

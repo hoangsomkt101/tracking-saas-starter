@@ -115,12 +115,28 @@ function normalizeContentIds(value: unknown) {
   return normalized.length ? normalized : undefined
 }
 
-function getConversionEnrichment(conversion: Awaited<ReturnType<typeof loadConversionEvent>>, clickUuid?: string, eventName?: string): Record<string, unknown> {
-  if (!conversion) return compactObject({ eventId: clickUuid && eventName ? `${eventName}_${clickUuid}` : clickUuid })
+function getConversionEnrichment(conversion: Awaited<ReturnType<typeof loadConversionEvent>>, clickEvent?: Awaited<ReturnType<typeof loadClickEvent>>, eventName?: string): Record<string, unknown> {
+  const clickMetadata = getJsonRecord(clickEvent?.metadata)
+  const clickUuid = clickEvent?.clickUuid
+  const defaultEventId = clickUuid && eventName ? `${eventName}_${clickUuid}` : clickUuid
+
+  if (!conversion) return compactObject({
+    contentId: clickMetadata.contentId,
+    contentIds: clickMetadata.contentIds,
+    contentName: clickMetadata.contentName,
+    contentType: clickMetadata.contentType,
+    contentCategory: clickMetadata.contentCategory,
+    eventSourceUrl: clickMetadata.pageUrl ?? clickEvent?.referrer,
+    pageUrl: clickMetadata.pageUrl,
+    pageTitle: clickMetadata.pageTitle,
+    eventId: clickMetadata.eventId ?? defaultEventId
+  })
+
   const extra = getJsonRecord(conversion.capiEnrichment)
   const value = moneyToNumber(extra.value) ?? moneyToNumber(conversion.payoutAmount?.toString()) ?? moneyToNumber(conversion.commissionAmount?.toString()) ?? moneyToNumber(conversion.spendAmount?.toString())
 
   return compactObject({
+    ...clickMetadata,
     ...extra,
     value,
     currency: extra.currency ?? conversion.currency ?? 'USD',
@@ -137,7 +153,7 @@ function getPlatformEventName(platform: string, eventName?: string) {
 
 function buildMetaPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent>>, eventName = 'PageView', conversion: Awaited<ReturnType<typeof loadConversionEvent>> = null) {
   if (!clickEvent) throw new Error('Missing click event')
-  const enrichment = getConversionEnrichment(conversion, clickEvent.clickUuid, eventName)
+  const enrichment = getConversionEnrichment(conversion, clickEvent, eventName)
   const eventTime = enrichment.eventTime instanceof Date ? enrichment.eventTime : clickEvent.createdAt
   const contentIds = normalizeContentIds(enrichment.contentIds) ?? normalizeContentIds(enrichment.contentId) ?? normalizeContentIds(clickEvent.trackingLink.brand?.name ?? clickEvent.trackingLink.slug)
   const contentId = normalizeContentId(enrichment.contentId) ?? contentIds?.[0]
@@ -149,6 +165,7 @@ function buildMetaPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent>>
         event_time: Math.floor(eventTime.getTime() / 1000),
         event_id: typeof enrichment.eventId === 'string' ? enrichment.eventId : clickEvent.clickUuid,
         action_source: 'website',
+        event_source_url: enrichment.eventSourceUrl,
         user_data: compactObject({
           client_ip_address: clickEvent.ip,
           client_user_agent: clickEvent.userAgent,
@@ -185,7 +202,7 @@ function buildMetaPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent>>
 
 function buildTikTokPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent>>, eventName = 'PageView', conversion: Awaited<ReturnType<typeof loadConversionEvent>> = null, dataset: { pixelId: string }) {
   if (!clickEvent) throw new Error('Missing click event')
-  const enrichment = getConversionEnrichment(conversion, clickEvent.clickUuid, eventName)
+  const enrichment = getConversionEnrichment(conversion, clickEvent, eventName)
   const eventTime = enrichment.eventTime instanceof Date ? enrichment.eventTime : clickEvent.createdAt
   const contentIds = normalizeContentIds(enrichment.contentIds) ?? normalizeContentIds(enrichment.contentId) ?? normalizeContentIds(clickEvent.trackingLink.brand?.name ?? clickEvent.trackingLink.slug)
   const contentId = normalizeContentId(enrichment.contentId) ?? contentIds?.[0]
@@ -215,6 +232,8 @@ function buildTikTokPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent
           content_name: enrichment.contentName,
           content_type: enrichment.contentType,
           order_id: enrichment.orderId,
+          page_url: enrichment.pageUrl ?? enrichment.eventSourceUrl,
+          page_title: enrichment.pageTitle,
           campaign_id: clickEvent.campaignId,
           tracking_link_id: clickEvent.trackingLinkId,
           brand_id: clickEvent.trackingLink.brandId,
