@@ -7,8 +7,14 @@ export const navGroups: NavGroup[] = [
     items: [
       { path: '/dashboard', label: 'Overview', icon: Home, featureKey: 'dashboard' },
       { path: '/campaigns', label: 'Campaigns', icon: Megaphone, featureKey: 'campaigns' },
-      { path: '/platforms', label: 'Affiliate Platforms', icon: Globe2, featureKey: 'platforms' },
       { path: '/datasets', label: 'Datasets', icon: ShieldCheck, featureKey: 'datasets' }
+    ]
+  },
+  {
+    label: 'Data Sources',
+    items: [
+      { path: '/settings', label: 'Websites', icon: Settings, featureKey: 'settings' },
+      { path: '/platforms', label: 'Affiliate Platforms', icon: Globe2, featureKey: 'platforms' }
     ]
   },
   {
@@ -29,7 +35,6 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Account',
     items: [
-      { path: '/settings', label: 'Websites', icon: Settings, featureKey: 'settings' },
       { path: '/support', label: 'Support', icon: HelpCircle, featureKey: 'support' }
     ]
   }

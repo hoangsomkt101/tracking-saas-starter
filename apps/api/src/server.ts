@@ -77,14 +77,14 @@ function getDefaultMenuFeatures() {
   return [
     { id: 'menu-dashboard', key: 'dashboard', path: '/dashboard', label: 'Overview', group: 'Platform', icon: 'Home', sortOrder: 10, isCore: true },
     { id: 'menu-campaigns', key: 'campaigns', path: '/campaigns', label: 'Campaigns', group: 'Platform', icon: 'Megaphone', sortOrder: 20, isCore: true },
-    { id: 'menu-platforms', key: 'platforms', path: '/platforms', label: 'Affiliate Platforms', group: 'Platform', icon: 'Globe2', sortOrder: 30, isCore: true },
+    { id: 'menu-platforms', key: 'platforms', path: '/platforms', label: 'Affiliate Platforms', group: 'Data Sources', icon: 'Globe2', sortOrder: 30, isCore: true },
     { id: 'menu-datasets', key: 'datasets', path: '/datasets', label: 'Datasets', group: 'Platform', icon: 'ShieldCheck', sortOrder: 40, isCore: true },
     { id: 'menu-tracking-links', key: 'tracking-links', path: '/tracking-links', label: 'Tracking Links', group: 'Tracking', icon: 'Link2', sortOrder: 60, isCore: true },
     { id: 'menu-click-events', key: 'click-events', path: '/click-events', label: 'Click Events', group: 'Tracking', icon: 'MousePointerClick', badge: 'Manual', sortOrder: 70, isCore: true },
     { id: 'menu-activity-logs', key: 'activity-logs', path: '/logs', label: 'Activity Logs', group: 'Tracking', icon: 'ScrollText', sortOrder: 75, isCore: true },
     { id: 'menu-analytics', key: 'analytics', path: '/analytics', label: 'Analytics', group: 'Tracking', icon: 'BarChart3', sortOrder: 80, isCore: false },
     { id: 'menu-billing', key: 'billing', path: '/billing', label: 'Billing', group: 'Account', icon: 'WalletCards', sortOrder: 90, isCore: true },
-    { id: 'menu-settings', key: 'settings', path: '/settings', label: 'Websites', group: 'Account', icon: 'Settings', sortOrder: 100, isCore: true },
+    { id: 'menu-settings', key: 'settings', path: '/settings', label: 'Websites', group: 'Data Sources', icon: 'Settings', sortOrder: 35, isCore: true },
     { id: 'menu-support', key: 'support', path: '/support', label: 'Support', group: 'Account', icon: 'HelpCircle', sortOrder: 110, isCore: true },
     { id: 'menu-superadmin', key: 'superadmin', path: '/superadmin', label: 'Super Admin', group: 'Admin', icon: 'Crown', badge: 'Root', sortOrder: 1000, isCore: false }
   ]
