@@ -45,6 +45,7 @@ model Tenant {
   reportSchedules    ReportSchedule[]
   menuGrants         TenantMenuGrant[]
   activityLogs       ActivityLog[]
+  websiteDomains     WebsiteDomain[]
 
   @@index([ownerUserId])
   @@index([billingPlanId])
@@ -348,6 +349,19 @@ model CapiEvent {
   @@index([datasetId])
   @@index([status, createdAt])
   @@unique([clickEventId, datasetId, eventName, source, sourceId])
+}
+
+model WebsiteDomain {
+  id        String   @id @default(uuid())
+  tenantId  String
+  domain    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@unique([tenantId, domain])
 }
 
 model ActivityLog {

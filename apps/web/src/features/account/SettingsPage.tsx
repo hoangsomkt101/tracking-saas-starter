@@ -1,8 +1,14 @@
-import { Copy } from 'lucide-react'
+import { type FormEvent } from 'react'
+import { Copy, Globe2, Plus, Trash2 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
-import { Card, CardContent } from '../../components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
+import { Input } from '../../components/ui/input'
+import { Badge } from '../../components/ui/badge'
+import { FieldLabel } from '../../components/common/FieldLabel'
 import { StatusBanner } from '../../components/common/StatusBanner'
 import { apiBaseUrl } from '../../config/env'
+import { runEntityAction } from '../../lib/entity-actions'
+import { getFormString } from '../../lib/forms'
 import type { DashboardContext, Tenant } from '../../types/domain'
 
 const TRACKING_PROPERTY_PREFIX = 'DBG-'
@@ -30,6 +36,26 @@ async function copyTrackingScript(ctx: DashboardContext, script: string) {
 export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
     const trackingScript = getTrackingScript(ctx.selectedTenant)
 
+    async function handleDomainSubmit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault()
+        if (!ctx.selectedTenant) return
+        const form = event.currentTarget
+        const data = new FormData(form)
+        await runEntityAction(ctx, async () => {
+            await ctx.fetchJson('/website-domains', {
+                method: 'POST',
+                body: JSON.stringify({ tenantId: ctx.selectedTenant?.id, domain: getFormString(data, 'domain') })
+            })
+            form.reset()
+        }, 'Đã thêm domain website')
+    }
+
+    async function handleDeleteDomain(id: string) {
+        await runEntityAction(ctx, async () => {
+            await ctx.fetchJson<{ ok: boolean }>(`/website-domains/${id}`, { method: 'DELETE' })
+        }, 'Đã xóa domain website')
+    }
+
     return (
         <>
             <StatusBanner status={ctx.status} />
@@ -42,8 +68,41 @@ export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
                                 <Button type="button" variant="outline" size="sm" disabled={!trackingScript} onClick={() => void copyTrackingScript(ctx, trackingScript)}><Copy size={14} /> Copy</Button>
                             </div>
                             <pre className="webhook-code-sample"><code>{trackingScript || 'Không tìm thấy workspace để tạo mã tracking.'}</code></pre>
-                            <p className="form-hint">Dán mã này vào website hoặc landing để quét Affiliate URL hoặc Shortlink thuộc Tracking Links và console.log khi phát hiện.</p>
+                            <p className="form-hint">Dán mã này vào website hoặc landing đã khai báo domain để quét Affiliate URL hoặc Shortlink thuộc Tracking Links và console.log khi phát hiện.</p>
                         </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="page-card settings-card">
+                    <CardHeader>
+                        <CardTitle><Globe2 size={18} /> Website domains</CardTitle>
+                        <CardDescription>Chỉ các website được thêm ở đây mới sử dụng được mã tracking.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <form className="route-form" onSubmit={(event) => void handleDomainSubmit(event)}>
+                            <label>
+                                <FieldLabel>Domain</FieldLabel>
+                                <Input name="domain" placeholder="example.com" autoComplete="off" required />
+                                <span className="form-hint">Có thể nhập domain hoặc URL đầy đủ, ví dụ: example.com, https://landing.example.com.</span>
+                            </label>
+                            <Button type="submit" disabled={!ctx.selectedTenant}><Plus size={16} /> Thêm domain</Button>
+                        </form>
+
+                        <div className="table-wrap">
+                            <table>
+                                <thead><tr><th>Domain</th><th>Status</th><th>Actions</th></tr></thead>
+                                <tbody>
+                                    {ctx.tenantWebsiteDomains.map((domain) => (
+                                        <tr key={domain.id}>
+                                            <td><strong>{domain.domain}</strong></td>
+                                            <td><Badge variant="success">Allowed</Badge></td>
+                                            <td><Button type="button" variant="outline" size="sm" onClick={() => void handleDeleteDomain(domain.id)}><Trash2 size={14} /> Xóa</Button></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {!ctx.tenantWebsiteDomains.length && <p className="empty-state">Chưa có domain nào. Mã tracking sẽ bị chặn cho tới khi thêm website hợp lệ.</p>}
                     </CardContent>
                 </Card>
             </section>

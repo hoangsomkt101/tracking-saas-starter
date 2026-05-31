@@ -50,6 +50,14 @@ export type Tenant = {
   createdAt: string
 }
 
+export type WebsiteDomain = {
+  id: string
+  tenantId: string
+  domain: string
+  createdAt: string
+  updatedAt: string
+}
+
 export type CampaignDataset = {
   id: string
   tenantId: string
@@ -379,6 +387,7 @@ export type AppData = {
   affiliatePlatforms: AffiliatePlatform[]
   datasets: Dataset[]
   trackingLinks: TrackingLink[]
+  websiteDomains: WebsiteDomain[]
   clickEvents: ClickEvent[]
   capiEvents: CapiEvent[]
   conversionEvents: ConversionEvent[]
@@ -427,6 +436,7 @@ export type DashboardContext = {
   tenantAffiliatePlatforms: AffiliatePlatform[]
   tenantDatasets: Dataset[]
   tenantTrackingLinks: TrackingLink[]
+  tenantWebsiteDomains: WebsiteDomain[]
   tenantCapiEvents: CapiEvent[]
   tenantConversionEvents: ConversionEvent[]
   tenantReportSchedules: ReportSchedule[]

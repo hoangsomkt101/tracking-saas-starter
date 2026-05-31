@@ -13,7 +13,7 @@ import { navGroups, pageMeta } from '../config/navigation'
 import { buildQueryString, parseApiResponse } from '../lib/api'
 import { activityLogFilterParams, eventFilterParams } from '../lib/event-filters'
 import { formatLastUpdated } from '../lib/format'
-import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, BillingPlan, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, ReportSchedule, SuperAdminUser, Tenant, ThemeMode, TrackingLink } from '../types/domain'
+import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, BillingPlan, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, ReportSchedule, SuperAdminUser, Tenant, ThemeMode, TrackingLink, WebsiteDomain } from '../types/domain'
 
 export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; onToggleTheme: () => void }) {
   const { getToken } = useAuth()
@@ -61,7 +61,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
       const conversionEventsQuery = buildQueryString({ ...filters, page: conversionEventsPage, limit: eventPageSize })
       const analyticsQuery = buildQueryString(filters)
       const activityLogsQuery = buildQueryString({ ...activityLogFilterParams(activityLogFilters), page: activityLogsPage, limit: eventPageSize })
-      const [currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, trackingLinks, reportSchedules, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData, analyticsBreakdown] = await Promise.all([
+      const [currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, trackingLinks, websiteDomains, reportSchedules, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData, analyticsBreakdown] = await Promise.all([
         fetchJson<CurrentUser>('/me'),
         fetchJson<Tenant[]>('/tenants'),
         fetchJson<Campaign[]>('/campaigns'),
@@ -69,6 +69,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
         fetchJson<AffiliatePlatform[]>('/affiliate-platforms'),
         fetchJson<Dataset[]>('/datasets'),
         fetchJson<TrackingLink[]>('/tracking-links'),
+        fetchJson<WebsiteDomain[]>('/website-domains'),
         fetchJson<ReportSchedule[]>('/report-schedules'),
         fetchJson<PaginatedResponse<ClickEvent>>(`/click-events${clickEventsQuery}`),
         fetchJson<PaginatedResponse<CapiEvent>>(`/capi-events${capiEventsQuery}`),
@@ -84,7 +85,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
         ])
         : [[], [], []]
 
-      return { currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, trackingLinks, reportSchedules, clickEvents: clickEventsPageData.items, capiEvents: capiEventsPageData.items, conversionEvents: conversionEventsPageData.items, activityLogs: activityLogsPageData.items, analyticsSummary: analyticsBreakdown.summary, analyticsBreakdown, superAdminUsers, billingPlans, menuFeatures, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData }
+      return { currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, trackingLinks, websiteDomains, reportSchedules, clickEvents: clickEventsPageData.items, capiEvents: capiEventsPageData.items, conversionEvents: conversionEventsPageData.items, activityLogs: activityLogsPageData.items, analyticsSummary: analyticsBreakdown.summary, analyticsBreakdown, superAdminUsers, billingPlans, menuFeatures, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData }
     },
     staleTime: 30_000,
     refetchInterval: 5 * 60 * 1000,
@@ -127,6 +128,11 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   const tenantTrackingLinks = useMemo(
     () => data.trackingLinks.filter((link) => link.tenantId === selectedTenant?.id),
     [data.trackingLinks, selectedTenant]
+  )
+
+  const tenantWebsiteDomains = useMemo(
+    () => data.websiteDomains.filter((domain) => domain.tenantId === selectedTenant?.id),
+    [data.websiteDomains, selectedTenant]
   )
 
   const tenantCapiEvents = useMemo(
@@ -250,6 +256,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     tenantAffiliatePlatforms,
     tenantDatasets,
     tenantTrackingLinks,
+    tenantWebsiteDomains,
     tenantCapiEvents,
     tenantConversionEvents,
     tenantReportSchedules,

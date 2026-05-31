@@ -27,6 +27,7 @@ const allowedCorsOrigins = new Set([
 ])
 
 function applyCorsHeaders(req: FastifyRequest, reply: FastifyReply) {
+  if (req.url.split('?')[0] === '/atp.js') return
   const origin = req.headers.origin
   reply
     .header('vary', 'Origin')
@@ -67,6 +68,37 @@ function optionalQueryString(value: unknown) { const normalized = getQueryValue(
 const TRACKING_PROPERTY_PREFIX = 'DBG-'
 const trackingTenantKeyPattern = /^[a-zA-Z0-9_-]{1,128}$/
 function parseTrackingPropertyId(value: unknown) { const propertyId = optionalQueryString(value); if (!propertyId?.startsWith(TRACKING_PROPERTY_PREFIX)) return null; const tenantKey = propertyId.slice(TRACKING_PROPERTY_PREFIX.length).trim(); return tenantKey && trackingTenantKeyPattern.test(tenantKey) ? { propertyId, tenantKey } : null }
+function parseHttpUrl(value: string) { try { const text = value.trim(); const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`; const url = new URL(candidate); return ['http:', 'https:'].includes(url.protocol) && url.hostname ? url : null } catch { return null } }
+function normalizeUrlHost(url: URL) { const hostname = url.hostname.toLowerCase().replace(/\.$/, ''); return url.port ? `${hostname}:${url.port}` : hostname }
+const websiteHostPattern = /^(localhost|\[[0-9a-f:.]+\]|\d{1,3}(?:\.\d{1,3}){3}|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*)(?::\d{1,5})?$/
+function normalizeWebsiteDomainInput(value: unknown) {
+  const url = parseHttpUrl(requireString(value, 'domain'))
+  if (!url) throw new Error('domain must be a valid http/https domain')
+  const domain = normalizeUrlHost(url)
+  const port = url.port ? Number(url.port) : undefined
+  if (domain.length > 255 || !websiteHostPattern.test(domain) || (port !== undefined && (port < 1 || port > 65535))) throw new Error('domain must be a valid website domain')
+  return domain
+}
+function getHostParts(host: string) {
+  if (host.startsWith('[')) { const end = host.indexOf(']'); return { hostname: end >= 0 ? host.slice(0, end + 1) : host, port: end >= 0 && host[end + 1] === ':' ? host.slice(end + 2) : undefined } }
+  const [hostname, port] = host.split(':')
+  return { hostname, port }
+}
+function canAllowSubdomains(hostname: string) { return hostname !== 'localhost' && !hostname.startsWith('[') && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname) }
+function websiteHostMatches(requestHost: string, allowedHost: string) {
+  if (requestHost === allowedHost) return true
+  const request = getHostParts(requestHost)
+  const allowed = getHostParts(allowedHost)
+  if (allowed.port || request.port || !canAllowSubdomains(allowed.hostname)) return false
+  return request.hostname.endsWith(`.${allowed.hostname}`)
+}
+function getRequestWebsiteOrigin(req: FastifyRequest) {
+  const origin = getHeaderString(req, 'origin')
+  if (origin && origin !== 'null') { const url = parseHttpUrl(origin); if (url) return { origin: url.origin, host: normalizeUrlHost(url), source: 'origin' as const } }
+  const referer = getHeaderString(req, 'referer') ?? getHeaderString(req, 'referrer')
+  if (referer) { const url = parseHttpUrl(referer); if (url) return { origin: url.origin, host: normalizeUrlHost(url), source: 'referer' as const } }
+  return null
+}
 function parseStringList(value: unknown) { const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []; return [...new Set(raw.map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))] }
 function parsePositiveInteger(value: unknown, fallback: number, max?: number) { const normalized = getQueryValue(value); const parsed = typeof normalized === 'number' ? normalized : typeof normalized === 'string' ? Number.parseInt(normalized, 10) : Number.NaN; if (!Number.isFinite(parsed) || parsed < 1) return fallback; const integer = Math.floor(parsed); return max ? Math.min(integer, max) : integer }
 function parsePagination(q: AnyRecord): PaginationInput { const page = parsePositiveInteger(q.page, DEFAULT_PAGE); const limit = parsePositiveInteger(q.limit, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT); return { page, limit, skip: (page - 1) * limit, take: limit } }
@@ -308,15 +340,24 @@ app.get('/metrics', async () => {
 })
 app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIPT_RATE_LIMIT_MAX ?? 600), timeWindow: process.env.PUBLIC_SCRIPT_RATE_LIMIT_WINDOW ?? '1 minute' } } }, async (req, reply) => {
   const parsed = parseTrackingPropertyId((req.query as AnyRecord).property_id)
-  const scriptHeaders = () => reply
-    .header('content-type', 'application/javascript; charset=utf-8')
-    .header('cache-control', 'no-store')
-    .header('access-control-allow-origin', '*')
-    .header('cross-origin-resource-policy', 'cross-origin')
+  const scriptHeaders = (allowedOrigin?: string) => {
+    const response = reply
+      .header('content-type', 'application/javascript; charset=utf-8')
+      .header('cache-control', 'no-store')
+      .header('vary', 'Origin, Referer')
+      .header('cross-origin-resource-policy', 'cross-origin')
+    if (allowedOrigin) response.header('access-control-allow-origin', allowedOrigin)
+    return response
+  }
   if (!parsed) return scriptHeaders().code(400).send('console.warn("[AffTrackPro] Invalid property_id. Expected DBG-{tenantKey}.");\n')
 
   const tenant = await prisma.tenant.findFirst({ where: { OR: [{ publicKey: parsed.tenantKey }, { id: parsed.tenantKey }] }, include: { ownerUser: true } })
   if (!tenant) return scriptHeaders().code(404).send('console.warn("[AffTrackPro] Unknown property_id.");\n')
+
+  const requestWebsite = getRequestWebsiteOrigin(req)
+  const allowedDomains = await prisma.websiteDomain.findMany({ where: { tenantId: tenant.id }, select: { domain: true } })
+  const allowedOrigin = requestWebsite && allowedDomains.some((entry) => websiteHostMatches(requestWebsite.host, entry.domain)) ? requestWebsite.origin : undefined
+  if (!allowedOrigin) return scriptHeaders().code(403).send('console.warn("[AffTrackPro] Website domain is not allowed for this tracking code.");\n')
 
   const [trackingLinks, userName] = await Promise.all([
     prisma.trackingLink.findMany({ where: { tenantId: tenant.id, isActive: true }, select: { id: true, slug: true, affiliateUrl: true } }),
@@ -335,7 +376,7 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     }))
   }
 
-  return scriptHeaders().send(`(() => {
+  return scriptHeaders(allowedOrigin).send(`(() => {
   const config = ${JSON.stringify(payload)};
   const detectedKeys = new Set();
   let loggedEmpty = false;
@@ -459,6 +500,33 @@ app.put('/superadmin/tenants/:id/menu-features', async (req, reply) => { require
 app.put('/superadmin/tenants/:id/billing-plan', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const billingPlanId = requireString((req.body as AnyRecord).billingPlanId, 'billingPlanId'); const [tenant, plan] = await Promise.all([prisma.tenant.findUnique({ where: { id } }), prisma.billingPlan.findUnique({ where: { id: billingPlanId } })]); if (!tenant) return reply.code(404).send({ error: 'Tenant not found' }); if (!plan) return reply.code(404).send({ error: 'Billing plan not found' }); return prisma.tenant.update({ where: { id }, data: { billingPlanId }, include: { billingPlan: true } }) })
 
 app.get('/tenants', async (req) => { const u = requireAuthenticated(req); const tenants = await prisma.tenant.findMany({ where: { ownerUserId: u.id }, include: { billingPlan: true, menuGrants: { where: { isEnabled: true, menuFeature: { isActive: true } }, include: { menuFeature: true }, orderBy: { menuFeature: { sortOrder: 'asc' } } } }, orderBy: { createdAt: 'desc' } }); return tenants.map(serializeTenant) })
+
+app.get('/website-domains', async (req) => {
+  const u = requireAuthenticated(req)
+  const q = req.query as AnyRecord
+  const tenantId = optionalQueryString(q.tenantId)
+  if (tenantId) await assertTenantAccess(u.id, tenantId)
+  return prisma.websiteDomain.findMany({ where: { tenantId, tenant: { ownerUserId: u.id } }, orderBy: { createdAt: 'desc' } })
+})
+app.post('/website-domains', async (req, reply) => {
+  const u = requireAuthenticated(req)
+  const b = req.body as AnyRecord
+  const tenantId = requireString(b.tenantId, 'tenantId')
+  await assertTenantAccess(u.id, tenantId)
+  const domain = normalizeWebsiteDomainInput(b.domain)
+  const row = await prisma.websiteDomain.create({ data: { tenantId, domain } })
+  await createActivityLog({ tenantId, source: 'api', eventType: 'website_domain.created', message: `Website domain "${domain}" was added`, entityType: 'websiteDomain', entityId: row.id, metadata: { actorUserId: u.id, websiteDomainId: row.id, domain } })
+  return reply.code(201).send(row)
+})
+app.delete('/website-domains/:id', async (req, reply) => {
+  const u = requireAuthenticated(req)
+  const { id } = req.params as { id: string }
+  const row = await prisma.websiteDomain.findFirst({ where: { id, tenant: { ownerUserId: u.id } } })
+  if (!row) return reply.code(404).send({ error: 'Website domain not found' })
+  await prisma.websiteDomain.delete({ where: { id } })
+  await createActivityLog({ tenantId: row.tenantId, source: 'api', eventType: 'website_domain.deleted', message: `Website domain "${row.domain}" was removed`, entityType: 'websiteDomain', entityId: row.id, metadata: { actorUserId: u.id, websiteDomainId: row.id, domain: row.domain } })
+  return { ok: true }
+})
 
 const trackingLinkInclude = { tenant: true, campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } as const
 const campaignInclude = { tenant: true, datasets: { include: { dataset: true }, orderBy: { createdAt: 'asc' as const } }, trackingLinks: { include: trackingLinkInclude, orderBy: { createdAt: 'desc' as const } } }
