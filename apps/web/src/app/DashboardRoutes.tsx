@@ -40,7 +40,8 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/logs" element={<FeatureGate ctx={ctx} featureKey="activity-logs"><ActivityLogsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/analytics" element={<FeatureGate ctx={ctx} featureKey="analytics"><AnalyticsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/billing" element={<FeatureGate ctx={ctx} featureKey="billing"><PlaceholderPage icon={WalletCards} title="Billing" description="Plan, usage quota và invoices." /></FeatureGate>} />
-      <Route path="/settings" element={<FeatureGate ctx={ctx} featureKey="settings"><SettingsPage ctx={ctx} /></FeatureGate>} />
+      <Route path="/websites" element={<FeatureGate ctx={ctx} featureKey="settings"><SettingsPage ctx={ctx} /></FeatureGate>} />
+      <Route path="/settings" element={<Navigate to="/websites" replace />} />
       <Route path="/support" element={<FeatureGate ctx={ctx} featureKey="support"><SupportPage /></FeatureGate>} />
       <Route path="/superadmin" element={<SuperAdminPage ctx={ctx} />} />
       <Route path="/superadmin/users/:id/manage" element={<SuperAdminUserManagePage ctx={ctx} />} />
