@@ -1,6 +1,6 @@
-import { Copy, KeyRound } from 'lucide-react'
+import { Copy } from 'lucide-react'
 import { Button } from '../../components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
+import { Card, CardContent } from '../../components/ui/card'
 import { StatusBanner } from '../../components/common/StatusBanner'
 import { apiBaseUrl } from '../../config/env'
 import type { DashboardContext, Tenant } from '../../types/domain'
@@ -35,10 +35,6 @@ export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
             <StatusBanner status={ctx.status} />
             <section className="resource-page settings-page">
                 <Card className="page-card settings-card">
-                    <CardHeader>
-                        <CardTitle><KeyRound size={18} /> Tracking code</CardTitle>
-                        <CardDescription>Dán mã này vào website hoặc landing để quét link tracking đã gắn trên trang.</CardDescription>
-                    </CardHeader>
                     <CardContent>
                         <div className="tracking-code-box">
                             <div className="tracking-code-heading">
@@ -46,7 +42,7 @@ export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
                                 <Button type="button" variant="outline" size="sm" disabled={!trackingScript} onClick={() => void copyTrackingScript(ctx, trackingScript)}><Copy size={14} /> Copy</Button>
                             </div>
                             <pre className="webhook-code-sample"><code>{trackingScript || 'Không tìm thấy workspace để tạo mã tracking.'}</code></pre>
-                            <p className="form-hint">Chức năng hiện tại: quét các Affiliate URL hoặc Shortlink thuộc Tracking Links trên website đã gắn mã và console.log khi phát hiện.</p>
+                            <p className="form-hint">Dán mã này vào website hoặc landing để quét Affiliate URL hoặc Shortlink thuộc Tracking Links và console.log khi phát hiện.</p>
                         </div>
                     </CardContent>
                 </Card>

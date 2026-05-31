@@ -40,12 +40,21 @@ export const navGroups: NavGroup[] = [
   }
 ]
 
-export const pageMeta: Record<string, { title: string; description: string }> = {
+export type PageMeta = {
+  title: string
+  description: string
+  primaryAction?: {
+    path: string
+    label: string
+  }
+}
+
+export const pageMeta: Record<string, PageMeta> = {
   '/dashboard': { title: 'Dashboard', description: 'Monitor affiliate performance and workspace activity.' },
-  '/campaigns': { title: 'Campaigns', description: 'Create campaigns and select configured dataset.' },
-  '/platforms': { title: 'Affiliate Platforms', description: 'Manage supported affiliate networks and webhooks.' },
-  '/datasets': { title: 'Datasets', description: 'Manage Meta/TikTok datasets in one place.' },
-  '/tracking-links': { title: 'Tracking Links', description: 'Create shortlinks with direct Affiliate URL, platform selection and bridge page settings.' },
+  '/campaigns': { title: 'Campaigns', description: 'Create campaigns and select configured dataset.', primaryAction: { path: '/campaigns/new', label: 'Thêm campaign' } },
+  '/platforms': { title: 'Affiliate Platforms', description: 'Manage supported affiliate networks and webhooks.', primaryAction: { path: '/platforms/new', label: 'Thêm platform' } },
+  '/datasets': { title: 'Datasets', description: 'Manage Meta/TikTok datasets in one place.', primaryAction: { path: '/datasets/new', label: 'Thêm dataset' } },
+  '/tracking-links': { title: 'Tracking Links', description: 'Create shortlinks with direct Affiliate URL, platform selection and bridge page settings.', primaryAction: { path: '/tracking-links/new', label: 'Thêm link' } },
   '/click-events': { title: 'Click Events', description: 'Review latest captured click events.' },
   '/logs': { title: 'Activity Logs', description: 'Theo dõi click, prelanding, webhook affiliate, CAPI và thay đổi cấu hình.' },
   '/analytics': { title: 'Analytics', description: 'Attribution and traffic insights.' },

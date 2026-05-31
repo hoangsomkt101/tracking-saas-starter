@@ -284,6 +284,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   }
 
   const meta = pageMeta[location.pathname] ?? pageMeta['/dashboard']
+  const primaryAction = meta.primaryAction
 
   return (
     <main className={`app-shell shadcn-theme ${isSidebarCollapsed ? 'is-sidebar-collapsed' : ''}`}>
@@ -352,7 +353,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
               {isLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
               Refresh
             </Button>
-            <Button type="button" onClick={() => navigate('/tracking-links')}><Plus size={16} /> New link</Button>
+            {primaryAction && <Button asChild><NavLink to={primaryAction.path}><Plus size={16} /> {primaryAction.label}</NavLink></Button>}
           </div>
         </section>
 
