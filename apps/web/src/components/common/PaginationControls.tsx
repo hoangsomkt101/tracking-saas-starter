@@ -11,7 +11,7 @@ export function PaginationControls({ meta, isLoading, onPageChange }: { meta: Pa
       <span>{start}-{end} / {meta.total} records</span>
       <div>
         <Button variant="outline" size="sm" type="button" disabled={isLoading || !meta.hasPreviousPage} onClick={() => onPageChange(meta.page - 1)}>Previous</Button>
-        <Badge variant="outline">Page {meta.page}/{meta.totalPages}</Badge>
+        <Badge variant="info">Page {meta.page}/{meta.totalPages}</Badge>
         <Button variant="outline" size="sm" type="button" disabled={isLoading || !meta.hasNextPage} onClick={() => onPageChange(meta.page + 1)}>Next</Button>
       </div>
     </div>

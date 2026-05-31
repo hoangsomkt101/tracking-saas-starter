@@ -285,7 +285,7 @@ export function EventMappingBuilder({ name, defaultValue, ctx, tenantId, platfor
           <Button type="button" variant="outline" size="sm" onClick={() => void testCurrentMapping()} disabled={!ctx || isTestingMapping}>
             {isTestingMapping ? <Loader2 className="spin" size={14} /> : <Sparkles size={14} />} Test mapping
           </Button>
-          {testResult && <Badge variant={(testResult as { error?: unknown }).error ? 'destructive' : 'secondary'}>{(testResult as { error?: unknown }).error ? 'Test failed' : 'Matched'}</Badge>}
+          {testResult && <Badge variant={(testResult as { error?: unknown }).error ? 'error' : 'success'}>{(testResult as { error?: unknown }).error ? 'Test failed' : 'Matched'}</Badge>}
         </div>
         {testResult && <pre>{JSON.stringify(testResult, null, 2)}</pre>}
       </div>

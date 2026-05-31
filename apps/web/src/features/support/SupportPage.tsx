@@ -55,7 +55,7 @@ export function SupportPage() {
                         </div>
                         <div>
                             <span>Trạng thái</span>
-                            <Badge variant="secondary">Đã công bố</Badge>
+                            <Badge variant="success">Đã công bố</Badge>
                         </div>
                     </div>
                     <div className="button-row support-actions">

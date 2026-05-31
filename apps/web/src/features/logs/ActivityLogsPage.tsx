@@ -13,10 +13,10 @@ import { getFormString } from '../../lib/forms'
 import type { ActivityLog, DashboardContext } from '../../types/domain'
 
 const levelMeta = {
-    DEBUG: { icon: Bug, badge: 'outline' as const },
-    INFO: { icon: Info, badge: 'secondary' as const },
-    WARN: { icon: TriangleAlert, badge: 'outline' as const },
-    ERROR: { icon: XCircle, badge: 'destructive' as const }
+    DEBUG: { icon: Bug, badge: 'muted' as const },
+    INFO: { icon: Info, badge: 'info' as const },
+    WARN: { icon: TriangleAlert, badge: 'warning' as const },
+    ERROR: { icon: XCircle, badge: 'error' as const }
 }
 
 function uniqueValues(logs: ActivityLog[], key: keyof ActivityLog) {

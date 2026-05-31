@@ -3882,6 +3882,90 @@ button,
   color: hsl(var(--compose-text-primary));
 }
 
+.badge-soft {
+  border-color: hsl(var(--badge-border));
+  background-color: hsl(var(--badge-bg));
+  color: hsl(var(--badge-text));
+}
+
+.badge-soft:hover {
+  background-color: hsl(var(--badge-bg-hover));
+}
+
+.badge-active,
+.badge-success {
+  --badge-bg: 142 76% 36% / 0.11;
+  --badge-bg-hover: 142 76% 36% / 0.16;
+  --badge-border: 142 72% 36% / 0.2;
+  --badge-text: 142 64% 28%;
+}
+
+.badge-info {
+  --badge-bg: 217 91% 60% / 0.11;
+  --badge-bg-hover: 217 91% 60% / 0.16;
+  --badge-border: 217 86% 58% / 0.2;
+  --badge-text: 217 78% 38%;
+}
+
+.badge-warning,
+.badge-pending {
+  --badge-bg: 38 92% 50% / 0.12;
+  --badge-bg-hover: 38 92% 50% / 0.17;
+  --badge-border: 38 88% 46% / 0.22;
+  --badge-text: 32 95% 32%;
+}
+
+.badge-error {
+  --badge-bg: 0 84% 60% / 0.12;
+  --badge-bg-hover: 0 84% 60% / 0.17;
+  --badge-border: 0 78% 56% / 0.22;
+  --badge-text: 0 72% 42%;
+}
+
+.badge-muted {
+  --badge-bg: 240 5% 84% / 0.22;
+  --badge-bg-hover: 240 5% 84% / 0.3;
+  --badge-border: 240 5% 64% / 0.2;
+  --badge-text: 240 5% 36%;
+}
+
+:root[data-theme="dark"] .badge-active,
+:root[data-theme="dark"] .badge-success {
+  --badge-bg: 142 72% 46% / 0.16;
+  --badge-bg-hover: 142 72% 46% / 0.22;
+  --badge-border: 142 70% 45% / 0.24;
+  --badge-text: 142 70% 72%;
+}
+
+:root[data-theme="dark"] .badge-info {
+  --badge-bg: 217 91% 60% / 0.16;
+  --badge-bg-hover: 217 91% 60% / 0.22;
+  --badge-border: 217 86% 58% / 0.24;
+  --badge-text: 217 92% 76%;
+}
+
+:root[data-theme="dark"] .badge-warning,
+:root[data-theme="dark"] .badge-pending {
+  --badge-bg: 38 92% 50% / 0.16;
+  --badge-bg-hover: 38 92% 50% / 0.22;
+  --badge-border: 38 88% 46% / 0.24;
+  --badge-text: 38 92% 72%;
+}
+
+:root[data-theme="dark"] .badge-error {
+  --badge-bg: 0 84% 60% / 0.17;
+  --badge-bg-hover: 0 84% 60% / 0.23;
+  --badge-border: 0 78% 56% / 0.26;
+  --badge-text: 0 86% 76%;
+}
+
+:root[data-theme="dark"] .badge-muted {
+  --badge-bg: 240 4% 64% / 0.12;
+  --badge-bg-hover: 240 4% 64% / 0.18;
+  --badge-border: 240 5% 64% / 0.18;
+  --badge-text: 240 6% 74%;
+}
+
 .shadcn-theme .text-foreground,
 .field-label,
 .page-heading h1,

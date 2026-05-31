@@ -99,7 +99,7 @@ export function OverviewPage({ ctx }: { ctx: DashboardContext }) {
             </div>
             <div className="workspace-metrics">
               <span>Mã workspace</span><strong>{ctx.selectedTenant?.slug ?? 'workspace'}</strong>
-              <span>Status</span><Badge variant="secondary">Active</Badge>
+              <span>Status</span><Badge variant="active">Active</Badge>
             </div>
           </CardContent>
         </Card>
