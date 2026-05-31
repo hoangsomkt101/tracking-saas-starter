@@ -61,25 +61,28 @@ export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
             <StatusBanner status={ctx.status} />
             <section className="resource-page settings-page">
                 <Card className="page-card settings-card">
+                    <CardHeader className="websites-card-header">
+                        <div>
+                            <CardTitle><Copy size={18} /> Mã tracking</CardTitle>
+                            <CardDescription>Dán mã này vào website hoặc landing đã khai báo domain.</CardDescription>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" disabled={!trackingScript} onClick={() => void copyTrackingScript(ctx, trackingScript)}><Copy size={14} /> Copy</Button>
+                    </CardHeader>
                     <CardContent>
                         <div className="tracking-code-box">
-                            <div className="tracking-code-heading">
-                                <strong>Mã tracking</strong>
-                                <Button type="button" variant="outline" size="sm" disabled={!trackingScript} onClick={() => void copyTrackingScript(ctx, trackingScript)}><Copy size={14} /> Copy</Button>
-                            </div>
                             <pre className="webhook-code-sample"><code>{trackingScript || 'Không tìm thấy workspace để tạo mã tracking.'}</code></pre>
-                            <p className="form-hint">Dán mã này vào website hoặc landing đã khai báo domain để quét Affiliate URL hoặc Shortlink thuộc Tracking Links và console.log khi phát hiện.</p>
+                            <p className="form-hint">Mã sẽ quét Affiliate URL hoặc Shortlink thuộc Tracking Links và console.log khi phát hiện.</p>
                         </div>
                     </CardContent>
                 </Card>
 
                 <Card className="page-card settings-card">
-                    <CardHeader>
+                    <CardHeader className="websites-card-header">
                         <CardTitle><Globe2 size={18} /> Website domains</CardTitle>
                         <CardDescription>Chỉ các website được thêm ở đây mới sử dụng được mã tracking.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <form className="route-form" onSubmit={(event) => void handleDomainSubmit(event)}>
+                        <form className="route-form website-domain-form" onSubmit={(event) => void handleDomainSubmit(event)}>
                             <label>
                                 <FieldLabel>Domain</FieldLabel>
                                 <Input name="domain" placeholder="example.com" autoComplete="off" required />
@@ -88,7 +91,7 @@ export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
                             <Button type="submit" disabled={!ctx.selectedTenant}><Plus size={16} /> Thêm domain</Button>
                         </form>
 
-                        <div className="table-wrap">
+                        <div className="table-wrap website-domain-table-wrap">
                             <table>
                                 <thead><tr><th>Domain</th><th>Status</th><th>Actions</th></tr></thead>
                                 <tbody>
