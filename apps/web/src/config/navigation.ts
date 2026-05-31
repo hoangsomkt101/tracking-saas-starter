@@ -29,7 +29,7 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Account',
     items: [
-      { path: '/settings', label: 'Settings', icon: Settings, featureKey: 'settings' },
+      { path: '/settings', label: 'Websites', icon: Settings, featureKey: 'settings' },
       { path: '/support', label: 'Support', icon: HelpCircle, featureKey: 'support' }
     ]
   }
@@ -45,7 +45,7 @@ export const pageMeta: Record<string, { title: string; description: string }> = 
   '/logs': { title: 'Activity Logs', description: 'Theo dõi click, prelanding, webhook affiliate, CAPI và thay đổi cấu hình.' },
   '/analytics': { title: 'Analytics', description: 'Attribution and traffic insights.' },
   '/billing': { title: 'Billing', description: 'Plan, usage quota and invoices.' },
-  '/settings': { title: 'Settings', description: 'Workspace and integration settings.' },
+  '/settings': { title: 'Websites', description: 'Quét Affiliate URL và Shortlink trên website đã gắn mã tracking.' },
   '/support': { title: 'Support', description: 'Thông tin hỗ trợ, hotline và pháp lý doanh nghiệp.' },
   '/superadmin': { title: 'Super Admin', description: 'Quản lý các tài khoản đã đăng ký và workspace tương ứng.' }
 }

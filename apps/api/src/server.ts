@@ -84,7 +84,7 @@ function getDefaultMenuFeatures() {
     { id: 'menu-activity-logs', key: 'activity-logs', path: '/logs', label: 'Activity Logs', group: 'Tracking', icon: 'ScrollText', sortOrder: 75, isCore: true },
     { id: 'menu-analytics', key: 'analytics', path: '/analytics', label: 'Analytics', group: 'Tracking', icon: 'BarChart3', sortOrder: 80, isCore: false },
     { id: 'menu-billing', key: 'billing', path: '/billing', label: 'Billing', group: 'Account', icon: 'WalletCards', sortOrder: 90, isCore: true },
-    { id: 'menu-settings', key: 'settings', path: '/settings', label: 'Settings', group: 'Account', icon: 'Settings', sortOrder: 100, isCore: true },
+    { id: 'menu-settings', key: 'settings', path: '/settings', label: 'Websites', group: 'Account', icon: 'Settings', sortOrder: 100, isCore: true },
     { id: 'menu-support', key: 'support', path: '/support', label: 'Support', group: 'Account', icon: 'HelpCircle', sortOrder: 110, isCore: true },
     { id: 'menu-superadmin', key: 'superadmin', path: '/superadmin', label: 'Super Admin', group: 'Admin', icon: 'Crown', badge: 'Root', sortOrder: 1000, isCore: false }
   ]
