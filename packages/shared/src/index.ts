@@ -72,7 +72,7 @@ export type SupportedAffiliatePlatformDefinition = {
 
 export const supportedAffiliatePlatforms: SupportedAffiliatePlatformDefinition[] = [
   { key: 'impact', label: 'Impact', slug: 'impact', trackingParamKey: 'subid1', webhookMethod: 'GET', defaultEventName: 'CompleteRegistration' },
-  { key: 'partnerstack', label: 'PartnerStack', slug: 'partnerstack', trackingParamKey: 'sid1', webhookMethod: 'POST', defaultEventName: 'CompleteRegistration' },
+  { key: 'partnerstack', label: 'PartnerStack', slug: 'partnerstack', trackingParamKey: 'sid', webhookMethod: 'POST', defaultEventName: 'CompleteRegistration' },
   { key: 'first_promo', label: 'First Promo', slug: 'first-promo', trackingParamKey: 'fp_sid', webhookMethod: 'POST', defaultEventName: 'CompleteRegistration' }
 ]
 
@@ -81,6 +81,7 @@ const supportedAffiliatePlatformAliases: Record<string, SupportedAffiliatePlatfo
   impactcom: 'impact',
   subid1: 'impact',
   partnerstack: 'partnerstack',
+  sid: 'partnerstack',
   sid1: 'partnerstack',
   firstpromo: 'first_promo',
   firstpromoter: 'first_promo',

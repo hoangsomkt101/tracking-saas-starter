@@ -5,7 +5,7 @@ import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import { randomUUID } from 'node:crypto'
 import { Prisma, prisma } from '@repo/db'
-import { createClickEventsQueue, createFbc, createRedisConnection, escapeHtml, normalizeHeaderValue, validateHttpUrl } from '@repo/shared'
+import { createClickEventsQueue, createFbc, createRedisConnection, escapeHtml, getSupportedAffiliatePlatform, normalizeHeaderValue, validateHttpUrl } from '@repo/shared'
 
 const app = Fastify({ logger: true })
 
@@ -79,6 +79,11 @@ async function createActivityLog(input: { tenantId: string; level?: 'DEBUG' | 'I
   } catch (error) {
     app.log.warn({ error, tenantId: input.tenantId, eventType: input.eventType }, 'Failed to write activity log')
   }
+}
+
+function resolveTrackingParamKey(platform: { slug?: string | null; name?: string | null; trackingParamKey?: string | null }) {
+  const supported = getSupportedAffiliatePlatform(platform.slug ?? '') ?? getSupportedAffiliatePlatform(platform.trackingParamKey ?? '') ?? getSupportedAffiliatePlatform(platform.name ?? '')
+  return supported?.trackingParamKey ?? platform.trackingParamKey ?? 'subid1'
 }
 
 function buildAffiliateRedirectUrl(affiliateUrl: string, trackingParamKey: string, clickUuid: string) {
@@ -285,7 +290,7 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
     eventName
   }, { jobId: getPixelEventId(eventName, clickEvent.clickUuid), delay: capiDelayMs })))
 
-  const redirectUrl = buildAffiliateRedirectUrl(trackingLink.affiliateUrl, trackingLink.affiliatePlatform.trackingParamKey, clickEvent.clickUuid)
+  const redirectUrl = buildAffiliateRedirectUrl(trackingLink.affiliateUrl, resolveTrackingParamKey(trackingLink.affiliatePlatform), clickEvent.clickUuid)
   const inlinePrelander = trackingLink.prelanderEnabled && trackingLink.prelanderHeadline && trackingLink.prelanderBody ? {
     title: trackingLink.prelanderTitle,
     headline: trackingLink.prelanderHeadline,
