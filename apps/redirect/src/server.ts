@@ -49,9 +49,9 @@ async function assertClickLimit(tenantId: string) {
 
 type AnyRecord = Record<string, any>
 type BrowserPixelDataset = { platform: 'meta' | 'tiktok'; pixelId: string }
-type BrowserPixelEventName = 'PageView' | 'ViewContent' | 'AddToCart'
+type BrowserPixelEventName = 'PageView' | 'AddToCart'
 
-const browserPixelEventNames: BrowserPixelEventName[] = ['PageView', 'ViewContent', 'AddToCart']
+const browserPixelEventNames: BrowserPixelEventName[] = ['PageView', 'AddToCart']
 
 function toJsonSafe(value: unknown): unknown {
   if (value === null || value === undefined) return value
