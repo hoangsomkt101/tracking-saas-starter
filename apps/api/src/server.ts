@@ -117,7 +117,7 @@ function trackingEventHeaders(reply: FastifyReply, allowedOrigin?: string | null
     .header('access-control-allow-methods', 'POST,OPTIONS')
     .header('access-control-allow-headers', 'content-type')
     .header('access-control-max-age', '86400')
-  if (allowedOrigin) response.header('access-control-allow-origin', allowedOrigin)
+  if (allowedOrigin) response.header('access-control-allow-origin', allowedOrigin).header('access-control-allow-credentials', 'true')
   return response
 }
 function getClientIp(req: FastifyRequest) { return getHeaderString(req, 'x-forwarded-for')?.split(',')[0]?.trim() || req.ip }
@@ -128,9 +128,11 @@ function getPublicRequestOrigin(req: FastifyRequest) {
 }
 function optionalLimitedString(value: unknown, maxLength = 1024) { const text = optionalString(value); return text ? text.slice(0, maxLength) : undefined }
 function getUrlSearchParam(value: string | undefined, key: string) { if (!value) return undefined; const url = parseHttpUrl(value); return optionalLimitedString(url?.searchParams.get(key), 512) }
+const TRACKING_SCRIPT_VIEW_CONTENT_CLICK_UUID_PREFIX = 'atp_'
 function normalizeTrackingEventId(value: unknown) { const raw = optionalLimitedString(value, 160) ?? randomUUID(); const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 160); return normalized || randomUUID() }
 function normalizeClientClickUuid(value: unknown) { const raw = optionalLimitedString(value, 160); if (!raw) return null; const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 160); return normalized || null }
-function buildTrackingScriptClickUuid(input: { tenantId: string; trackingLinkId: string; eventId: string }) { return `atp_${sha256Hex(stableStringify(input)).slice(0, 32)}` }
+function buildTrackingScriptClickUuid(input: { tenantId: string; trackingLinkId: string; eventId: string }) { return `${TRACKING_SCRIPT_VIEW_CONTENT_CLICK_UUID_PREFIX}${sha256Hex(stableStringify(input)).slice(0, 32)}` }
+function excludeTrackingScriptViewContentClicks(where: AnyRecord) { const rule = { clickUuid: { startsWith: TRACKING_SCRIPT_VIEW_CONTENT_CLICK_UUID_PREFIX } }; where.NOT = where.NOT ? Array.isArray(where.NOT) ? [...where.NOT, rule] : [where.NOT, rule] : rule; return where }
 function parseTrackingEventBody(value: unknown) { if (typeof value === 'string') { try { return getPlainRecord(JSON.parse(value)) ?? {} } catch { return {} } } return getPlainRecord(value) ?? {} }
 function parseStringList(value: unknown) { const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []; return [...new Set(raw.map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))] }
 function parsePositiveInteger(value: unknown, fallback: number, max?: number) { const normalized = getQueryValue(value); const parsed = typeof normalized === 'number' ? normalized : typeof normalized === 'string' ? Number.parseInt(normalized, 10) : Number.NaN; if (!Number.isFinite(parsed) || parsed < 1) return fallback; const integer = Math.floor(parsed); return max ? Math.min(integer, max) : integer }
@@ -162,7 +164,7 @@ function getDefaultTenantSlug(clerkUser: Awaited<ReturnType<typeof clerk.users.g
 function getUserDisplayName(user: Pick<User, 'firstName' | 'lastName' | 'email'> | null | undefined, fallback = 'Unknown user') { const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim(); return fullName || user?.email || fallback }
 async function getDefaultBillingPlanId() { const existing = await prisma.billingPlan.findFirst({ where: { isDefault: true, isActive: true }, orderBy: { createdAt: 'asc' } }); if (existing) return existing.id; const plan = await prisma.billingPlan.upsert({ where: { slug: 'free' }, update: { isDefault: true, isActive: true }, create: { slug: 'free', name: 'Free', description: 'Default free plan for newly registered accounts', monthlyPriceCents: 0, currency: 'USD', clickLimit: 1000, capiEventLimit: 1000, eapiEventLimit: 1000, campaignDatasetLimit: 2, isDefault: true, isActive: true } }); return plan.id }
 async function getTenantPlanOrDefault(tenantId: string) { const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { billingPlan: true } }); if (!tenant) return null; if (tenant.billingPlan) return tenant.billingPlan; const billingPlanId = await getDefaultBillingPlanId(); return (await prisma.tenant.update({ where: { id: tenantId }, data: { billingPlanId }, include: { billingPlan: true } })).billingPlan }
-async function getCurrentBillingUsage(tenantId: string) { const periodStart = new Date(); periodStart.setUTCDate(1); periodStart.setUTCHours(0, 0, 0, 0); const [clicks, capiEvents, eapiEvents] = await Promise.all([prisma.clickEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } }), prisma.capiEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } }), prisma.affiliateConversionEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } })]); return { periodStart, clicks, capiEvents, eapiEvents } }
+async function getCurrentBillingUsage(tenantId: string) { const periodStart = new Date(); periodStart.setUTCDate(1); periodStart.setUTCHours(0, 0, 0, 0); const [clicks, capiEvents, eapiEvents] = await Promise.all([prisma.clickEvent.count({ where: excludeTrackingScriptViewContentClicks({ tenantId, createdAt: { gte: periodStart } }) }), prisma.capiEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } }), prisma.affiliateConversionEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } })]); return { periodStart, clicks, capiEvents, eapiEvents } }
 async function assertBillingLimit(tenantId: string, metric: 'clicks' | 'capiEvents' | 'eapiEvents') { const plan = await getTenantPlanOrDefault(tenantId); if (!plan) throw new Error('Billing plan not found'); const usage = await getCurrentBillingUsage(tenantId); const limit = metric === 'clicks' ? plan.clickLimit : metric === 'capiEvents' ? plan.capiEventLimit : plan.eapiEventLimit; if (usage[metric] >= limit) throw new Error(`Billing limit exceeded: ${metric} ${usage[metric]}/${limit} for plan ${plan.name}`); return { plan, usage } }
 
 async function requireUser(req: FastifyRequest) {
@@ -321,7 +323,7 @@ function containsInsensitive(value: string) { return { contains: value, mode: 'i
 function getEventFilters(q: AnyRecord) { return { tenantId: optionalQueryString(q.tenantId), search: optionalQueryString(q.search), campaignId: optionalQueryString(q.campaignId), brandId: optionalQueryString(q.brandId), trackingLinkId: optionalQueryString(q.trackingLinkId), affiliatePlatformId: optionalQueryString(q.affiliatePlatformId) ?? optionalQueryString(q.platformId), status: optionalQueryString(q.status) } }
 function buildTrackingLinkFilter(q: AnyRecord) { const f = getEventFilters(q); const trackingLink: AnyRecord = {}; if (f.brandId) trackingLink.brandId = f.brandId; if (f.affiliatePlatformId) trackingLink.affiliatePlatformId = f.affiliatePlatformId; return trackingLink }
 function addCreatedAtFilter(where: AnyRecord, q: AnyRecord) { const createdAt = getCreatedAtFilter(q); if (createdAt) where.createdAt = createdAt }
-function buildClickEventWhere(userId: string, q: AnyRecord, options: { includeSearch?: boolean; includeDate?: boolean } = {}) { const f = getEventFilters(q); const includeSearch = options.includeSearch ?? true; const includeDate = options.includeDate ?? true; const where: AnyRecord = { tenant: { ownerUserId: userId } }; if (f.tenantId) where.tenantId = f.tenantId; if (f.campaignId) where.campaignId = f.campaignId; if (f.trackingLinkId) where.trackingLinkId = f.trackingLinkId; if (includeDate) addCreatedAtFilter(where, q); const trackingLink = buildTrackingLinkFilter(q); if (hasKeys(trackingLink)) where.trackingLink = trackingLink; if (includeSearch && f.search) where.OR = [{ clickUuid: containsInsensitive(f.search) }, { fbclid: containsInsensitive(f.search) }, { ttclid: containsInsensitive(f.search) }, { fbp: containsInsensitive(f.search) }, { fbc: containsInsensitive(f.search) }, { ip: containsInsensitive(f.search) }, { referrer: containsInsensitive(f.search) }, { trackingLink: { slug: containsInsensitive(f.search) } }]; return where }
+function buildClickEventWhere(userId: string, q: AnyRecord, options: { includeSearch?: boolean; includeDate?: boolean; includeTrackingScriptViewContent?: boolean } = {}) { const f = getEventFilters(q); const includeSearch = options.includeSearch ?? true; const includeDate = options.includeDate ?? true; const includeTrackingScriptViewContent = options.includeTrackingScriptViewContent ?? false; const where: AnyRecord = { tenant: { ownerUserId: userId } }; if (!includeTrackingScriptViewContent) excludeTrackingScriptViewContentClicks(where); if (f.tenantId) where.tenantId = f.tenantId; if (f.campaignId) where.campaignId = f.campaignId; if (f.trackingLinkId) where.trackingLinkId = f.trackingLinkId; if (includeDate) addCreatedAtFilter(where, q); const trackingLink = buildTrackingLinkFilter(q); if (hasKeys(trackingLink)) where.trackingLink = trackingLink; if (includeSearch && f.search) where.OR = [{ clickUuid: containsInsensitive(f.search) }, { fbclid: containsInsensitive(f.search) }, { ttclid: containsInsensitive(f.search) }, { fbp: containsInsensitive(f.search) }, { fbc: containsInsensitive(f.search) }, { ip: containsInsensitive(f.search) }, { referrer: containsInsensitive(f.search) }, { trackingLink: { slug: containsInsensitive(f.search) } }]; return where }
 function buildCapiEventWhere(userId: string, q: AnyRecord) { const f = getEventFilters(q); const where: AnyRecord = { tenant: { ownerUserId: userId } }; if (f.tenantId) where.tenantId = f.tenantId; addCreatedAtFilter(where, q); if (f.status) where.status = f.status.toUpperCase(); const clickEvent: AnyRecord = {}; if (f.campaignId) clickEvent.campaignId = f.campaignId; if (f.trackingLinkId) clickEvent.trackingLinkId = f.trackingLinkId; const trackingLink = buildTrackingLinkFilter(q); if (hasKeys(trackingLink)) clickEvent.trackingLink = trackingLink; if (hasKeys(clickEvent)) where.clickEvent = clickEvent; if (f.search) where.OR = [{ eventName: containsInsensitive(f.search) }, { lastError: containsInsensitive(f.search) }, { platform: containsInsensitive(f.search) }, { clickEvent: { clickUuid: containsInsensitive(f.search) } }, { clickEvent: { trackingLink: { slug: containsInsensitive(f.search) } } }]; return where }
 async function getMatchingClickUuidsForConversionFilters(userId: string, q: AnyRecord) { const f = getEventFilters(q); if (!f.campaignId && !f.brandId && !f.trackingLinkId) return undefined; const rows = await prisma.clickEvent.findMany({ where: buildClickEventWhere(userId, q, { includeSearch: false, includeDate: false }), select: { clickUuid: true } }); return rows.map((row) => row.clickUuid) }
 async function buildConversionEventWhere(userId: string, q: AnyRecord) { const f = getEventFilters(q); const where: AnyRecord = { tenant: { ownerUserId: userId } }; if (f.tenantId) where.tenantId = f.tenantId; addCreatedAtFilter(where, q); if (f.affiliatePlatformId) where.affiliatePlatformId = f.affiliatePlatformId; if (f.search) where.OR = [{ clickUuid: containsInsensitive(f.search) }, { customerId: containsInsensitive(f.search) }, { customerEmail: containsInsensitive(f.search) }, { eventName: containsInsensitive(f.search) }, { eventRule: containsInsensitive(f.search) }, { receivedMethod: containsInsensitive(f.search) }, { affiliatePlatform: { name: containsInsensitive(f.search) } }]; const matchingClickUuids = await getMatchingClickUuidsForConversionFilters(userId, q); if (matchingClickUuids) where.clickUuid = { in: matchingClickUuids.length ? matchingClickUuids : ['__no_matching_click_uuid__'] }; return where }
@@ -954,37 +956,57 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
 
   if (!activeDatasets.length) return send(202, { ok: true, skipped: true, reason: 'No active datasets selected for campaign', eventName: 'ViewContent', trackingLinkId: trackingLink.id, slug: trackingLink.slug })
 
-  const viewContentEvent = compactRecord({
+  const clickUuid = buildTrackingScriptClickUuid({ tenantId: tenant.id, trackingLinkId: trackingLink.id, eventId })
+  const metadata = compactRecord({
+    ...commonMetadata,
+    source: 'atp.view_content',
     eventName: 'ViewContent',
-    eventId,
-    eventTime: new Date(),
-    eventSourceUrl: pageUrl ?? requestReferer,
-    pageUrl,
-    pageTitle,
-    ip: getClientIp(req),
-    userAgent: getHeaderString(req, 'user-agent'),
-    fbp,
-    fbc,
-    ttp,
-    ttclid,
-    fbclid,
     contentId: trackingLink.slug,
     contentIds: [trackingLink.slug],
     contentName: trackingLink.slug,
     contentType: 'product',
-    campaignId: trackingLink.campaignId,
-    trackingLinkId: trackingLink.id,
-    brandId: trackingLink.brandId,
-    affiliateNetwork: trackingLink.affiliatePlatform.name,
-    metadata: commonMetadata
+    activeDatasetIds
   })
 
   try {
-    const results = await sendTrackingScriptViewContent({ tenantId: tenant.id, datasets: activeDatasets, event: viewContentEvent })
-    const failed = results.filter((result) => !result.delivered)
-    await createActivityLog({ tenantId: tenant.id, level: failed.length ? 'ERROR' : 'INFO', source: 'atp.js', eventType: failed.length ? 'tracking_script.view_content_failed' : 'tracking_script.view_content_sent', message: `ViewContent CAPI ${failed.length ? 'failed' : 'sent'} for "${trackingLink.slug}"`, entityType: 'trackingLink', entityId: trackingLink.id, metadata: { eventId, trackingLinkId: trackingLink.id, campaignId: trackingLink.campaignId, activeDatasetIds, pageUrl, matchedHref, results: results.map((result) => ({ platform: result.platform, datasetId: result.datasetId, delivered: result.delivered, responsePayload: result.responsePayload, error: result.error })) } })
-    const statusCode = failed.length === results.length ? 502 : failed.length ? 207 : 200
-    return send(statusCode, { ok: failed.length === 0, eventName: 'ViewContent', eventId, trackingLinkId: trackingLink.id, slug: trackingLink.slug, delivered: results.length - failed.length, failed: failed.length })
+    let duplicate = false
+    let clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
+
+    if (clickEvent) {
+      duplicate = true
+      if (clickEvent.tenantId !== tenant.id || clickEvent.trackingLinkId !== trackingLink.id) return send(409, { error: 'Duplicate tracking event id conflict' })
+    } else {
+      try {
+        clickEvent = await prisma.clickEvent.create({
+          data: {
+            tenantId: tenant.id,
+            campaignId: trackingLink.campaignId ?? null,
+            trackingLinkId: trackingLink.id,
+            clickUuid,
+            ip: getClientIp(req),
+            userAgent: getHeaderString(req, 'user-agent'),
+            referrer: pageReferrer ?? requestReferer,
+            fbp,
+            fbc,
+            ttp,
+            ttclid,
+            fbclid,
+            metadata: metadata as Prisma.InputJsonValue
+          }
+        })
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+          duplicate = true
+          clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
+        } else {
+          throw error
+        }
+      }
+    }
+
+    if (!clickEvent) throw new Error('Tracking ViewContent event was not created')
+    if (!duplicate) await enqueueClick(clickEvent, 'ViewContent', 'tracking_script', eventId)
+    return send(duplicate ? 200 : 201, { ok: true, duplicate, eventName: 'ViewContent', eventId, trackingLinkId: trackingLink.id, slug: trackingLink.slug })
   } catch (error) {
     req.log.error({ error, tenantId: tenant.id, trackingLinkId: trackingLink.id }, 'Failed to process atp ViewContent event')
     const message = error instanceof Error ? error.message : 'Internal server error'
