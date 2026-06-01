@@ -8,12 +8,39 @@ import { Button } from '../components/ui/button'
 import { ThemeToggle } from '../components/common/ThemeToggle'
 import { DashboardRoutes } from './DashboardRoutes'
 import { apiBaseUrl } from '../config/env'
-import { defaultActivityLogFilters, defaultEventFilters, defaultPagination, emptyData, eventPageSize } from '../config/app-data'
+import { defaultActivityLogFilters, defaultAnalyticsBreakdown, defaultEventFilters, defaultPagination, emptyData, emptyPaginated, eventPageSize } from '../config/app-data'
 import { navGroups, pageMeta } from '../config/navigation'
 import { buildQueryString, parseApiResponse } from '../lib/api'
 import { activityLogFilterParams, eventFilterParams } from '../lib/event-filters'
 import { formatLastUpdated } from '../lib/format'
-import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, BillingPlan, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, ReportSchedule, SuperAdminUser, Tenant, ThemeMode, TrackingLink, WebsiteDomain } from '../types/domain'
+import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, BillingPlan, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, DataRefreshKey, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, ReportSchedule, SuperAdminUser, Tenant, ThemeMode, TrackingLink, WebsiteDomain } from '../types/domain'
+
+const refreshQueryKeys: Record<DataRefreshKey, readonly unknown[]> = {
+  tenants: ['tenants'],
+  campaigns: ['campaigns'],
+  brands: ['brands'],
+  'affiliate-platforms': ['affiliate-platforms'],
+  datasets: ['datasets'],
+  'tracking-links': ['tracking-links'],
+  'website-domains': ['website-domains'],
+  'report-schedules': ['report-schedules'],
+  'click-events': ['click-events'],
+  'capi-events': ['capi-events'],
+  'conversion-events': ['conversion-events'],
+  'activity-logs': ['activity-logs'],
+  analytics: ['analytics'],
+  'superadmin-users': ['superadmin-users'],
+  'billing-plans': ['billing-plans'],
+  'menu-features': ['menu-features']
+}
+
+function isPath(pathname: string, route: string) {
+  return pathname === route || pathname.startsWith(`${route}/`)
+}
+
+function withTenant(path: string, tenantId?: string) {
+  return `${path}${buildQueryString({ tenantId })}`
+}
 
 export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; onToggleTheme: () => void }) {
   const { getToken } = useAuth()
@@ -52,58 +79,227 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     return parseApiResponse<T>(response)
   }, [getToken])
 
-  const appDataQuery = useQuery({
-    queryKey: ['app-data', clickEventsPage, capiEventsPage, conversionEventsPage, activityLogsPage, eventFilters, activityLogFilters],
-    queryFn: async (): Promise<LoadedAppData> => {
-      const filters = eventFilterParams(eventFilters)
-      const clickEventsQuery = buildQueryString({ ...filters, page: clickEventsPage, limit: eventPageSize })
-      const capiEventsQuery = buildQueryString({ ...filters, page: capiEventsPage, limit: eventPageSize })
-      const conversionEventsQuery = buildQueryString({ ...filters, page: conversionEventsPage, limit: eventPageSize })
-      const analyticsQuery = buildQueryString(filters)
-      const activityLogsQuery = buildQueryString({ ...activityLogFilterParams(activityLogFilters), page: activityLogsPage, limit: eventPageSize })
-      const [currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, trackingLinks, websiteDomains, reportSchedules, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData, analyticsBreakdown] = await Promise.all([
-        fetchJson<CurrentUser>('/me'),
-        fetchJson<Tenant[]>('/tenants'),
-        fetchJson<Campaign[]>('/campaigns'),
-        fetchJson<Brand[]>('/brands'),
-        fetchJson<AffiliatePlatform[]>('/affiliate-platforms'),
-        fetchJson<Dataset[]>('/datasets'),
-        fetchJson<TrackingLink[]>('/tracking-links'),
-        fetchJson<WebsiteDomain[]>('/website-domains'),
-        fetchJson<ReportSchedule[]>('/report-schedules'),
-        fetchJson<PaginatedResponse<ClickEvent>>(`/click-events${clickEventsQuery}`),
-        fetchJson<PaginatedResponse<CapiEvent>>(`/capi-events${capiEventsQuery}`),
-        fetchJson<PaginatedResponse<ConversionEvent>>(`/conversion-events${conversionEventsQuery}`),
-        fetchJson<PaginatedResponse<ActivityLog>>(`/activity-logs${activityLogsQuery}`),
-        fetchJson<AnalyticsBreakdown>(`/analytics/breakdown${analyticsQuery}`)
-      ])
-      const [superAdminUsers, billingPlans, menuFeatures] = currentUser.isSuperAdmin
-        ? await Promise.all([
-          fetchJson<SuperAdminUser[]>('/superadmin/users'),
-          fetchJson<BillingPlan[]>('/superadmin/billing-plans'),
-          fetchJson<MenuFeature[]>('/superadmin/menu-features')
-        ])
-        : [[], [], []]
-
-      return { currentUser, tenants, campaigns, brands, affiliatePlatforms, datasets, trackingLinks, websiteDomains, reportSchedules, clickEvents: clickEventsPageData.items, capiEvents: capiEventsPageData.items, conversionEvents: conversionEventsPageData.items, activityLogs: activityLogsPageData.items, analyticsSummary: analyticsBreakdown.summary, analyticsBreakdown, superAdminUsers, billingPlans, menuFeatures, clickEventsPageData, capiEventsPageData, conversionEventsPageData, activityLogsPageData }
-    },
-    staleTime: 30_000,
-    refetchInterval: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    placeholderData: (previousData) => previousData ?? emptyData
+  const currentUserQuery = useQuery({
+    queryKey: ['current-user'],
+    queryFn: () => fetchJson<CurrentUser>('/me'),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false
   })
 
-  const data = appDataQuery.data ?? emptyData
-  const clickEventsPagination = appDataQuery.data?.clickEventsPageData.pagination ?? { ...defaultPagination, page: clickEventsPage }
-  const capiEventsPagination = appDataQuery.data?.capiEventsPageData.pagination ?? { ...defaultPagination, page: capiEventsPage }
-  const conversionEventsPagination = appDataQuery.data?.conversionEventsPageData.pagination ?? { ...defaultPagination, page: conversionEventsPage }
-  const activityLogsPagination = appDataQuery.data?.activityLogsPageData.pagination ?? { ...defaultPagination, page: activityLogsPage }
-  const isLoading = appDataQuery.isLoading || appDataQuery.isFetching
+  const tenantsQuery = useQuery({
+    queryKey: ['tenants'],
+    queryFn: () => fetchJson<Tenant[]>('/tenants'),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData ?? []
+  })
 
+  const tenants = tenantsQuery.data ?? []
   const selectedTenant = useMemo(
-    () => data.tenants.find((tenant) => tenant.id === selectedTenantId) ?? data.tenants[0],
-    [data.tenants, selectedTenantId]
+    () => tenants.find((tenant) => tenant.id === selectedTenantId) ?? tenants[0],
+    [tenants, selectedTenantId]
   )
+  const tenantId = selectedTenant?.id
+  const isSuperAdmin = Boolean(currentUserQuery.data?.isSuperAdmin)
+
+  const routePath = location.pathname
+  const isDashboardRoute = routePath === '/dashboard' || routePath === '/'
+  const isCampaignRoute = isPath(routePath, '/campaigns')
+  const isPlatformRoute = isPath(routePath, '/platforms')
+  const isDatasetRoute = isPath(routePath, '/datasets')
+  const isTrackingLinkRoute = isPath(routePath, '/tracking-links')
+  const isClickEventsRoute = isPath(routePath, '/click-events')
+  const isActivityLogsRoute = isPath(routePath, '/logs')
+  const isAnalyticsRoute = isPath(routePath, '/analytics')
+  const isSettingsRoute = isPath(routePath, '/websites') || isPath(routePath, '/settings')
+  const isSuperAdminRoute = isPath(routePath, '/superadmin')
+
+  const shouldLoadCampaigns = Boolean(tenantId && (isDashboardRoute || isCampaignRoute || isTrackingLinkRoute || isClickEventsRoute || isAnalyticsRoute))
+  const shouldLoadBrands = Boolean(tenantId && isPath(routePath, '/brands'))
+  const shouldLoadAffiliatePlatforms = Boolean(tenantId && (isDashboardRoute || isPlatformRoute || isTrackingLinkRoute || isClickEventsRoute || isAnalyticsRoute))
+  const shouldLoadDatasets = Boolean(tenantId && (isDashboardRoute || isDatasetRoute || isCampaignRoute))
+  const shouldLoadTrackingLinks = Boolean(tenantId && (isDashboardRoute || isTrackingLinkRoute || isClickEventsRoute || isAnalyticsRoute))
+  const shouldLoadWebsiteDomains = Boolean(tenantId && isSettingsRoute)
+  const shouldLoadReportSchedules = Boolean(tenantId && isAnalyticsRoute)
+  const shouldLoadClickEvents = Boolean(tenantId && isClickEventsRoute)
+  const shouldLoadCapiEvents = Boolean(tenantId && isAnalyticsRoute)
+  const shouldLoadConversionEvents = Boolean(tenantId && isAnalyticsRoute)
+  const shouldLoadActivityLogs = Boolean(tenantId && isActivityLogsRoute)
+  const shouldLoadAnalytics = Boolean(tenantId && (isDashboardRoute || isAnalyticsRoute))
+  const shouldLoadSuperAdmin = Boolean(isSuperAdmin && isSuperAdminRoute)
+
+  const campaignsQuery = useQuery({
+    queryKey: ['campaigns', tenantId],
+    queryFn: () => fetchJson<Campaign[]>(withTenant('/campaigns', tenantId)),
+    enabled: shouldLoadCampaigns,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const brandsQuery = useQuery({
+    queryKey: ['brands', tenantId],
+    queryFn: () => fetchJson<Brand[]>(withTenant('/brands', tenantId)),
+    enabled: shouldLoadBrands,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const affiliatePlatformsQuery = useQuery({
+    queryKey: ['affiliate-platforms', tenantId],
+    queryFn: () => fetchJson<AffiliatePlatform[]>(withTenant('/affiliate-platforms', tenantId)),
+    enabled: shouldLoadAffiliatePlatforms,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const datasetsQuery = useQuery({
+    queryKey: ['datasets', tenantId],
+    queryFn: () => fetchJson<Dataset[]>(withTenant('/datasets', tenantId)),
+    enabled: shouldLoadDatasets,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const trackingLinksQuery = useQuery({
+    queryKey: ['tracking-links', tenantId],
+    queryFn: () => fetchJson<TrackingLink[]>(withTenant('/tracking-links', tenantId)),
+    enabled: shouldLoadTrackingLinks,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const websiteDomainsQuery = useQuery({
+    queryKey: ['website-domains', tenantId],
+    queryFn: () => fetchJson<WebsiteDomain[]>(withTenant('/website-domains', tenantId)),
+    enabled: shouldLoadWebsiteDomains,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const reportSchedulesQuery = useQuery({
+    queryKey: ['report-schedules', tenantId],
+    queryFn: () => fetchJson<ReportSchedule[]>(withTenant('/report-schedules', tenantId)),
+    enabled: shouldLoadReportSchedules,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const eventParams = eventFilterParams(eventFilters)
+  const activityLogParams = activityLogFilterParams(activityLogFilters)
+
+  const clickEventsQuery = useQuery({
+    queryKey: ['click-events', tenantId, clickEventsPage, eventFilters],
+    queryFn: () => fetchJson<PaginatedResponse<ClickEvent>>(`/click-events${buildQueryString({ tenantId, ...eventParams, page: clickEventsPage, limit: eventPageSize })}`),
+    enabled: shouldLoadClickEvents,
+    placeholderData: (previousData) => previousData ?? emptyPaginated<ClickEvent>(clickEventsPage)
+  })
+
+  const capiEventsQuery = useQuery({
+    queryKey: ['capi-events', tenantId, capiEventsPage, eventFilters],
+    queryFn: () => fetchJson<PaginatedResponse<CapiEvent>>(`/capi-events${buildQueryString({ tenantId, ...eventParams, page: capiEventsPage, limit: eventPageSize })}`),
+    enabled: shouldLoadCapiEvents,
+    placeholderData: (previousData) => previousData ?? emptyPaginated<CapiEvent>(capiEventsPage)
+  })
+
+  const conversionEventsQuery = useQuery({
+    queryKey: ['conversion-events', tenantId, conversionEventsPage, eventFilters],
+    queryFn: () => fetchJson<PaginatedResponse<ConversionEvent>>(`/conversion-events${buildQueryString({ tenantId, ...eventParams, page: conversionEventsPage, limit: eventPageSize })}`),
+    enabled: shouldLoadConversionEvents,
+    placeholderData: (previousData) => previousData ?? emptyPaginated<ConversionEvent>(conversionEventsPage)
+  })
+
+  const activityLogsQuery = useQuery({
+    queryKey: ['activity-logs', tenantId, activityLogsPage, activityLogFilters],
+    queryFn: () => fetchJson<PaginatedResponse<ActivityLog>>(`/activity-logs${buildQueryString({ tenantId, ...activityLogParams, page: activityLogsPage, limit: eventPageSize })}`),
+    enabled: shouldLoadActivityLogs,
+    placeholderData: (previousData) => previousData ?? emptyPaginated<ActivityLog>(activityLogsPage)
+  })
+
+  const analyticsQuery = useQuery({
+    queryKey: ['analytics', tenantId, eventFilters],
+    queryFn: () => fetchJson<AnalyticsBreakdown>(`/analytics/breakdown${buildQueryString({ tenantId, ...eventParams })}`),
+    enabled: shouldLoadAnalytics,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? defaultAnalyticsBreakdown
+  })
+
+  const superAdminUsersQuery = useQuery({
+    queryKey: ['superadmin-users'],
+    queryFn: () => fetchJson<SuperAdminUser[]>('/superadmin/users'),
+    enabled: shouldLoadSuperAdmin,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const billingPlansQuery = useQuery({
+    queryKey: ['billing-plans'],
+    queryFn: () => fetchJson<BillingPlan[]>('/superadmin/billing-plans'),
+    enabled: shouldLoadSuperAdmin,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const menuFeaturesQuery = useQuery({
+    queryKey: ['menu-features'],
+    queryFn: () => fetchJson<MenuFeature[]>('/superadmin/menu-features'),
+    enabled: shouldLoadSuperAdmin,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData ?? []
+  })
+
+  const data: LoadedAppData = {
+    ...emptyData,
+    currentUser: currentUserQuery.data,
+    tenants,
+    campaigns: campaignsQuery.data ?? [],
+    brands: brandsQuery.data ?? [],
+    affiliatePlatforms: affiliatePlatformsQuery.data ?? [],
+    datasets: datasetsQuery.data ?? [],
+    trackingLinks: trackingLinksQuery.data ?? [],
+    websiteDomains: websiteDomainsQuery.data ?? [],
+    reportSchedules: reportSchedulesQuery.data ?? [],
+    clickEvents: clickEventsQuery.data?.items ?? [],
+    capiEvents: capiEventsQuery.data?.items ?? [],
+    conversionEvents: conversionEventsQuery.data?.items ?? [],
+    activityLogs: activityLogsQuery.data?.items ?? [],
+    analyticsSummary: analyticsQuery.data?.summary ?? defaultAnalyticsBreakdown.summary,
+    analyticsBreakdown: analyticsQuery.data ?? defaultAnalyticsBreakdown,
+    superAdminUsers: superAdminUsersQuery.data ?? [],
+    billingPlans: billingPlansQuery.data ?? [],
+    menuFeatures: menuFeaturesQuery.data ?? [],
+    clickEventsPageData: clickEventsQuery.data ?? emptyPaginated<ClickEvent>(clickEventsPage),
+    capiEventsPageData: capiEventsQuery.data ?? emptyPaginated<CapiEvent>(capiEventsPage),
+    conversionEventsPageData: conversionEventsQuery.data ?? emptyPaginated<ConversionEvent>(conversionEventsPage),
+    activityLogsPageData: activityLogsQuery.data ?? emptyPaginated<ActivityLog>(activityLogsPage)
+  }
+
+  const clickEventsPagination = data.clickEventsPageData.pagination ?? { ...defaultPagination, page: clickEventsPage }
+  const capiEventsPagination = data.capiEventsPageData.pagination ?? { ...defaultPagination, page: capiEventsPage }
+  const conversionEventsPagination = data.conversionEventsPageData.pagination ?? { ...defaultPagination, page: conversionEventsPage }
+  const activityLogsPagination = data.activityLogsPageData.pagination ?? { ...defaultPagination, page: activityLogsPage }
+
+  const queryStates = [
+    currentUserQuery,
+    tenantsQuery,
+    campaignsQuery,
+    brandsQuery,
+    affiliatePlatformsQuery,
+    datasetsQuery,
+    trackingLinksQuery,
+    websiteDomainsQuery,
+    reportSchedulesQuery,
+    clickEventsQuery,
+    capiEventsQuery,
+    conversionEventsQuery,
+    activityLogsQuery,
+    analyticsQuery,
+    superAdminUsersQuery,
+    billingPlansQuery,
+    menuFeaturesQuery
+  ]
+  const isLoading = queryStates.some((query) => query.isLoading || query.isFetching)
+  const lastUpdatedAt = Math.max(0, ...queryStates.map((query) => query.dataUpdatedAt))
+  const firstQueryError = queryStates.find((query) => query.error)?.error
 
   const tenantCampaigns = useMemo(
     () => data.campaigns.filter((campaign) => campaign.tenantId === selectedTenant?.id),
@@ -156,13 +352,17 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   )
 
   const loadData = useCallback(async () => {
-    await queryClient.refetchQueries({ queryKey: ['app-data'], type: 'active' })
+    await queryClient.refetchQueries({ type: 'active' })
+  }, [queryClient])
+
+  const refreshEntity = useCallback(async (key: DataRefreshKey) => {
+    await queryClient.invalidateQueries({ queryKey: refreshQueryKeys[key] })
   }, [queryClient])
 
   const exportAnalyticsCsv = useCallback(async (type: string) => {
     const token = await getToken()
     if (!token) throw new Error('Không lấy được phiên đăng nhập')
-    const query = buildQueryString({ ...eventFilterParams(eventFilters), type })
+    const query = buildQueryString({ tenantId, ...eventFilterParams(eventFilters), type })
     const response = await fetch(`${apiBaseUrl}/analytics/export.csv${query}`, { headers: { Authorization: `Bearer ${token}` } })
     if (!response.ok) throw new Error(await response.text())
     const blob = await response.blob()
@@ -174,7 +374,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
-  }, [getToken, eventFilters])
+  }, [getToken, eventFilters, tenantId])
 
   const applyEventFilters = useCallback((filters: EventFilters) => {
     setEventFilters(filters)
@@ -213,8 +413,8 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   }, [activityLogsPagination.totalPages])
 
   useEffect(() => {
-    setSelectedTenantId((current) => current || data.tenants[0]?.id || '')
-  }, [data.tenants])
+    setSelectedTenantId((current) => current || tenants[0]?.id || '')
+  }, [tenants])
 
   useEffect(() => {
     if (!status.message || status.type !== 'success') return
@@ -227,10 +427,10 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   }, [status.message, status.type])
 
   useEffect(() => {
-    if (appDataQuery.error) {
-      setStatus({ type: 'error', message: appDataQuery.error instanceof Error ? appDataQuery.error.message : 'Không tải được dữ liệu' })
+    if (firstQueryError) {
+      setStatus({ type: 'error', message: firstQueryError instanceof Error ? firstQueryError.message : 'Không tải được dữ liệu' })
     }
-  }, [appDataQuery.error])
+  }, [firstQueryError])
 
   const grantedMenuFeatureIds = useMemo(() => {
     const coreFeatures = ['dashboard', 'campaigns', 'platforms', 'datasets', 'tracking-links', 'click-events', 'activity-logs', 'billing', 'settings', 'support']
@@ -261,13 +461,13 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     tenantConversionEvents,
     tenantReportSchedules,
     tenantActivityLogs,
-    isSuperAdmin: Boolean(data.currentUser?.isSuperAdmin),
+    isSuperAdmin,
     superAdminUsers: data.superAdminUsers,
     billingPlans: data.billingPlans,
     menuFeatures: data.menuFeatures,
     grantedMenuFeatureIds,
     isLoading,
-    lastUpdatedAt: appDataQuery.dataUpdatedAt,
+    lastUpdatedAt,
     clickEventsPagination,
     capiEventsPagination,
     conversionEventsPagination,
@@ -286,6 +486,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     status,
     setStatus,
     loadData,
+    refreshEntity,
     fetchJson,
     exportAnalyticsCsv
   }
@@ -355,7 +556,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
             <p>{meta.description}</p>
           </div>
           <div className="heading-actions">
-            <span className="last-updated">Cập nhật: {formatLastUpdated(appDataQuery.dataUpdatedAt)}</span>
+            <span className="last-updated">Cập nhật: {formatLastUpdated(lastUpdatedAt)}</span>
             <Button variant="outline" type="button" onClick={() => void loadData()} disabled={isLoading}>
               {isLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
               Refresh

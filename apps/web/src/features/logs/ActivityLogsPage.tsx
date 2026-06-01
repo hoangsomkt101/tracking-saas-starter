@@ -88,7 +88,7 @@ export function ActivityLogsPage({ ctx }: { ctx: DashboardContext }) {
                         <CardTitle><ScrollText size={18} /> Activity logs</CardTitle>
                         <CardDescription>{ctx.isLoading ? 'Đang tải...' : `${ctx.activityLogsPagination.total} logs · trang này ${ctx.tenantActivityLogs.length} records · cập nhật ${formatLastUpdated(ctx.lastUpdatedAt)}`}</CardDescription>
                     </div>
-                    <Button variant="outline" size="sm" type="button" onClick={() => void ctx.loadData()} disabled={ctx.isLoading}>
+                    <Button variant="outline" size="sm" type="button" onClick={() => void ctx.refreshEntity('activity-logs')} disabled={ctx.isLoading}>
                         {ctx.isLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
                         Refresh
                     </Button>

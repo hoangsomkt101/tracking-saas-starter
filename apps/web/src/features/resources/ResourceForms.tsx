@@ -36,7 +36,7 @@ export function CreateCampaignCard({ ctx, onCreated }: CreateResourceCardProps) 
       })
       ctx.setStatus({ type: 'success', message: 'Đã tạo campaign' })
       formElement.reset()
-      await ctx.loadData()
+      await ctx.refreshEntity('campaigns')
       await onCreated?.()
     } catch (error) {
       ctx.setStatus({ type: 'error', message: error instanceof Error ? error.message : 'Không tạo được campaign' })
@@ -79,7 +79,7 @@ export function CreateBrandCard({ ctx, onCreated }: CreateResourceCardProps) {
       })
       ctx.setStatus({ type: 'success', message: 'Đã tạo brand/offer' })
       formElement.reset()
-      await ctx.loadData()
+      await ctx.refreshEntity('brands')
       await onCreated?.()
     } catch (error) {
       ctx.setStatus({ type: 'error', message: error instanceof Error ? error.message : 'Không tạo được brand' })
@@ -122,7 +122,7 @@ export function CreateAffiliatePlatformCard({ ctx, onCreated }: CreateResourceCa
       })
       ctx.setStatus({ type: 'success', message: 'Đã tạo affiliate platform/network' })
       formElement.reset()
-      await ctx.loadData()
+      await ctx.refreshEntity('affiliate-platforms')
       await onCreated?.()
     } catch (error) {
       ctx.setStatus({ type: 'error', message: error instanceof Error ? error.message : 'Không tạo được affiliate platform' })
@@ -168,7 +168,7 @@ export function CreateDatasetCard({ ctx, onCreated }: CreateResourceCardProps) {
       })
       ctx.setStatus({ type: 'success', message: 'Đã tạo dataset' })
       formElement.reset()
-      await ctx.loadData()
+      await ctx.refreshEntity('datasets')
       await onCreated?.()
     } catch (error) {
       ctx.setStatus({ type: 'error', message: error instanceof Error ? error.message : 'Không tạo được dataset' })
@@ -221,7 +221,7 @@ export function CreateTrackingLinkCard({ ctx, onCreated }: CreateResourceCardPro
       })
       ctx.setStatus({ type: 'success', message: 'Đã tạo tracking link' })
       formElement.reset()
-      await ctx.loadData()
+      await ctx.refreshEntity('tracking-links')
       await onCreated?.()
     } catch (error) {
       ctx.setStatus({ type: 'error', message: error instanceof Error ? error.message : 'Không tạo được tracking link' })

@@ -64,7 +64,7 @@ export function ClickEventsPage({ ctx }: { ctx: DashboardContext }) {
             <CardTitle><MousePointerClick size={18} /> Recent activity</CardTitle>
             <CardDescription>{ctx.isLoading ? 'Đang tải...' : `${ctx.clickEventsPagination.total} click events · trang này ${ctx.data.clickEvents.length} records · cập nhật ${formatLastUpdated(ctx.lastUpdatedAt)}`}</CardDescription>
           </div>
-          <Button variant="outline" size="sm" type="button" onClick={() => void ctx.loadData()} disabled={ctx.isLoading}>
+          <Button variant="outline" size="sm" type="button" onClick={() => void ctx.refreshEntity('click-events')} disabled={ctx.isLoading}>
             {ctx.isLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}
             Refresh
           </Button>

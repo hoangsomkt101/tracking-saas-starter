@@ -74,6 +74,7 @@ export type Campaign = {
   createdAt: string
   datasets?: CampaignDataset[]
   trackingLinks?: TrackingLink[]
+  _count?: { trackingLinks?: number }
 }
 
 export type Brand = {
@@ -408,6 +409,24 @@ export type LoadedAppData = AppData & {
   activityLogsPageData: PaginatedResponse<ActivityLog>
 }
 
+export type DataRefreshKey =
+  | 'tenants'
+  | 'campaigns'
+  | 'brands'
+  | 'affiliate-platforms'
+  | 'datasets'
+  | 'tracking-links'
+  | 'website-domains'
+  | 'report-schedules'
+  | 'click-events'
+  | 'capi-events'
+  | 'conversion-events'
+  | 'activity-logs'
+  | 'analytics'
+  | 'superadmin-users'
+  | 'billing-plans'
+  | 'menu-features'
+
 export type CreateStatus = {
   type: 'idle' | 'success' | 'error'
   message: string
@@ -466,6 +485,7 @@ export type DashboardContext = {
   status: CreateStatus
   setStatus: (status: CreateStatus) => void
   loadData: () => Promise<void>
+  refreshEntity: (key: DataRefreshKey) => Promise<void>
   fetchJson: <T>(path: string, init?: RequestInit) => Promise<T>
   exportAnalyticsCsv: (type: string) => Promise<void>
 }

@@ -4,7 +4,6 @@ export async function runEntityAction(ctx: DashboardContext, action: () => Promi
   try {
     await action()
     ctx.setStatus({ type: 'success', message: successMessage })
-    await ctx.loadData()
   } catch (error) {
     ctx.setStatus({ type: 'error', message: error instanceof Error ? error.message : 'Thao tác thất bại' })
   }

@@ -47,12 +47,14 @@ export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
                 body: JSON.stringify({ tenantId: ctx.selectedTenant?.id, domain: getFormString(data, 'domain') })
             })
             form.reset()
+            await ctx.refreshEntity('website-domains')
         }, 'Đã thêm domain website')
     }
 
     async function handleDeleteDomain(id: string) {
         await runEntityAction(ctx, async () => {
             await ctx.fetchJson<{ ok: boolean }>(`/website-domains/${id}`, { method: 'DELETE' })
+            await ctx.refreshEntity('website-domains')
         }, 'Đã xóa domain website')
     }
 
