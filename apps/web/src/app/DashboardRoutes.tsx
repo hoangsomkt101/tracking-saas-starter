@@ -8,6 +8,7 @@ import { SuperAdminPage, SuperAdminUserManagePage } from '../features/admin/Supe
 import { ClickEventsPage } from '../features/events/EventPages'
 import { ActivityLogsPage } from '../features/logs/ActivityLogsPage'
 import { SupportPage } from '../features/support/SupportPage'
+import { DocsPage } from '../features/docs/DocsPage'
 import { CampaignCreatePage, CampaignDeletePage, CampaignDetailPage, CampaignEditPage, CampaignsPage, DatasetCreatePage, DatasetDeletePage, DatasetDetailPage, DatasetEditPage, DatasetsPage, PlatformCreatePage, PlatformDeletePage, PlatformDetailPage, PlatformEditPage, PlatformsPage, TrackingLinkCreatePage, TrackingLinkDeletePage, TrackingLinkDetailPage, TrackingLinkEditPage, TrackingLinksPage } from '../features/resources/ResourcePages'
 import type { DashboardContext } from '../types/domain'
 
@@ -42,6 +43,7 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/billing" element={<FeatureGate ctx={ctx} featureKey="billing"><PlaceholderPage icon={WalletCards} title="Billing" description="Plan, usage quota và invoices." /></FeatureGate>} />
       <Route path="/websites" element={<FeatureGate ctx={ctx} featureKey="settings"><SettingsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/settings" element={<Navigate to="/websites" replace />} />
+      <Route path="/docs" element={<DocsPage />} />
       <Route path="/support" element={<FeatureGate ctx={ctx} featureKey="support"><SupportPage /></FeatureGate>} />
       <Route path="/superadmin" element={<SuperAdminPage ctx={ctx} />} />
       <Route path="/superadmin/users/:id/manage" element={<SuperAdminUserManagePage ctx={ctx} />} />

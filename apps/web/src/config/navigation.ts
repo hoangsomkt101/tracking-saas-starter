@@ -1,4 +1,4 @@
-import { BarChart3, Crown, Globe2, HelpCircle, Home, Link2, Megaphone, MousePointerClick, ScrollText, Settings, ShieldCheck } from 'lucide-react'
+import { BarChart3, BookOpen, Crown, Globe2, HelpCircle, Home, Link2, Megaphone, MousePointerClick, ScrollText, Settings, ShieldCheck } from 'lucide-react'
 import type { NavGroup } from '../types/domain'
 
 export const navGroups: NavGroup[] = [
@@ -35,6 +35,7 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Account',
     items: [
+      { path: '/docs', label: 'Docs', icon: BookOpen },
       { path: '/support', label: 'Support', icon: HelpCircle, featureKey: 'support' }
     ]
   }
@@ -60,6 +61,7 @@ export const pageMeta: Record<string, PageMeta> = {
   '/analytics': { title: 'Analytics', description: 'Attribution and traffic insights.' },
   '/billing': { title: 'Billing', description: 'Plan, usage quota and invoices.' },
   '/websites': { title: 'Websites', description: 'Quét Affiliate URL và Shortlink trên website đã gắn mã tracking.' },
+  '/docs': { title: 'Docs', description: 'Hướng dẫn tạo campaign, dataset, data source và tracking link.' },
   '/support': { title: 'Support', description: 'Thông tin hỗ trợ, hotline và pháp lý doanh nghiệp.' },
   '/superadmin': { title: 'Super Admin', description: 'Quản lý các tài khoản đã đăng ký và workspace tương ứng.' }
 }
