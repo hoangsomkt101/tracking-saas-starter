@@ -132,7 +132,6 @@ const TRACKING_SCRIPT_VIEW_CONTENT_CLICK_UUID_PREFIX = 'atp_'
 const TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME = 'AddToCart'
 function normalizeTrackingEventId(value: unknown) { const raw = optionalLimitedString(value, 160) ?? randomUUID(); const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 160); return normalized || randomUUID() }
 function normalizeClientClickUuid(value: unknown) { const raw = optionalLimitedString(value, 160); if (!raw) return null; const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 160); return normalized || null }
-function buildTrackingScriptClickUuid(input: { tenantId: string; trackingLinkId: string; eventId: string }) { return `${TRACKING_SCRIPT_VIEW_CONTENT_CLICK_UUID_PREFIX}${sha256Hex(stableStringify(input)).slice(0, 32)}` }
 function excludeTrackingScriptViewContentClicks(where: AnyRecord) { const rule = { clickUuid: { startsWith: TRACKING_SCRIPT_VIEW_CONTENT_CLICK_UUID_PREFIX } }; where.NOT = where.NOT ? Array.isArray(where.NOT) ? [...where.NOT, rule] : [where.NOT, rule] : rule; return where }
 function parseTrackingEventBody(value: unknown) { if (typeof value === 'string') { try { return getPlainRecord(JSON.parse(value)) ?? {} } catch { return {} } } return getPlainRecord(value) ?? {} }
 function parseStringList(value: unknown) { const raw = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : []; return [...new Set(raw.map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))] }
@@ -201,58 +200,6 @@ function toJsonSafe(value: unknown): unknown { if (value === null || value === u
 function normalizeActivityLogLevel(value: unknown) { const level = typeof value === 'string' ? value.trim().toUpperCase() : ''; return activityLogLevels.has(level as ActivityLogLevelInput) ? level as ActivityLogLevelInput : undefined }
 function serializeActivityLog(e: AnyRecord) { return { ...e, id: e.id.toString() } }
 async function createActivityLog(input: { tenantId: string; level?: ActivityLogLevelInput; source: string; eventType: string; message: string; entityType?: string; entityId?: string | number | bigint | null; metadata?: unknown }) { try { await prisma.$executeRawUnsafe('INSERT INTO "ActivityLog" ("tenantId", "level", "source", "eventType", "message", "entityType", "entityId", "metadata") VALUES ($1, $2::"ActivityLogLevel", $3, $4, $5, $6, $7, $8::jsonb)', input.tenantId, input.level ?? 'INFO', input.source, input.eventType, input.message, input.entityType ?? null, input.entityId === null || input.entityId === undefined ? null : String(input.entityId), input.metadata === undefined ? null : JSON.stringify(toJsonSafe(input.metadata))) } catch (error) { app.log.warn({ error, tenantId: input.tenantId, eventType: input.eventType }, 'Failed to write activity log') } }
-function normalizeCapiContentId(value: unknown) { if (value === null || value === undefined) return undefined; const normalized = String(value).trim().toLowerCase().replace(/\s+/g, ''); return normalized || undefined }
-function normalizeCapiContentIds(value: unknown) { const items = Array.isArray(value) ? value : value === null || value === undefined || value === '' ? [] : [value]; const normalized = [...new Set(items.map(normalizeCapiContentId).filter((item): item is string => Boolean(item)))]; return normalized.length ? normalized : undefined }
-function hashCapiUserValue(value: unknown) { if (typeof value !== 'string' || !value.trim()) return undefined; return sha256Hex(value.trim().toLowerCase()) }
-type TrackingScriptCapiResult = { platform: string; datasetId: string; delivered: boolean; requestPayload: Record<string, unknown>; responsePayload?: unknown; error?: string }
-function buildTrackingScriptMetaPayload(event: AnyRecord) {
-  const contentIds = normalizeCapiContentIds(event.contentIds) ?? normalizeCapiContentIds(event.contentId)
-  const contentId = normalizeCapiContentId(event.contentId) ?? contentIds?.[0]
-  return {
-    data: [{
-      event_name: event.eventName,
-      event_time: Math.floor((event.eventTime instanceof Date ? event.eventTime : new Date()).getTime() / 1000),
-      event_id: event.eventId,
-      action_source: 'website',
-      event_source_url: event.eventSourceUrl,
-      user_data: compactRecord({ client_ip_address: event.ip, client_user_agent: event.userAgent, fbp: event.fbp, fbc: event.fbc, em: hashCapiUserValue(event.customerEmail), external_id: hashCapiUserValue(event.customerId) }),
-      custom_data: compactRecord({ content_ids: contentIds, content_id: contentId, content_name: event.contentName, content_type: event.contentType, content_category: event.contentCategory, campaign_id: event.campaignId, tracking_link_id: event.trackingLinkId, brand_id: event.brandId, affiliate_network: event.affiliateNetwork })
-    }]
-  }
-}
-function buildTrackingScriptTikTokPayload(event: AnyRecord, dataset: { pixelId: string }) {
-  const contentIds = normalizeCapiContentIds(event.contentIds) ?? normalizeCapiContentIds(event.contentId)
-  const contentId = normalizeCapiContentId(event.contentId) ?? contentIds?.[0]
-  return {
-    event_source: 'web',
-    event_source_id: dataset.pixelId,
-    data: [{
-      event: event.eventName,
-      event_time: Math.floor((event.eventTime instanceof Date ? event.eventTime : new Date()).getTime() / 1000),
-      event_id: event.eventId,
-      user: compactRecord({ ip: event.ip, user_agent: event.userAgent, ttp: event.ttp, ttclid: event.ttclid, email: hashCapiUserValue(event.customerEmail), external_id: hashCapiUserValue(event.customerId) }),
-      properties: compactRecord({ content_id: contentId, content_ids: contentIds, content_name: event.contentName, content_type: event.contentType, content_category: event.contentCategory, page_url: event.pageUrl ?? event.eventSourceUrl, page_title: event.pageTitle, campaign_id: event.campaignId, tracking_link_id: event.trackingLinkId, brand_id: event.brandId, affiliate_network: event.affiliateNetwork })
-    }]
-  }
-}
-async function deliverTrackingScriptCapi(platform: string, pixelId: string, accessToken: string, payload: Record<string, unknown>): Promise<{ delivered: boolean; requestPayload: Record<string, unknown>; responsePayload?: unknown; error?: string }> {
-  if (process.env.CAPI_DRY_RUN !== 'false') return { delivered: true, requestPayload: payload, responsePayload: { dryRun: true, platform, pixelId } }
-  const url = platform === 'tiktok' ? 'https://business-api.tiktok.com/open_api/v1.3/event/track/' : `https://graph.facebook.com/v20.0/${encodeURIComponent(pixelId)}/events?access_token=${encodeURIComponent(accessToken)}`
-  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(platform === 'tiktok' ? { 'Access-Token': accessToken } : {}) }, body: JSON.stringify(payload) })
-  const responsePayload = await response.json().catch(() => ({ status: response.status }))
-  return response.ok ? { delivered: true, requestPayload: payload, responsePayload } : { delivered: false, requestPayload: payload, responsePayload, error: `CAPI ${platform} failed with HTTP ${response.status}` }
-}
-async function sendTrackingScriptViewContent(input: { tenantId: string; datasets: Array<{ id: string; name: string; platform: string; pixelId: string; accessToken: string }>; event: AnyRecord }): Promise<TrackingScriptCapiResult[]> {
-  const results: TrackingScriptCapiResult[] = []
-  for (const dataset of input.datasets) {
-    await assertBillingLimit(input.tenantId, 'capiEvents')
-    const platform = dataset.platform === 'tiktok' ? 'tiktok' : 'meta'
-    const payload = platform === 'tiktok' ? buildTrackingScriptTikTokPayload(input.event, dataset) : buildTrackingScriptMetaPayload(input.event)
-    const result = await deliverTrackingScriptCapi(platform, dataset.pixelId, dataset.accessToken, payload)
-    results.push({ platform, datasetId: dataset.id, delivered: result.delivered, requestPayload: result.requestPayload, responsePayload: result.responsePayload, error: result.error })
-  }
-  return results
-}
 function getHeaderString(req: FastifyRequest, name: string) { const value = req.headers[name.toLowerCase()]; return Array.isArray(value) ? value[0] : typeof value === 'string' && value.trim() ? value.trim() : undefined }
 function isFilledPayloadValue(value: unknown): boolean { if (value === undefined || value === null) return false; if (typeof value === 'string') return value.trim().length > 0; if (Array.isArray(value)) return value.some(isFilledPayloadValue); return true }
 function normalizePayloadLookupKey(value: string) { return value.toLowerCase().replace(/[^a-z0-9]/g, '') }
@@ -462,7 +409,6 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
         id: true,
         slug: true,
         affiliateUrl: true,
-        campaign: { select: { datasets: { select: { dataset: { select: { isActive: true } } } } } },
         affiliatePlatform: { select: { name: true, slug: true, trackingParamKey: true } }
       }
     }),
@@ -480,7 +426,6 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
       affiliateUrl: link.affiliateUrl,
       trackingParamKey: resolveTrackingParamKey(link.affiliatePlatform),
       affiliatePlatform: link.affiliatePlatform,
-      hasCapiDatasets: Boolean(link.campaign?.datasets.some((entry) => entry.dataset.isActive)),
       shortlinkPaths: [`/${link.slug}/${tenant.publicKey}`, `/${link.slug}/${tenant.id}`]
     }))
   }
@@ -488,13 +433,11 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
   return scriptHeaders(allowedOrigin).send(`(() => {
   const config = ${JSON.stringify(payload)};
   const detectedKeys = new Set();
-  const sentEventKeys = new Set();
   const sentClickKeys = new Set();
   let loggedEmpty = false;
   let mutationTimer = null;
   const scriptBaseUrl = document.currentScript && document.currentScript.src ? document.currentScript.src : window.location.href;
   const eventEndpointUrl = resolveEventEndpoint();
-  const pageInstanceId = createId();
 
   console.log(config.userName);
 
@@ -696,46 +639,6 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     }
   }
 
-  function sendViewContentEvent(detection, trackingLink) {
-    if (!trackingLink.hasCapiDatasets || !eventEndpointUrl || (!window.fetch && !(window.navigator && typeof window.navigator.sendBeacon === 'function'))) return;
-    const eventKey = trackingLink.id + ':' + window.location.href;
-    if (sentEventKeys.has(eventKey)) return;
-    sentEventKeys.add(eventKey);
-
-    const eventHref = detection.originalHref || detection.href;
-    const cookies = getKnownCookies();
-    const fbclid = getSearchParam(window.location.href, 'fbclid') || getSearchParam(eventHref, 'fbclid');
-    const ttclid = getSearchParam(window.location.href, 'ttclid') || getSearchParam(eventHref, 'ttclid');
-    const eventId = 'ViewContent_atp_' + safeIdentifier(pageInstanceId) + '_' + safeIdentifier(trackingLink.id);
-    const payload = {
-      eventName: 'ViewContent',
-      eventId,
-      trackingLinkId: trackingLink.id,
-      slug: trackingLink.slug,
-      matchType: detection.type,
-      href: eventHref,
-      source: detection.source,
-      index: detection.index,
-      text: detection.text,
-      pageUrl: window.location.href,
-      pageTitle: document.title || '',
-      referrer: document.referrer || '',
-      fbp: cookies.fbp,
-      fbc: cookies.fbc,
-      ttp: cookies.ttp,
-      fbclid,
-      ttclid,
-      cookies
-    };
-
-    postEventPayload(payload).then((response) => {
-      if (response && response.ok === false) console.warn('[AffTrackPro] Không gửi được ViewContent CAPI', response.status || 'beacon/fetch unavailable');
-      else console.log('[AffTrackPro] Đã gửi ViewContent CAPI', { trackingLinkId: trackingLink.id, slug: trackingLink.slug });
-    }).catch((error) => {
-      console.warn('[AffTrackPro] Không gửi được ViewContent CAPI', error);
-    });
-  }
-
   function getCandidates() {
     const links = Array.from(document.querySelectorAll('a[href], area[href]')).map((element, index) => ({
       element,
@@ -782,12 +685,10 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
           slug: trackingLink.slug,
           affiliateUrl: trackingLink.affiliateUrl,
           trackingParamKey: getTrackingParamKey(trackingLink),
-          hasCapiDatasets: trackingLink.hasCapiDatasets,
           shortlinkPaths: trackingLink.shortlinkPaths
         };
         if (matchType === 'affiliate_url') applyAffiliateClickUuid(detection, trackingLink);
         detections.push({ ...detection, element: undefined });
-        sendViewContentEvent(detection, trackingLink);
       }
     }
 
@@ -842,16 +743,12 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
       slug: true,
       affiliateUrl: true,
       campaignId: true,
-      brandId: true,
-      campaign: { select: { id: true, datasets: { select: { dataset: { select: { id: true, name: true, platform: true, pixelId: true, accessToken: true, isActive: true } } } } } },
       affiliatePlatform: { select: { id: true, name: true, slug: true, trackingParamKey: true } }
     }
   })
   if (!trackingLink) return send(404, { error: 'Tracking link not found' })
 
-  const activeDatasets = trackingLink.campaign?.datasets.map((entry) => entry.dataset).filter((dataset) => dataset.isActive) ?? []
-  const activeDatasetIds = activeDatasets.map((dataset) => dataset.id)
-  const requestedEventName = optionalLimitedString(body.eventName, 64) ?? 'ViewContent'
+  const requestedEventName = optionalLimitedString(body.eventName, 64) ?? ''
   const normalizedRequestedEventName = requestedEventName.toLowerCase()
   const pageUrl = optionalLimitedString(body.pageUrl, 2048)
   const pageTitle = optionalLimitedString(body.pageTitle, 512)
@@ -883,7 +780,6 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
     requestOrigin: allowedOrigin,
     requestReferer,
     affiliateUrl: trackingLink.affiliateUrl,
-    activeDatasetIds,
     affiliatePlatform: trackingLink.affiliatePlatform,
     cookies: compactRecord({
       fbp,
@@ -955,65 +851,7 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
     }
   }
 
-  if (!activeDatasets.length) return send(202, { ok: true, skipped: true, reason: 'No active datasets selected for campaign', eventName: 'ViewContent', trackingLinkId: trackingLink.id, slug: trackingLink.slug })
-
-  const clickUuid = buildTrackingScriptClickUuid({ tenantId: tenant.id, trackingLinkId: trackingLink.id, eventId })
-  const metadata = compactRecord({
-    ...commonMetadata,
-    source: 'atp.view_content',
-    eventName: 'ViewContent',
-    contentId: trackingLink.slug,
-    contentIds: [trackingLink.slug],
-    contentName: trackingLink.slug,
-    contentType: 'product',
-    activeDatasetIds
-  })
-
-  try {
-    let duplicate = false
-    let clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
-
-    if (clickEvent) {
-      duplicate = true
-      if (clickEvent.tenantId !== tenant.id || clickEvent.trackingLinkId !== trackingLink.id) return send(409, { error: 'Duplicate tracking event id conflict' })
-    } else {
-      try {
-        clickEvent = await prisma.clickEvent.create({
-          data: {
-            tenantId: tenant.id,
-            campaignId: trackingLink.campaignId ?? null,
-            trackingLinkId: trackingLink.id,
-            clickUuid,
-            ip: getClientIp(req),
-            userAgent: getHeaderString(req, 'user-agent'),
-            referrer: pageReferrer ?? requestReferer,
-            fbp,
-            fbc,
-            ttp,
-            ttclid,
-            fbclid,
-            metadata: metadata as Prisma.InputJsonValue
-          }
-        })
-      } catch (error) {
-        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-          duplicate = true
-          clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
-        } else {
-          throw error
-        }
-      }
-    }
-
-    if (!clickEvent) throw new Error('Tracking ViewContent event was not created')
-    if (!duplicate) await enqueueClick(clickEvent, 'ViewContent', 'tracking_script', eventId)
-    return send(duplicate ? 200 : 201, { ok: true, duplicate, eventName: 'ViewContent', eventId, trackingLinkId: trackingLink.id, slug: trackingLink.slug })
-  } catch (error) {
-    req.log.error({ error, tenantId: tenant.id, trackingLinkId: trackingLink.id }, 'Failed to process atp ViewContent event')
-    const message = error instanceof Error ? error.message : 'Internal server error'
-    const statusCode = message.toLowerCase().includes('billing limit exceeded') || message.toLowerCase().includes('capi billing limit exceeded') ? 429 : 500
-    return send(statusCode, { error: statusCode === 500 ? 'Internal server error' : message })
-  }
+  return send(202, { ok: true, skipped: true, reason: 'Tracking script ViewContent is disabled', eventName: requestedEventName || 'Unknown', trackingLinkId: trackingLink.id, slug: trackingLink.slug })
 })
 
 app.get('/me', async (req) => ({ ...requireAuthenticated(req), isSuperAdmin: isSuperAdmin(requireAuthenticated(req)) }))
