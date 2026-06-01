@@ -49,9 +49,9 @@ async function assertClickLimit(tenantId: string) {
 
 type AnyRecord = Record<string, any>
 type BrowserPixelDataset = { platform: 'meta' | 'tiktok'; pixelId: string }
-type BrowserPixelEventName = 'PageView' | 'AddToCart'
+type BrowserPixelEventName = 'AddToCart'
 
-const browserPixelEventNames: BrowserPixelEventName[] = ['PageView', 'AddToCart']
+const browserPixelEventNames: BrowserPixelEventName[] = ['AddToCart']
 
 function toJsonSafe(value: unknown): unknown {
   if (value === null || value === undefined) return value
@@ -142,7 +142,7 @@ function buildBrowserPixelScripts(pixels: BrowserPixelDataset[], clickUuid: stri
           ${metaPixelIds.map((pixelId) => `fbq('init', ${jsonForHtml(pixelId)});`).join('\n          ')}
           ${metaEvents}
         </script>
-        ${metaPixelIds.map((pixelId) => `<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${encodeURIComponent(pixelId)}&ev=PageView&noscript=1" /></noscript>`).join('\n        ')}
+        ${metaPixelIds.map((pixelId) => `<noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${encodeURIComponent(pixelId)}&ev=AddToCart&noscript=1" /></noscript>`).join('\n        ')}
       ` : ''
   const tiktokScript = tiktokPixelIds.length ? `
         <script>
@@ -279,7 +279,7 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
   })
 
   const browserPixels = getBrowserPixels(trackingLink.campaign)
-  const capiEventNames = browserPixels.length ? browserPixelEventNames : ['PageView' as BrowserPixelEventName]
+  const capiEventNames = browserPixelEventNames
   const browserPixelRedirectDelayMs = Number(process.env.REDIRECT_BROWSER_PIXEL_REDIRECT_DELAY_MS ?? 1500)
   const capiDelayMs = browserPixels.length ? Number(process.env.REDIRECT_CAPI_DELAY_MS ?? 3000) : 0
   await Promise.all(capiEventNames.map((eventName) => clickEventsQueue.add('click.created', {
