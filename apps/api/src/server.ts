@@ -129,6 +129,7 @@ function getPublicRequestOrigin(req: FastifyRequest) {
 function optionalLimitedString(value: unknown, maxLength = 1024) { const text = optionalString(value); return text ? text.slice(0, maxLength) : undefined }
 function getUrlSearchParam(value: string | undefined, key: string) { if (!value) return undefined; const url = parseHttpUrl(value); return optionalLimitedString(url?.searchParams.get(key), 512) }
 const TRACKING_SCRIPT_VIEW_CONTENT_CLICK_UUID_PREFIX = 'atp_'
+const TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME = 'AddToCart'
 function normalizeTrackingEventId(value: unknown) { const raw = optionalLimitedString(value, 160) ?? randomUUID(); const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 160); return normalized || randomUUID() }
 function normalizeClientClickUuid(value: unknown) { const raw = optionalLimitedString(value, 160); if (!raw) return null; const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 160); return normalized || null }
 function buildTrackingScriptClickUuid(input: { tenantId: string; trackingLinkId: string; eventId: string }) { return `${TRACKING_SCRIPT_VIEW_CONTENT_CLICK_UUID_PREFIX}${sha256Hex(stableStringify(input)).slice(0, 32)}` }
@@ -901,7 +902,7 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
     if (paramClickUuid && paramClickUuid !== clickUuid) return send(409, { error: 'clickUuid does not match affiliate URL tracking parameter' })
     if (![matchedHref, originalHref].some((href) => trackingAffiliateUrlMatches(href, trackingLink.affiliateUrl))) return send(400, { error: 'Affiliate URL does not match tracking link' })
 
-    const metadata = compactRecord({ ...commonMetadata, source: 'atp.affiliate_click', eventName: 'AffiliateClick', trackingParamKey, clickUuid })
+    const metadata = compactRecord({ ...commonMetadata, source: 'atp.affiliate_click', eventName: 'AffiliateClick', capiEventName: TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME, trackingParamKey, clickUuid })
     try {
       let duplicate = false
       let clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
@@ -941,8 +942,8 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
 
       if (!clickEvent) throw new Error('Click event was not created')
       if (!duplicate) {
-        await enqueueClick(clickEvent, 'PageView')
-        await createActivityLog({ tenantId: tenant.id, source: 'atp.js', eventType: 'tracking_script.affiliate_click', message: `Affiliate URL click tracked for "${trackingLink.slug}"`, entityType: 'clickEvent', entityId: clickEvent.id, metadata: { clickEventId: clickEvent.id, clickUuid, trackingLinkId: trackingLink.id, campaignId: trackingLink.campaignId, trackingParamKey, matchedHref, originalHref, pageUrl } })
+        await enqueueClick(clickEvent, TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME)
+        await createActivityLog({ tenantId: tenant.id, source: 'atp.js', eventType: 'tracking_script.affiliate_click', message: `Affiliate URL click tracked for "${trackingLink.slug}"`, entityType: 'clickEvent', entityId: clickEvent.id, metadata: { clickEventId: clickEvent.id, clickUuid, trackingLinkId: trackingLink.id, campaignId: trackingLink.campaignId, trackingParamKey, matchedHref, originalHref, pageUrl, capiEventName: TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME } })
       }
 
       return send(duplicate ? 200 : 201, { ok: true, duplicate, eventName: 'AffiliateClick', eventId, clickUuid: clickEvent.clickUuid, trackingLinkId: trackingLink.id, slug: trackingLink.slug })
