@@ -879,9 +879,18 @@ app.post('/website-domains', async (req, reply) => {
   const tenantId = requireString(b.tenantId, 'tenantId')
   await assertTenantAccess(u.id, tenantId)
   const domain = normalizeWebsiteDomainInput(b.domain)
-  const row = await prisma.websiteDomain.create({ data: { tenantId, domain } })
-  await createActivityLog({ tenantId, source: 'api', eventType: 'website_domain.created', message: `Website domain "${domain}" was added`, entityType: 'websiteDomain', entityId: row.id, metadata: { actorUserId: u.id, websiteDomainId: row.id, domain } })
-  return reply.code(201).send(row)
+  const duplicateError = 'Domain này đã được whitelist, vui lòng dùng domain khác'
+  const existing = await prisma.websiteDomain.findFirst({ where: { domain }, select: { id: true } })
+  if (existing) return reply.code(409).send({ error: duplicateError, domain })
+
+  try {
+    const row = await prisma.websiteDomain.create({ data: { tenantId, domain } })
+    await createActivityLog({ tenantId, source: 'api', eventType: 'website_domain.created', message: `Website domain "${domain}" was added`, entityType: 'websiteDomain', entityId: row.id, metadata: { actorUserId: u.id, websiteDomainId: row.id, domain } })
+    return reply.code(201).send(row)
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return reply.code(409).send({ error: duplicateError, domain })
+    throw error
+  }
 })
 app.delete('/website-domains/:id', async (req, reply) => {
   const u = requireAuthenticated(req)

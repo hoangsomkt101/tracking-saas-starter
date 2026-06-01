@@ -361,6 +361,7 @@ model WebsiteDomain {
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+  @@unique([domain])
   @@unique([tenantId, domain])
 }
 
