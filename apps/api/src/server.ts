@@ -195,6 +195,31 @@ function requireAuthenticated(req: FastifyRequest) { const u = (req as Partial<A
 async function assertTenantAccess(userId: string, tenantId: string) { const tenant = await prisma.tenant.findFirst({ where: { id: tenantId, ownerUserId: userId } }); if (!tenant) throw new Error('Tenant not found or access denied'); return tenant }
 function isSuperAdmin(user: User) { const emails = new Set([...parseEnvList(process.env.SUPERADMIN_EMAILS), ...parseEnvList(process.env.SUPER_ADMIN_EMAILS), ...parseEnvList(process.env.ADMIN_EMAILS)].map((x) => x.toLowerCase())); const ids = new Set([...parseEnvList(process.env.SUPERADMIN_CLERK_USER_IDS), ...parseEnvList(process.env.SUPER_ADMIN_CLERK_USER_IDS), ...parseEnvList(process.env.ADMIN_CLERK_USER_IDS)].map((x) => x.toLowerCase())); return Boolean((user.email && emails.has(user.email.toLowerCase())) || ids.has(user.clerkUserId.toLowerCase())) }
 function requireSuperAdmin(req: FastifyRequest) { const u = requireAuthenticated(req); if (!isSuperAdmin(u)) throw new Error('Super admin access denied'); return u }
+async function deleteClerkUserAccount(clerkUserId: string) { userSessionCache.delete(clerkUserId); clerkUserCache.delete(clerkUserId); if (!isClerkConfigured()) return false; try { await clerk.users.deleteUser(clerkUserId); return true } catch (error) { const status = (error as AnyRecord)?.status ?? (error as AnyRecord)?.statusCode; if (status !== 404) app.log.warn({ error, clerkUserId }, 'Failed to delete Clerk user'); return false } }
+async function deleteRegisteredUserAccount(target: Pick<User, 'id' | 'clerkUserId'> & { tenant?: { id: string } | null }) {
+  const tenantId = target.tenant?.id
+  await prisma.$transaction(async (tx) => {
+    if (tenantId) {
+      await tx.capiEvent.deleteMany({ where: { tenantId } })
+      await tx.affiliateConversionEvent.deleteMany({ where: { tenantId } })
+      await tx.clickEvent.deleteMany({ where: { tenantId } })
+      await tx.campaignDataset.deleteMany({ where: { tenantId } })
+      await tx.trackingLink.deleteMany({ where: { tenantId } })
+      await tx.brand.deleteMany({ where: { tenantId } })
+      await tx.dataset.deleteMany({ where: { tenantId } })
+      await tx.campaign.deleteMany({ where: { tenantId } })
+      await tx.affiliatePlatform.deleteMany({ where: { tenantId } })
+      await tx.reportSchedule.deleteMany({ where: { tenantId } })
+      await tx.websiteDomain.deleteMany({ where: { tenantId } })
+      await tx.tenantMenuGrant.deleteMany({ where: { tenantId } })
+      await tx.activityLog.deleteMany({ where: { tenantId } })
+      await tx.tenant.deleteMany({ where: { id: tenantId } })
+    }
+    await tx.user.deleteMany({ where: { id: target.id } })
+  })
+  const clerkDeleted = await deleteClerkUserAccount(target.clerkUserId)
+  return { clerkDeleted }
+}
 
 function serializeTenant<T extends AnyRecord>(tenant: T) { return tenant }
 function serializeDataset<T extends { accessToken?: string | null }>(dataset: T) { return { ...dataset, accessToken: maskSecret(dataset.accessToken) } }
@@ -869,6 +894,8 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
 app.get('/me', async (req) => ({ ...requireAuthenticated(req), isSuperAdmin: isSuperAdmin(requireAuthenticated(req)) }))
 
 app.get('/superadmin/users', async (req) => { requireSuperAdmin(req); const users = await prisma.user.findMany({ include: { tenant: { include: { billingPlan: true, menuGrants: { include: { menuFeature: true }, orderBy: { menuFeature: { sortOrder: 'asc' } } }, _count: { select: { campaigns: true, brands: true, affiliatePlatforms: true, datasets: true, trackingLinks: true, clickEvents: true, conversionEvents: true, capiEvents: true } } } } }, orderBy: { createdAt: 'desc' } }); return users.map((u) => ({ ...u, tenant: u.tenant ? serializeTenant(u.tenant) : u.tenant })) })
+app.delete('/superadmin/users', async (req) => { const admin = requireSuperAdmin(req); const users = await prisma.user.findMany({ include: { tenant: { select: { id: true } } }, orderBy: { createdAt: 'desc' } }); const targets = users.filter((user) => user.id !== admin.id && !isSuperAdmin(user)); let clerkDeletedCount = 0; for (const user of targets) { const result = await deleteRegisteredUserAccount(user); if (result.clerkDeleted) clerkDeletedCount += 1 } return { ok: true, deletedCount: targets.length, skippedCount: users.length - targets.length, clerkDeletedCount } })
+app.delete('/superadmin/users/:id', async (req, reply) => { const admin = requireSuperAdmin(req); const { id } = req.params as { id: string }; const user = await prisma.user.findUnique({ where: { id }, include: { tenant: { select: { id: true } } } }); if (!user) return reply.code(404).send({ error: 'User not found' }); if (user.id === admin.id) return reply.code(400).send({ error: 'Không thể xoá tài khoản Super Admin đang đăng nhập' }); if (isSuperAdmin(user)) return reply.code(400).send({ error: 'Không thể xoá tài khoản Super Admin' }); const result = await deleteRegisteredUserAccount(user); return { ok: true, id, clerkDeleted: result.clerkDeleted } })
 app.get('/superadmin/billing-plans', async (req) => { requireSuperAdmin(req); return prisma.billingPlan.findMany({ orderBy: [{ isDefault: 'desc' }, { monthlyPriceCents: 'asc' }, { createdAt: 'desc' }] }) })
 app.post('/superadmin/billing-plans', async (req, reply) => { requireSuperAdmin(req); const b = req.body as AnyRecord; const name = requireString(b.name, 'name'); const isDefault = optionalBoolean(b.isDefault, false); if (isDefault) await prisma.billingPlan.updateMany({ data: { isDefault: false } }); const plan = await prisma.billingPlan.create({ data: { slug: toSlug(optionalString(b.slug) ?? name), name, description: optionalString(b.description), monthlyPriceCents: optionalInteger(b.monthlyPriceCents, 0), currency: optionalString(b.currency) ?? 'USD', clickLimit: optionalInteger(b.clickLimit, 1000), capiEventLimit: optionalInteger(b.capiEventLimit, 1000), eapiEventLimit: optionalInteger(b.eapiEventLimit, 1000), campaignDatasetLimit: optionalInteger(b.campaignDatasetLimit, 2), isDefault, isActive: optionalBoolean(b.isActive, true) } }); return reply.code(201).send(plan) })
 app.put('/superadmin/billing-plans/:id', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const b = req.body as AnyRecord; const p = await prisma.billingPlan.findUnique({ where: { id } }); if (!p) return reply.code(404).send({ error: 'Billing plan not found' }); const isDefault = optionalBoolean(b.isDefault, p.isDefault); if (isDefault) await prisma.billingPlan.updateMany({ where: { id: { not: id } }, data: { isDefault: false } }); const currentDatasetLimit = 'campaignDatasetLimit' in p ? Number(p.campaignDatasetLimit) : 2; return prisma.billingPlan.update({ where: { id }, data: { slug: b.slug ? toSlug(b.slug) : p.slug, name: optionalString(b.name) ?? p.name, description: typeof b.description === 'string' ? b.description : p.description, monthlyPriceCents: optionalInteger(b.monthlyPriceCents, p.monthlyPriceCents), currency: optionalString(b.currency) ?? p.currency, clickLimit: optionalInteger(b.clickLimit, p.clickLimit), capiEventLimit: optionalInteger(b.capiEventLimit, p.capiEventLimit), eapiEventLimit: optionalInteger(b.eapiEventLimit, p.eapiEventLimit), campaignDatasetLimit: optionalInteger(b.campaignDatasetLimit, currentDatasetLimit), isDefault, isActive: optionalBoolean(b.isActive, p.isActive) } }) })
