@@ -1,6 +1,6 @@
 import { UserButton, useAuth, useUser } from '@clerk/clerk-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router'
 import { Bell, ChevronDown, Command, Globe2, Loader2, PanelLeft, Plus, RefreshCw, Search } from 'lucide-react'
 import { Badge } from '../components/ui/badge'
@@ -57,24 +57,34 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   const [activityLogsPage, setActivityLogsPage] = useState(1)
   const [activityLogFilters, setActivityLogFilters] = useState<ActivityLogFilters>(defaultActivityLogFilters)
   const [status, setStatus] = useState<CreateStatus>({ type: 'idle', message: '' })
+  const lastQueryErrorMessageRef = useRef('')
 
   const fetchJson = useCallback(async <T,>(path: string, init?: RequestInit) => {
+    const makeRequest = async (token: string) => {
+      const headers = new Headers(init?.headers)
+      headers.set('Authorization', `Bearer ${token}`)
+      if (typeof init?.body === 'string' && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json')
+      }
+
+      return fetch(`${apiBaseUrl}${path}`, {
+        ...init,
+        headers
+      })
+    }
+
     const token = await getToken()
 
     if (!token) {
       throw new Error('Không lấy được phiên đăng nhập')
     }
 
-    const headers = new Headers(init?.headers)
-    headers.set('Authorization', `Bearer ${token}`)
-    if (typeof init?.body === 'string' && !headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json')
-    }
+    let response = await makeRequest(token)
 
-    const response = await fetch(`${apiBaseUrl}${path}`, {
-      ...init,
-      headers
-    })
+    if (response.status === 401) {
+      const freshToken = await getToken({ skipCache: true })
+      if (freshToken) response = await makeRequest(freshToken)
+    }
 
     return parseApiResponse<T>(response)
   }, [getToken])
@@ -279,27 +289,27 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   const activityLogsPagination = data.activityLogsPageData.pagination ?? { ...defaultPagination, page: activityLogsPage }
 
   const queryStates = [
-    currentUserQuery,
-    tenantsQuery,
-    campaignsQuery,
-    brandsQuery,
-    affiliatePlatformsQuery,
-    datasetsQuery,
-    trackingLinksQuery,
-    websiteDomainsQuery,
-    reportSchedulesQuery,
-    clickEventsQuery,
-    capiEventsQuery,
-    conversionEventsQuery,
-    activityLogsQuery,
-    analyticsQuery,
-    superAdminUsersQuery,
-    billingPlansQuery,
-    menuFeaturesQuery
+    { query: currentUserQuery, enabled: true },
+    { query: tenantsQuery, enabled: true },
+    { query: campaignsQuery, enabled: shouldLoadCampaigns },
+    { query: brandsQuery, enabled: shouldLoadBrands },
+    { query: affiliatePlatformsQuery, enabled: shouldLoadAffiliatePlatforms },
+    { query: datasetsQuery, enabled: shouldLoadDatasets },
+    { query: trackingLinksQuery, enabled: shouldLoadTrackingLinks },
+    { query: websiteDomainsQuery, enabled: shouldLoadWebsiteDomains },
+    { query: reportSchedulesQuery, enabled: shouldLoadReportSchedules },
+    { query: clickEventsQuery, enabled: shouldLoadClickEvents },
+    { query: capiEventsQuery, enabled: shouldLoadCapiEvents },
+    { query: conversionEventsQuery, enabled: shouldLoadConversionEvents },
+    { query: activityLogsQuery, enabled: shouldLoadActivityLogs },
+    { query: analyticsQuery, enabled: shouldLoadAnalytics },
+    { query: superAdminUsersQuery, enabled: shouldLoadSuperAdmin },
+    { query: billingPlansQuery, enabled: shouldLoadSuperAdmin },
+    { query: menuFeaturesQuery, enabled: shouldLoadSuperAdmin }
   ]
-  const isLoading = queryStates.some((query) => query.isLoading || query.isFetching)
-  const lastUpdatedAt = Math.max(0, ...queryStates.map((query) => query.dataUpdatedAt))
-  const firstQueryError = queryStates.find((query) => query.error)?.error
+  const isLoading = queryStates.some(({ query, enabled }) => enabled && (query.isLoading || query.isFetching))
+  const lastUpdatedAt = Math.max(0, ...queryStates.map(({ query }) => query.dataUpdatedAt))
+  const firstQueryError = queryStates.find(({ query, enabled }) => enabled && query.error)?.query.error
 
   const tenantCampaigns = useMemo(
     () => data.campaigns.filter((campaign) => campaign.tenantId === selectedTenant?.id),
@@ -413,7 +423,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   }, [activityLogsPagination.totalPages])
 
   useEffect(() => {
-    setSelectedTenantId((current) => current || tenants[0]?.id || '')
+    setSelectedTenantId((current) => tenants.some((tenant) => tenant.id === current) ? current : tenants[0]?.id || '')
   }, [tenants])
 
   useEffect(() => {
@@ -428,8 +438,17 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
 
   useEffect(() => {
     if (firstQueryError) {
-      setStatus({ type: 'error', message: firstQueryError instanceof Error ? firstQueryError.message : 'Không tải được dữ liệu' })
+      const message = firstQueryError instanceof Error ? firstQueryError.message : 'Không tải được dữ liệu'
+      lastQueryErrorMessageRef.current = message
+      setStatus({ type: 'error', message })
+      return
     }
+
+    const lastQueryErrorMessage = lastQueryErrorMessageRef.current
+    if (!lastQueryErrorMessage) return
+
+    lastQueryErrorMessageRef.current = ''
+    setStatus((current) => current.type === 'error' && current.message === lastQueryErrorMessage ? { type: 'idle', message: '' } : current)
   }, [firstQueryError])
 
   const grantedMenuFeatureIds = useMemo(() => {
