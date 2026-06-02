@@ -149,7 +149,7 @@ function getDefaultMenuFeatures() {
     { id: 'menu-tracking-links', key: 'tracking-links', path: '/tracking-links', label: 'Tracking Links', group: 'Tracking', icon: 'Link2', sortOrder: 60, isCore: true },
     { id: 'menu-click-events', key: 'click-events', path: '/click-events', label: 'Click Events', group: 'Tracking', icon: 'MousePointerClick', badge: 'Manual', sortOrder: 70, isCore: true },
     { id: 'menu-activity-logs', key: 'activity-logs', path: '/logs', label: 'Activity Logs', group: 'Tracking', icon: 'ScrollText', sortOrder: 75, isCore: true },
-    { id: 'menu-analytics', key: 'analytics', path: '/analytics', label: 'Analytics', group: 'Tracking', icon: 'BarChart3', sortOrder: 80, isCore: false },
+    { id: 'menu-analytics', key: 'analytics', path: '/analytics', label: 'Analytics', group: 'Tracking', icon: 'BarChart3', sortOrder: 80, isCore: true },
     { id: 'menu-billing', key: 'billing', path: '/billing', label: 'Billing', group: 'Account', icon: 'WalletCards', sortOrder: 90, isCore: true },
     { id: 'menu-settings', key: 'settings', path: '/websites', label: 'Websites', group: 'Data Sources', icon: 'Settings', sortOrder: 35, isCore: true },
     { id: 'menu-support', key: 'support', path: '/support', label: 'Support', group: 'Account', icon: 'HelpCircle', sortOrder: 110, isCore: true },
@@ -157,7 +157,7 @@ function getDefaultMenuFeatures() {
   ]
 }
 async function ensureMenuFeaturesSeeded() { await prisma.menuFeature.updateMany({ where: { key: { in: ['brands', 'prelanders'] } }, data: { isActive: false, isCore: false } }); await Promise.all(getDefaultMenuFeatures().map((feature) => prisma.menuFeature.upsert({ where: { key: feature.key }, update: { ...feature, isActive: true }, create: feature }))) }
-async function ensureTenantCoreMenuGrants(tenantId: string) { await ensureMenuFeaturesSeeded(); const core = await prisma.menuFeature.findMany({ where: { isCore: true, isActive: true } }); await Promise.all(core.map((f) => prisma.tenantMenuGrant.upsert({ where: { tenantId_menuFeatureId: { tenantId, menuFeatureId: f.id } }, update: {}, create: { tenantId, menuFeatureId: f.id, isEnabled: true } }))) }
+async function ensureTenantCoreMenuGrants(tenantId: string) { await ensureMenuFeaturesSeeded(); const core = await prisma.menuFeature.findMany({ where: { isCore: true, isActive: true } }); await Promise.all(core.map((f) => prisma.tenantMenuGrant.upsert({ where: { tenantId_menuFeatureId: { tenantId, menuFeatureId: f.id } }, update: { isEnabled: true }, create: { tenantId, menuFeatureId: f.id, isEnabled: true } }))) }
 
 type ClerkUserSnapshot = { id: string; firstName: string | null; lastName: string | null; imageUrl: string; emailAddresses: Array<{ id: string; emailAddress: string }>; primaryEmailAddressId: string | null }
 const clerkUserCache = new Map<string, { user: ClerkUserSnapshot; expiresAt: number }>()
