@@ -305,7 +305,7 @@ export function LandingPage({ theme, onToggleTheme }: { theme: ThemeMode; onTogg
                         <div className="landing2-eyebrow">Giải pháp</div>
                         <h2 className="landing2-section-title">Kết nối dữ liệu ads, click và affiliate conversion vào một luồng tracking thống nhất.</h2>
                         <p className="landing2-section-description">
-                            Mỗi click từ Facebook Ads hoặc TikTok Ads được Aff Track Pro ghi nhận cùng các tham số như campaign, adset, ad, fbclid, ttclid và Sub ID.
+                            Mỗi click từ Facebook Ads hoặc TikTok Ads được Aff Track Pro ghi nhận cùng các tham số như campaign, adset, ad và Sub ID.
                             Khi affiliate network gửi conversion qua postback, hệ thống sẽ map conversion đó về đúng nguồn traffic ban đầu.
                         </p>
                     </div>
