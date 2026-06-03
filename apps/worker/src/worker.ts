@@ -103,6 +103,61 @@ function moneyToNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+function parseMoneyNumber(value: unknown): number | undefined {
+  if (Array.isArray(value)) return parseMoneyNumber(value.find(isFilledPayloadValue))
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const normalized = value.trim().replace(/,/g, '')
+    const direct = Number(normalized)
+    if (Number.isFinite(direct)) return direct
+    const numericText = normalized.replace(/[^0-9.-]/g, '')
+    const parsed = Number(numericText)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+function isFilledPayloadValue(value: unknown): boolean {
+  if (value === undefined || value === null) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  if (Array.isArray(value)) return value.some(isFilledPayloadValue)
+  return true
+}
+
+function normalizePayloadLookupKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function getPayloadValue(payload: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = payload[key]
+    if (isFilledPayloadValue(value)) return value
+  }
+  const entries = Object.entries(payload)
+  for (const key of keys) {
+    const normalizedKey = normalizePayloadLookupKey(key)
+    const match = entries.find(([entryKey, value]) => normalizePayloadLookupKey(entryKey) === normalizedKey && isFilledPayloadValue(value))
+    if (match) return match[1]
+  }
+  return undefined
+}
+
+function getPayloadString(payload: Record<string, unknown>, keys: string[]) {
+  const value = getPayloadValue(payload, keys)
+  if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean).join(', ') || undefined
+  if (typeof value === 'string') return value.trim() || undefined
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return undefined
+}
+
+function getImpactActionTrackerEventName(payload: Record<string, unknown>) {
+  return getPayloadString(payload, ['ActionTrackerName', 'actionTrackerName', 'action_tracker_name'])
+}
+
+function getImpactAmountNumber(payload: Record<string, unknown>) {
+  return parseMoneyNumber(getPayloadValue(payload, ['Amount', 'amount']))
+}
+
 function normalizeContentId(value: unknown) {
   if (value === null || value === undefined) return undefined
   const normalized = String(value).trim().toLowerCase().replace(/\s+/g, '')
@@ -133,7 +188,12 @@ function getConversionEnrichment(conversion: Awaited<ReturnType<typeof loadConve
   })
 
   const extra = getJsonRecord(conversion.capiEnrichment)
-  const value = moneyToNumber(extra.value) ?? moneyToNumber(conversion.payoutAmount?.toString()) ?? moneyToNumber(conversion.commissionAmount?.toString()) ?? moneyToNumber(conversion.spendAmount?.toString())
+  const rawPayload = getJsonRecord(conversion.rawPayload)
+  const actionTrackerName = getImpactActionTrackerEventName(rawPayload)
+  const actionTrackerValue = eventName && actionTrackerName && eventName.trim().toLowerCase() === actionTrackerName.trim().toLowerCase()
+    ? getImpactAmountNumber(rawPayload)
+    : undefined
+  const value = actionTrackerValue ?? moneyToNumber(extra.value) ?? moneyToNumber(conversion.payoutAmount?.toString()) ?? moneyToNumber(conversion.commissionAmount?.toString()) ?? moneyToNumber(conversion.spendAmount?.toString())
 
   return compactObject({
     ...clickMetadata,
