@@ -183,7 +183,7 @@ function PrimaryCta({ label, className = '' }: { label: string; className?: stri
             </SignedIn>
             <SignedOut>
                 <SignInButton mode="modal" forceRedirectUrl="/dashboard" signUpForceRedirectUrl="/dashboard">
-                    <button type="button" className={`lp-btn ${className}`}>
+                    <button type="button" className={`lp-btn landing2-clerk-button ${className}`}>
                         {label} <ArrowRight size={17} />
                     </button>
                 </SignInButton>
@@ -213,7 +213,7 @@ export function LandingPage({ theme, onToggleTheme }: { theme: ThemeMode; onTogg
                         <ThemeToggle theme={theme} onToggle={onToggleTheme} />
                         <SignedOut>
                             <SignInButton mode="modal" forceRedirectUrl="/dashboard" signUpForceRedirectUrl="/dashboard">
-                                <button type="button" className="lp-btn lp-btn-secondary landing2-login-link">Đăng nhập</button>
+                                <button type="button" className="lp-btn lp-btn-secondary landing2-login-link landing2-clerk-login">Đăng nhập</button>
                             </SignInButton>
                         </SignedOut>
                         <PrimaryCta label="Bắt đầu" className="lp-btn-primary" />

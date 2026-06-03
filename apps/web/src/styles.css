@@ -4754,6 +4754,21 @@ th,
   --l2-button-light-border: #e7e7ea;
   --l2-button-light-shadow: 0 10px 26px rgba(10, 10, 15, 0.12);
   --l2-button-secondary-hover: rgba(0, 0, 0, 0.04);
+  --l2-clerk-button-bg: #111113;
+  --l2-clerk-button-hover: #27272a;
+  --l2-clerk-button-text: #ffffff;
+  --l2-clerk-button-border: #111113;
+  --l2-clerk-button-shadow: 0 14px 36px rgba(10, 10, 15, 0.22);
+  --l2-clerk-login-bg: #111113;
+  --l2-clerk-login-hover: #27272a;
+  --l2-clerk-login-text: #ffffff;
+  --l2-clerk-login-border: #111113;
+  --l2-clerk-login-shadow: 0 10px 24px rgba(10, 10, 15, 0.16);
+  --l2-section-clerk-button-bg: #ffffff;
+  --l2-section-clerk-button-hover: #f4f4f5;
+  --l2-section-clerk-button-text: #07070a;
+  --l2-section-clerk-button-border: rgba(255, 255, 255, 0.32);
+  --l2-section-clerk-button-shadow: 0 12px 30px rgba(255, 255, 255, 0.08);
   --l2-hero-overlay: radial-gradient(circle at 20% 20%, rgba(17, 17, 19, 0.12), transparent 28%), radial-gradient(circle at 80% 0%, rgba(17, 17, 19, 0.08), transparent 30%);
   --l2-pill-bg: #ffffff;
   --l2-pill-text: #32343b;
@@ -4822,6 +4837,16 @@ th,
   --l2-button-light-border: rgba(255, 255, 255, 0.24);
   --l2-button-light-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
   --l2-button-secondary-hover: rgba(255, 255, 255, 0.08);
+  --l2-clerk-button-bg: #ffffff;
+  --l2-clerk-button-hover: #f4f4f5;
+  --l2-clerk-button-text: #09090b;
+  --l2-clerk-button-border: rgba(255, 255, 255, 0.28);
+  --l2-clerk-button-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+  --l2-clerk-login-bg: rgba(255, 255, 255, 0.12);
+  --l2-clerk-login-hover: rgba(255, 255, 255, 0.18);
+  --l2-clerk-login-text: #ffffff;
+  --l2-clerk-login-border: rgba(255, 255, 255, 0.28);
+  --l2-clerk-login-shadow: none;
   --l2-hero-overlay: radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.1), transparent 28%), radial-gradient(circle at 80% 0%, rgba(255, 255, 255, 0.07), transparent 30%);
   --l2-pill-bg: rgba(255, 255, 255, 0.06);
   --l2-pill-text: #e4e4e7;
@@ -4993,6 +5018,39 @@ th,
   border: 1px solid var(--l2-button-light-border);
   box-shadow: var(--l2-button-light-shadow);
   color: var(--l2-button-light-text) !important;
+}
+
+.landing2-clerk-button {
+  background: var(--l2-clerk-button-bg) !important;
+  border: 1px solid var(--l2-clerk-button-border) !important;
+  box-shadow: var(--l2-clerk-button-shadow) !important;
+  color: var(--l2-clerk-button-text) !important;
+}
+
+.landing2-clerk-button:hover {
+  background: var(--l2-clerk-button-hover) !important;
+}
+
+.landing2-clerk-login {
+  background: var(--l2-clerk-login-bg) !important;
+  border: 1px solid var(--l2-clerk-login-border) !important;
+  box-shadow: var(--l2-clerk-login-shadow) !important;
+  color: var(--l2-clerk-login-text) !important;
+}
+
+.landing2-clerk-login:hover {
+  background: var(--l2-clerk-login-hover) !important;
+}
+
+.landing2-section-dark .landing2-clerk-button {
+  background: var(--l2-section-clerk-button-bg) !important;
+  border-color: var(--l2-section-clerk-button-border) !important;
+  box-shadow: var(--l2-section-clerk-button-shadow) !important;
+  color: var(--l2-section-clerk-button-text) !important;
+}
+
+.landing2-section-dark .landing2-clerk-button:hover {
+  background: var(--l2-section-clerk-button-hover) !important;
 }
 
 .landing2-hero-section {
