@@ -211,9 +211,6 @@ export function LandingPage({ theme, onToggleTheme }: { theme: ThemeMode; onTogg
 
                     <div className="landing2-header-actions">
                         <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-                        <SignedIn>
-                            <NavLink to="/dashboard" className="lp-btn lp-btn-secondary landing2-login-link">Dashboard</NavLink>
-                        </SignedIn>
                         <SignedOut>
                             <SignInButton mode="modal" forceRedirectUrl="/dashboard" signUpForceRedirectUrl="/dashboard">
                                 <button type="button" className="lp-btn lp-btn-secondary landing2-login-link">Đăng nhập</button>

@@ -4756,7 +4756,7 @@ th,
   box-sizing: border-box;
 }
 
-.landing2-page a {
+.landing2-page a:not(.lp-btn) {
   color: inherit;
   text-decoration: none;
 }
@@ -4777,7 +4777,7 @@ th,
   background: rgba(255, 255, 255, 0.82);
   border-bottom: 1px solid rgba(231, 231, 234, 0.8);
   left: 0;
-  position: sticky;
+  position: fixed;
   right: 0;
   top: 0;
   z-index: 30;
@@ -4883,7 +4883,7 @@ th,
   background: var(--l2-white);
   border: 1px solid rgba(255, 255, 255, 0.32);
   box-shadow: 0 12px 30px rgba(255, 255, 255, 0.08);
-  color: var(--l2-text);
+  color: var(--l2-text) !important;
 }
 
 .landing2-hero-section {
