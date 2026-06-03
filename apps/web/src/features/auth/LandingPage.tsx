@@ -177,7 +177,7 @@ function PrimaryCta({ label, className = '' }: { label: string; className?: stri
     return (
         <>
             <SignedIn>
-                <NavLink to="/dashboard" className={`lp-btn ${className}`}>
+                <NavLink to="/dashboard" className={`lp-btn landing2-dashboard-button ${className}`}>
                     Go to dashboard <ArrowRight size={17} />
                 </NavLink>
             </SignedIn>

@@ -5020,14 +5020,16 @@ th,
   color: var(--l2-button-light-text) !important;
 }
 
-.landing2-clerk-button {
+.landing2-clerk-button,
+.landing2-dashboard-button {
   background: var(--l2-clerk-button-bg) !important;
   border: 1px solid var(--l2-clerk-button-border) !important;
   box-shadow: var(--l2-clerk-button-shadow) !important;
   color: var(--l2-clerk-button-text) !important;
 }
 
-.landing2-clerk-button:hover {
+.landing2-clerk-button:hover,
+.landing2-dashboard-button:hover {
   background: var(--l2-clerk-button-hover) !important;
 }
 
@@ -5042,14 +5044,16 @@ th,
   background: var(--l2-clerk-login-hover) !important;
 }
 
-.landing2-section-dark .landing2-clerk-button {
+.landing2-section-dark .landing2-clerk-button,
+.landing2-section-dark .landing2-dashboard-button {
   background: var(--l2-section-clerk-button-bg) !important;
   border-color: var(--l2-section-clerk-button-border) !important;
   box-shadow: var(--l2-section-clerk-button-shadow) !important;
   color: var(--l2-section-clerk-button-text) !important;
 }
 
-.landing2-section-dark .landing2-clerk-button:hover {
+.landing2-section-dark .landing2-clerk-button:hover,
+.landing2-section-dark .landing2-dashboard-button:hover {
   background: var(--l2-section-clerk-button-hover) !important;
 }
 
