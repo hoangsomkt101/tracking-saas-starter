@@ -4860,13 +4860,14 @@ th,
 }
 
 .lp-btn-primary {
-  background: var(--l2-black);
-  box-shadow: 0 10px 26px rgba(10, 10, 15, 0.16);
-  color: var(--l2-white);
+  background: var(--l2-white);
+  border: 1px solid var(--l2-border);
+  box-shadow: 0 10px 26px rgba(10, 10, 15, 0.12);
+  color: var(--l2-text);
 }
 
 .lp-btn-primary:hover {
-  background: #000000;
+  background: #f7f7f8;
 }
 
 .lp-btn-secondary {
@@ -4880,6 +4881,7 @@ th,
 
 .lp-btn-light {
   background: var(--l2-white);
+  border: 1px solid rgba(255, 255, 255, 0.32);
   box-shadow: 0 12px 30px rgba(255, 255, 255, 0.08);
   color: var(--l2-text);
 }
