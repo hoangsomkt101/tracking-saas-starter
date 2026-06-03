@@ -194,7 +194,7 @@ function PrimaryCta({ label, className = '' }: { label: string; className?: stri
 
 export function LandingPage({ theme, onToggleTheme }: { theme: ThemeMode; onToggleTheme: () => void }) {
     return (
-        <main className="landing2-page shadcn-theme">
+        <main className="landing2-page shadcn-theme" data-theme={theme}>
             <header className="landing2-header">
                 <div className="landing2-container landing2-header-inner">
                     <NavLink to="/" className="landing2-logo" aria-label="Aff Track Pro">
