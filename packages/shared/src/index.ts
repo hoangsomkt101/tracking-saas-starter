@@ -1,6 +1,8 @@
 import { Queue } from 'bullmq'
 import { Redis } from 'ioredis'
 
+export * from './impact.js'
+
 export const CLICK_EVENTS_QUEUE = 'click-events'
 
 export type ClickEventJob = {

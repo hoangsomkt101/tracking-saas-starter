@@ -1,6 +1,6 @@
 import { SignInButton, SignedIn, SignedOut } from '@clerk/clerk-react'
 import { NavLink } from 'react-router'
-import { ArrowRight, BarChart3, CheckCircle2, Command, Link2, MousePointerClick, ShieldCheck, Sparkles, Zap } from 'lucide-react'
+import { ArrowRight, BarChart3, CheckCircle2, Command, Link2, MousePointerClick, ShieldCheck, Sparkles } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { ThemeToggle } from '../../components/common/ThemeToggle'
@@ -106,13 +106,6 @@ export function LandingPage({ theme, onToggleTheme }: { theme: ThemeMode; onTogg
                             <span>CAPI delivered</span>
                             <strong>1,198</strong>
                             <div><span style={{ width: '58%' }} /></div>
-                        </div>
-                    </div>
-                    <div className="preview-event-card">
-                        <Zap size={17} />
-                        <div>
-                            <strong>Click UUID matched</strong>
-                            <span>fbclid/ttclid + postback payload đã được map về đúng campaign.</span>
                         </div>
                     </div>
                 </div>

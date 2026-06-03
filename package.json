@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "turbo dev",
     "build": "turbo build",
+    "test": "pnpm --filter @apps/api test",
     "lint": "turbo lint",
     "start:api": "pnpm --filter @apps/api start",
     "start:redirect": "pnpm --filter @apps/redirect start",

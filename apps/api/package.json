@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc --noEmit",
+    "test": "tsx test/impact.test.ts",
     "start": "node --import tsx src/server.ts"
   },
   "dependencies": {
