@@ -5,7 +5,6 @@ import { OverviewPage } from '../features/dashboard/OverviewPage'
 import { SettingsPage } from '../features/account/SettingsPage'
 import { AnalyticsPage } from '../features/analytics/AnalyticsPage'
 import { SuperAdminPage, SuperAdminUserManagePage } from '../features/admin/SuperAdminPages'
-import { ClickEventsPage } from '../features/events/EventPages'
 import { ActivityLogsPage } from '../features/logs/ActivityLogsPage'
 import { SupportPage } from '../features/support/SupportPage'
 import { DocsPage } from '../features/docs/DocsPage'
@@ -37,7 +36,7 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/tracking-links/:id" element={<FeatureGate ctx={ctx} featureKey="tracking-links"><TrackingLinkDetailPage ctx={ctx} /></FeatureGate>} />
       <Route path="/tracking-links/:id/edit" element={<FeatureGate ctx={ctx} featureKey="tracking-links"><TrackingLinkEditPage ctx={ctx} /></FeatureGate>} />
       <Route path="/tracking-links/:id/delete" element={<FeatureGate ctx={ctx} featureKey="tracking-links"><TrackingLinkDeletePage ctx={ctx} /></FeatureGate>} />
-      <Route path="/click-events" element={<FeatureGate ctx={ctx} featureKey="click-events"><ClickEventsPage ctx={ctx} /></FeatureGate>} />
+      <Route path="/click-events" element={<Navigate to="/analytics" replace />} />
       <Route path="/logs" element={<FeatureGate ctx={ctx} featureKey="activity-logs"><ActivityLogsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/analytics" element={<FeatureGate ctx={ctx} featureKey="analytics"><AnalyticsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/billing" element={<FeatureGate ctx={ctx} featureKey="billing"><PlaceholderPage icon={WalletCards} title="Billing" description="Plan, usage quota và invoices." /></FeatureGate>} />

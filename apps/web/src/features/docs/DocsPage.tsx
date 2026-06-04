@@ -175,10 +175,10 @@ export function DocsPage() {
                             <li><CheckCircle2 size={16} /> Tracking link có campaign, platform, Affiliate URL và slug đúng nội dung offer.</li>
                         </ul>
                         <p className="empty-state docs-final-note">
-                            Sau khi chạy thử, hãy kiểm tra Click Events, Activity Logs và Analytics để xác nhận click/postback/purchase được ghi nhận đúng.
+                            Sau khi chạy thử, hãy kiểm tra Analytics và Activity Logs để xác nhận click/postback/purchase được ghi nhận đúng.
                         </p>
                         <div className="button-row docs-actions">
-                            <Button asChild size="sm" variant="outline"><NavLink to="/click-events">Kiểm tra click <ExternalLink size={14} /></NavLink></Button>
+                            <Button asChild size="sm" variant="outline"><NavLink to="/analytics">Kiểm tra analytics <ExternalLink size={14} /></NavLink></Button>
                             <Button asChild size="sm" variant="outline"><NavLink to="/logs">Xem logs <ExternalLink size={14} /></NavLink></Button>
                         </div>
                     </CardContent>

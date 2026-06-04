@@ -131,7 +131,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   const shouldLoadTrackingLinks = Boolean(tenantId && (isDashboardRoute || isTrackingLinkRoute || isClickEventsRoute || isAnalyticsRoute))
   const shouldLoadWebsiteDomains = Boolean(tenantId && isSettingsRoute)
   const shouldLoadReportSchedules = Boolean(tenantId && isAnalyticsRoute)
-  const shouldLoadClickEvents = Boolean(tenantId && isClickEventsRoute)
+  const shouldLoadClickEvents = Boolean(tenantId && (isClickEventsRoute || isAnalyticsRoute))
   const shouldLoadCapiEvents = Boolean(tenantId && isAnalyticsRoute)
   const shouldLoadConversionEvents = Boolean(tenantId && isAnalyticsRoute)
   const shouldLoadActivityLogs = Boolean(tenantId && isActivityLogsRoute)
@@ -452,7 +452,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   }, [firstQueryError])
 
   const grantedMenuFeatureIds = useMemo(() => {
-    const coreFeatures = ['dashboard', 'campaigns', 'platforms', 'datasets', 'tracking-links', 'click-events', 'activity-logs', 'billing', 'settings', 'support']
+    const coreFeatures = ['dashboard', 'campaigns', 'platforms', 'datasets', 'tracking-links', 'activity-logs', 'billing', 'settings', 'support']
     if (data.currentUser?.isSuperAdmin) {
       return new Set(navGroups.flatMap((group) => group.items.map((item) => item.featureKey).filter(Boolean) as string[]))
     }
