@@ -211,6 +211,12 @@ export type ConversionEvent = {
   spendAmount?: string | null
   payoutAmount?: string | null
   commissionAmount?: string | null
+  postbackAmount?: string | null
+  postbackPayout?: string | null
+  postbackEventAt?: string | null
+  postbackEventDateField?: string | null
+  postbackEventDateValue?: string | null
+  postbackDelaySeconds?: number | null
   currency?: string | null
   eventName?: string | null
   eventRule?: string | null

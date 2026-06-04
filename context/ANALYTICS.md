@@ -1,10 +1,10 @@
 # Analytics Context
 
-Analytics đã được đơn giản hoá thành một màn hình đối soát event thô theo 3 nhóm dữ liệu:
+Analytics đã được đơn giản hoá thành một màn hình đối soát event thô theo 3 nhóm dữ liệu theo thứ tự debug:
 
 1. **Data click**: dữ liệu click đã capture, trước đây nằm riêng ở `/click-events`.
-2. **CAPI delivery**: các event app/worker đã post tới endpoint Meta/TikTok CAPI.
-3. **Postback**: conversion/postback affiliate network gửi về app. UI không dùng label "Conversion attribution" nữa.
+2. **Postback**: conversion/postback affiliate network gửi về app. UI không dùng label "Conversion attribution" nữa.
+3. **CAPI delivery**: các event app/worker đã post tới endpoint Meta/TikTok CAPI.
 
 Mục tiêu: gọn, dễ debug, dễ đối soát. Không tập trung vào dashboard phân tích nâng cao, funnel, breakdown hoặc report scheduler.
 
@@ -64,7 +64,93 @@ Data click dùng để:
 - Là dữ liệu nền để match với postback qua `clickUuid`.
 - Là nguồn cho worker tạo CAPI delivery jobs.
 
-## 2. CAPI delivery
+## 2. Postback
+
+### Nguồn dữ liệu
+
+Bảng: `AffiliateConversionEvent`.
+
+Nguồn tạo:
+
+```http
+GET/POST /affiliate-webhooks/:tenantKey/:platformSlug
+```
+
+API đọc dữ liệu:
+
+```http
+GET /conversion-events
+```
+
+CSV export:
+
+```http
+GET /analytics/export.csv?type=conversions
+```
+
+### Tên gọi UI
+
+UI gọi phần này là **Postback**.
+
+Không dùng label cũ:
+
+- `Conversion attribution`
+- `affiliate/EAPI conversions`
+
+Mục tiêu là diễn đạt đúng bản chất: network gửi postback về app.
+
+### Field hiển thị trong UI
+
+Bảng **Postback** chỉ giữ các field cần đối soát:
+
+- Matched click:
+  - `Matched` nếu app tìm được click theo `tenantId + clickUuid` hoặc snapshot cho thấy đã match.
+  - `Unmatched` nếu không match được click.
+- Amount: số tiền khách hàng/user customer chi tiêu trong postback payload. Ưu tiên `Amount`, `amount`, `saleAmount`, `sale_amount`, `orderAmount`, `order_amount`, `customerAmount`, `customer_amount`, `value`; fallback `spendAmount` đã lưu.
+- Payout: hoa hồng user nhận được. Ưu tiên `Payout`, `payout`, `payoutAmount`, `payout_amount`, `commissionAmount`, `commission_amount`, `commission`; fallback `payoutAmount`/`commissionAmount` đã lưu.
+- Created: thời điểm app nhận/lưu postback (`AffiliateConversionEvent.createdAt`).
+- Postback time: thời điểm event trong data postback. Ưu tiên `EventDate`; fallback `CreationDate`, `CreatedDate`, `ConversionDate`, `TransactionDate`, `Timestamp` và các biến thể snake/camel/lowercase.
+- Delay: độ trễ tính bằng `AffiliateConversionEvent.createdAt - postbackEventAt`, đơn vị giây ở API và format ngắn ở UI.
+
+Impact thường gửi:
+
+```json
+{
+  "Amount": "0.00",
+  "Payout": "100.00",
+  "EventDate": "2026-05-13T11:37:49+08:00",
+  "CreationDate": ""
+}
+```
+
+Với Impact:
+
+- `Amount` = customer spend/order amount.
+- `Payout` = commission user nhận được.
+- `EventDate` là time chính để tính delay; `CreationDate` chỉ dùng fallback nếu có giá trị hợp lệ.
+
+### Field API/CSV bổ sung cho Postback
+
+`GET /conversion-events` và CSV `type=conversions` trả thêm:
+
+- `postbackAmount`
+- `postbackPayout`
+- `postbackEventAt`
+- `postbackEventDateField`
+- `postbackEventDateValue`
+- `postbackDelaySeconds`
+
+### Vai trò
+
+Postback dùng để:
+
+- Xác nhận affiliate network đã gửi event về app.
+- Kiểm tra click UUID có match với click đã capture không.
+- Đối soát amount/payout network gửi về.
+- Đo độ trễ từ event time của network tới thời điểm app nhận postback.
+- Trigger CAPI jobs có source `affiliate_conversion` nếu postback mới và match được click.
+
+## 3. CAPI delivery
 
 ### Nguồn dữ liệu
 
@@ -114,65 +200,6 @@ Lưu ý:
 - `CAPI_DRY_RUN` mặc định bật. Chỉ gửi thật khi `CAPI_DRY_RUN=false`.
 - Payload request/response được lưu trong `CapiEvent.payload` để debug.
 
-## 3. Postback
-
-### Nguồn dữ liệu
-
-Bảng: `AffiliateConversionEvent`.
-
-Nguồn tạo:
-
-```http
-GET/POST /affiliate-webhooks/:tenantKey/:platformSlug
-```
-
-API đọc dữ liệu:
-
-```http
-GET /conversion-events
-```
-
-CSV export:
-
-```http
-GET /analytics/export.csv?type=conversions
-```
-
-### Tên gọi UI
-
-UI gọi phần này là **Postback**.
-
-Không dùng label cũ:
-
-- `Conversion attribution`
-- `affiliate/EAPI conversions`
-
-Mục tiêu là diễn đạt đúng bản chất: network gửi postback về app.
-
-### Field hiển thị trong UI
-
-Bảng **Postback** hiển thị:
-
-- Network.
-- Event name.
-- Click UUID từ payload.
-- Matched click:
-  - `Matched` nếu app tìm được click theo `tenantId + clickUuid` hoặc snapshot cho thấy đã match.
-  - `Unmatched` nếu không match được click.
-- Amount: ưu tiên payout, commission, rồi spend.
-- Requests: `requestCount` và prefix idempotency key.
-- Method: GET/POST.
-- Created time.
-
-### Vai trò
-
-Postback dùng để:
-
-- Xác nhận affiliate network đã gửi event về app.
-- Kiểm tra event name/mapping.
-- Kiểm tra click UUID có match với click đã capture không.
-- Trigger CAPI jobs có source `affiliate_conversion` nếu postback mới và match được click.
-
 ## Filter chung
 
 `/analytics` dùng `EventFiltersForm`, áp dụng chung cho 3 bảng:
@@ -190,9 +217,9 @@ Lưu ý:
 - `status` chỉ ảnh hưởng CAPI delivery.
 - Date filter áp dụng theo `createdAt` của từng bảng riêng:
   - `ClickEvent.createdAt` cho data click.
-  - `CapiEvent.createdAt` cho CAPI delivery.
   - `AffiliateConversionEvent.createdAt` cho postback.
-- Conversion/postback filter theo campaign/tracking link cần resolve qua matching click UUIDs trong API.
+  - `CapiEvent.createdAt` cho CAPI delivery.
+- Postback filter theo campaign/tracking link cần resolve qua matching click UUIDs trong API.
 
 ## Export CSV
 
@@ -201,8 +228,8 @@ UI hiện có 3 nút export:
 | Button | Query |
 | --- | --- |
 | Data click CSV | `/analytics/export.csv?type=clicks` |
-| CAPI delivery CSV | `/analytics/export.csv?type=capi` |
 | Postback CSV | `/analytics/export.csv?type=conversions` |
+| CAPI delivery CSV | `/analytics/export.csv?type=capi` |
 
 `breakdown` export không còn nằm trong UI đơn giản mới.
 
@@ -213,8 +240,8 @@ Trong `DashboardLayout.tsx`:
 - Khi route là `/analytics`, frontend load:
   - `/analytics/breakdown` để lấy summary CAPI delivered/failed và giữ compatibility với dashboard.
   - `/click-events` để hiển thị Data click.
-  - `/capi-events` để hiển thị CAPI delivery.
   - `/conversion-events` để hiển thị Postback.
+  - `/capi-events` để hiển thị CAPI delivery.
 - Pagination page size: `eventPageSize = 25`.
 - Apply filter reset page về 1 cho cả click/CAPI/postback.
 
@@ -238,8 +265,8 @@ Nếu cần dùng lại dashboard phân tích nâng cao sau này, có thể tạ
 Tên nên dùng trong UI/document:
 
 - **Data click**: click đã capture.
-- **CAPI delivery**: event đã/đang post tới Meta/TikTok endpoint.
 - **Postback**: affiliate network gửi event/conversion về app.
+- **CAPI delivery**: event đã/đang post tới Meta/TikTok endpoint.
 
 Tên nên tránh ở UI đơn giản hiện tại:
 

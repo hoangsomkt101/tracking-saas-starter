@@ -13,13 +13,27 @@ function statusVariant(status: string) {
   return 'pending'
 }
 
+function formatPostbackDelay(seconds?: number | null) {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return '—'
+  const sign = seconds < 0 ? '-' : ''
+  const abs = Math.abs(seconds)
+  const days = Math.floor(abs / 86400)
+  const hours = Math.floor((abs % 86400) / 3600)
+  const minutes = Math.floor((abs % 3600) / 60)
+  const secs = Math.floor(abs % 60)
+  if (days) return `${sign}${days}d ${hours}h`
+  if (hours) return `${sign}${hours}h ${minutes}m`
+  if (minutes) return `${sign}${minutes}m ${secs}s`
+  return `${sign}${secs}s`
+}
+
 export function AnalyticsPage({ ctx }: { ctx: DashboardContext }) {
   const summary = ctx.data.analyticsBreakdown.summary
   const exportCsv = (type: string) => { void ctx.exportAnalyticsCsv(type).catch((error) => ctx.setStatus({ type: 'error', message: error instanceof Error ? error.message : 'Không export được CSV' })) }
   const cards = [
     { label: 'Data click', value: ctx.clickEventsPagination.total, hint: 'Click events đã capture', icon: MousePointerClick },
-    { label: 'CAPI delivery', value: ctx.capiEventsPagination.total, hint: `${summary.capiDelivered} delivered · ${summary.capiFailed} failed`, icon: ShieldCheck },
-    { label: 'Postback', value: ctx.conversionEventsPagination.total, hint: 'Affiliate postback records', icon: CircleDollarSign }
+    { label: 'Postback', value: ctx.conversionEventsPagination.total, hint: 'Affiliate postback records', icon: CircleDollarSign },
+    { label: 'CAPI delivery', value: ctx.capiEventsPagination.total, hint: `${summary.capiDelivered} delivered · ${summary.capiFailed} failed`, icon: ShieldCheck }
   ]
 
   return (
@@ -29,12 +43,12 @@ export function AnalyticsPage({ ctx }: { ctx: DashboardContext }) {
         <CardHeader className="section-heading">
           <div>
             <CardTitle><Download size={18} /> Export CSV</CardTitle>
-            <CardDescription>Xuất 3 loại data đang hiển thị: click, CAPI delivery, postback.</CardDescription>
+            <CardDescription>Xuất 3 loại data đang hiển thị: click, postback, CAPI delivery.</CardDescription>
           </div>
           <div className="button-row">
             <Button type="button" variant="outline" size="sm" onClick={() => exportCsv('clicks')}>Data click CSV</Button>
-            <Button type="button" variant="outline" size="sm" onClick={() => exportCsv('capi')}>CAPI delivery CSV</Button>
             <Button type="button" variant="outline" size="sm" onClick={() => exportCsv('conversions')}>Postback CSV</Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => exportCsv('capi')}>CAPI delivery CSV</Button>
           </div>
         </CardHeader>
       </Card>
@@ -66,6 +80,25 @@ export function AnalyticsPage({ ctx }: { ctx: DashboardContext }) {
 
         <Card className="table-card">
           <CardHeader>
+            <CardTitle><CircleDollarSign size={18} /> Postback</CardTitle>
+            <CardDescription>{ctx.conversionEventsPagination.total} affiliate postback records · trang này {ctx.tenantConversionEvents.length} records.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Matched click</th><th>Amount</th><th>Payout</th><th>Created</th><th>Postback time</th><th>Delay</th></tr></thead>
+                <tbody>
+                  {ctx.tenantConversionEvents.map((event) => <tr key={event.id}><td>{event.attribution?.matched ? <><Badge variant="success">Matched</Badge><br /><small>{event.attribution.trackingLink?.slug ?? event.clickUuid ?? '—'}</small></> : <><Badge variant="muted">Unmatched</Badge><br /><small>{event.clickUuid ?? 'No click UUID'}</small></>}</td><td>{formatCurrencyAmount(event.postbackAmount ?? event.spendAmount, event.currency ?? 'USD')}</td><td>{formatCurrencyAmount(event.postbackPayout ?? event.payoutAmount ?? event.commissionAmount, event.currency ?? 'USD')}</td><td>{formatDate(event.createdAt)}</td><td>{event.postbackEventAt ? <>{formatDate(event.postbackEventAt)}<br /><small>{event.postbackEventDateField ?? 'event date'}: {event.postbackEventDateValue ?? event.postbackEventAt}</small></> : '—'}</td><td>{formatPostbackDelay(event.postbackDelaySeconds)}</td></tr>)}
+                  {!ctx.tenantConversionEvents.length && <tr><td colSpan={6}>Chưa có postback.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <PaginationControls meta={ctx.conversionEventsPagination} isLoading={ctx.isLoading} onPageChange={ctx.setConversionEventsPage} />
+          </CardContent>
+        </Card>
+
+        <Card className="table-card">
+          <CardHeader>
             <CardTitle><ShieldCheck size={18} /> CAPI delivery</CardTitle>
             <CardDescription>{ctx.capiEventsPagination.total} Meta/TikTok endpoint post records · trang này {ctx.tenantCapiEvents.length} records.</CardDescription>
           </CardHeader>
@@ -80,25 +113,6 @@ export function AnalyticsPage({ ctx }: { ctx: DashboardContext }) {
               </table>
             </div>
             <PaginationControls meta={ctx.capiEventsPagination} isLoading={ctx.isLoading} onPageChange={ctx.setCapiEventsPage} />
-          </CardContent>
-        </Card>
-
-        <Card className="table-card">
-          <CardHeader>
-            <CardTitle><CircleDollarSign size={18} /> Postback</CardTitle>
-            <CardDescription>{ctx.conversionEventsPagination.total} affiliate postback records · trang này {ctx.tenantConversionEvents.length} records.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>Network</th><th>Event</th><th>Click UUID</th><th>Matched click</th><th>Amount</th><th>Requests</th><th>Method</th><th>Created</th></tr></thead>
-                <tbody>
-                  {ctx.tenantConversionEvents.map((event) => <tr key={event.id}><td>{event.affiliatePlatform?.name ?? event.affiliatePlatformId}</td><td>{event.eventName ?? '—'}</td><td>{event.clickUuid ?? '—'}</td><td>{event.attribution?.matched ? <><Badge variant="success">Matched</Badge><br /><small>{event.attribution.trackingLink?.slug ?? event.attribution.campaign?.name ?? '—'}</small></> : <Badge variant="muted">Unmatched</Badge>}</td><td>{formatCurrencyAmount(event.payoutAmount ?? event.commissionAmount ?? event.spendAmount, event.currency ?? 'USD')}</td><td>{event.requestCount ?? 1}<br /><small>{event.idempotencyKey ? event.idempotencyKey.slice(0, 14) : '—'}</small></td><td>{event.receivedMethod}</td><td>{formatDate(event.createdAt)}</td></tr>)}
-                  {!ctx.tenantConversionEvents.length && <tr><td colSpan={8}>Chưa có postback.</td></tr>}
-                </tbody>
-              </table>
-            </div>
-            <PaginationControls meta={ctx.conversionEventsPagination} isLoading={ctx.isLoading} onPageChange={ctx.setConversionEventsPage} />
           </CardContent>
         </Card>
       </section>
