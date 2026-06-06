@@ -115,6 +115,14 @@ describe('Impact postback helpers', () => {
         })
     }
 
+    it('keeps Impact RefClickId usable when SubId1 is missing', () => {
+        const payload = makeImpactPayload('Sign Up', '0.00', '0.00')
+        delete (payload as Record<string, unknown>).SubId1
+
+        assert.equal(isImpactPostbackPayload(payload), true)
+        assert.equal(getImpactRefClickId(payload), 'impact-ref-click-id')
+    })
+
     it('sends CompleteRegistration plus ActionTrackerName when Amount=0 and Payout=0', () => {
         const payload = makeImpactPayload('install', '0.00', '0.00')
         const primaryEvent = getImpactEventMatch(payload)

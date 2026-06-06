@@ -293,7 +293,7 @@ export function getPartnerStackIdempotencyKey(payload: PartnerStackPayloadRecord
     const customerKey = getPartnerStackCustomerId(payload)
 
     if (event?.startsWith('customer.') && customerKey) {
-        if (eventName === 'CompleteRegistration' && clickUuid) return `partnerstack:complete_registration:${customerKey}`
+        if (eventName === 'CompleteRegistration') return `partnerstack:complete_registration:${customerKey}`
         return `partnerstack:${normalizeKeyPart(event)}:${customerKey}`
     }
 

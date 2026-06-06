@@ -106,6 +106,7 @@ describe('PartnerStack postback helpers', () => {
         assert.equal(match?.eventName, 'CompleteRegistration')
         assert.equal(getPartnerStackIdempotencyKey(payload, 'CompleteRegistration', clickUuid), 'partnerstack:complete_registration:cus_AcOLfPJYaM7mfF')
         assert.equal(getPartnerStackIdempotencyKey(makeCustomerUpdatedPayload(1778779999999), 'CompleteRegistration', clickUuid), 'partnerstack:complete_registration:cus_AcOLfPJYaM7mfF')
+        assert.equal(getPartnerStackIdempotencyKey({ ...payload, data: { ...payload.data, sub_ids: [] } }, 'CompleteRegistration'), 'partnerstack:complete_registration:cus_AcOLfPJYaM7mfF')
         assert.equal(eventDate?.field, 'data.created_at')
         assert.equal(eventDate?.date.getTime(), 1778778601000)
         assert.equal(enrichment?.eventTimeMs, 1778778601000)

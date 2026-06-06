@@ -41,6 +41,7 @@ model Tenant {
   trackingLinks      TrackingLink[]
   clickEvents        ClickEvent[]
   conversionEvents   AffiliateConversionEvent[]
+  affiliateRefAttributions AffiliateRefAttribution[]
   capiEvents         CapiEvent[]
   reportSchedules    ReportSchedule[]
   menuGrants         TenantMenuGrant[]
@@ -179,6 +180,7 @@ model AffiliatePlatform {
   brands           Brand[]
   trackingLinks    TrackingLink[]
   conversionEvents AffiliateConversionEvent[]
+  affiliateRefAttributions AffiliateRefAttribution[]
 
   @@index([tenantId])
   @@unique([tenantId, slug])
@@ -279,6 +281,7 @@ model ClickEvent {
   trackingLink   TrackingLink @relation(fields: [trackingLinkId], references: [id], onDelete: Cascade)
   capiEvents     CapiEvent[]
   conversionEvents AffiliateConversionEvent[]
+  affiliateRefAttributions AffiliateRefAttribution[]
 
   @@index([tenantId, createdAt])
   @@index([campaignId, createdAt])
@@ -330,6 +333,34 @@ model AffiliateConversionEvent {
   @@index([clickUuid])
   @@index([affiliateRefId], map: "AffConv_affiliateRefId_idx")
   @@index([idempotencyKey])
+}
+
+model AffiliateRefAttribution {
+  id                    String            @id @default(uuid())
+  tenantId              String
+  affiliatePlatformId   String
+  affiliateRefSource    String
+  affiliateRefId        String
+  clickEventId          BigInt
+  clickUuid             String
+  firstSeenAt           DateTime          @default(now())
+  lastSeenAt            DateTime          @default(now())
+  learnedAt             DateTime          @default(now())
+  lastMatchedAt         DateTime?
+  learnedFromConversionEventId BigInt?
+  metadata              Json?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  tenant                Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  affiliatePlatform     AffiliatePlatform @relation(fields: [affiliatePlatformId], references: [id], onDelete: Cascade)
+  clickEvent            ClickEvent        @relation(fields: [clickEventId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, affiliatePlatformId, affiliateRefSource, affiliateRefId], map: "AffRefAttr_unique_ref")
+  @@index([tenantId, affiliatePlatformId, lastSeenAt], map: "AffRefAttr_tenant_platform_seen_idx")
+  @@index([tenantId, clickEventId, lastSeenAt], map: "AffRefAttr_tenant_click_seen_idx")
+  @@index([clickUuid], map: "AffRefAttr_clickUuid_idx")
+  @@index([affiliateRefId], map: "AffRefAttr_refId_idx")
 }
 
 model CapiEvent {

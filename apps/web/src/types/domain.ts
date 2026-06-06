@@ -191,6 +191,8 @@ export type CapiEvent = {
 
 export type ConversionAttribution = {
   matched: boolean
+  attributionMethod?: string | null
+  matchedByRefId?: boolean
   clickEvent?: ClickEvent | null
   campaign?: Campaign | null
   trackingLink?: TrackingLink | null

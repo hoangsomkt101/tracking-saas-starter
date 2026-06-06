@@ -286,6 +286,51 @@ function extractAffiliateRefIds(platform: { slug?: string | null; name?: string 
   const affiliateRefSource = partnerStackCustomerKey ? 'partnerstack_customer_key' : impactRefClickId ? 'impact_ref_click_id' : undefined
   return { affiliateRefId, affiliateRefSource, partnerStackCustomerKey, impactRefClickId }
 }
+type AffiliateRefIds = ReturnType<typeof extractAffiliateRefIds>
+const clickAttributionInclude = { campaign: true, trackingLink: { include: { campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } } as const
+function hasAffiliateRef(refs: AffiliateRefIds): refs is AffiliateRefIds & { affiliateRefId: string; affiliateRefSource: string } { return Boolean(refs.affiliateRefId && refs.affiliateRefSource) }
+function getAffiliateRefAttributionWhere(platform: { tenantId: string; id: string }, refs: AffiliateRefIds) {
+  if (!hasAffiliateRef(refs)) return null
+  return { tenantId_affiliatePlatformId_affiliateRefSource_affiliateRefId: { tenantId: platform.tenantId, affiliatePlatformId: platform.id, affiliateRefSource: refs.affiliateRefSource, affiliateRefId: refs.affiliateRefId } }
+}
+async function findClickEventByUuid(tenantId: string, clickUuid?: string) {
+  return clickUuid ? prisma.clickEvent.findFirst({ where: { tenantId, clickUuid }, include: clickAttributionInclude }) : null
+}
+async function findAffiliateRefAttribution(platform: { tenantId: string; id: string }, refs: AffiliateRefIds) {
+  const where = getAffiliateRefAttributionWhere(platform, refs)
+  return where ? prisma.affiliateRefAttribution.findUnique({ where, include: { clickEvent: { include: clickAttributionInclude } } }) : null
+}
+async function upsertAffiliateRefAttribution(platform: { tenantId: string; id: string }, refs: AffiliateRefIds, clickEvent: AnyRecord, conversion: AnyRecord | null, attributionMethod: string | undefined, eventMatch: { eventName?: string; eventRule?: string }) {
+  const where = getAffiliateRefAttributionWhere(platform, refs)
+  if (!where || !clickEvent) return null
+  const now = new Date()
+  const firstSeenAt = conversion?.createdAt instanceof Date ? conversion.createdAt : now
+  const metadata = compactRecord({ source: 'affiliate_webhook', attributionMethod, conversionEventId: conversion?.id?.toString(), eventName: eventMatch.eventName, eventRule: eventMatch.eventRule, clickUuid: clickEvent.clickUuid })
+  return prisma.affiliateRefAttribution.upsert({
+    where,
+    create: { tenantId: platform.tenantId, affiliatePlatformId: platform.id, affiliateRefSource: refs.affiliateRefSource!, affiliateRefId: refs.affiliateRefId!, clickEventId: clickEvent.id, clickUuid: clickEvent.clickUuid, firstSeenAt, lastSeenAt: now, learnedAt: now, lastMatchedAt: now, learnedFromConversionEventId: conversion?.id, metadata: metadata as Prisma.InputJsonValue },
+    update: { clickEventId: clickEvent.id, clickUuid: clickEvent.clickUuid, lastSeenAt: now, lastMatchedAt: now, learnedFromConversionEventId: conversion?.id, metadata: metadata as Prisma.InputJsonValue }
+  })
+}
+async function backfillAffiliateRefConversions(platform: { tenantId: string; id: string }, refs: AffiliateRefIds, clickEvent: AnyRecord, attributionSnapshot: AnyRecord) {
+  if (!hasAffiliateRef(refs) || !clickEvent) return []
+  const rows = await prisma.affiliateConversionEvent.findMany({
+    where: { tenantId: platform.tenantId, affiliatePlatformId: platform.id, affiliateRefSource: refs.affiliateRefSource, affiliateRefId: refs.affiliateRefId, OR: [{ clickEventId: null }, { clickUuid: null }] },
+    select: { id: true, eventName: true, rawPayload: true }
+  })
+  if (!rows.length) return []
+  await prisma.affiliateConversionEvent.updateMany({
+    where: { id: { in: rows.map((row) => row.id) } },
+    data: { clickEventId: clickEvent.id, clickUuid: clickEvent.clickUuid, attributionSnapshot: attributionSnapshot as Prisma.InputJsonValue }
+  })
+  return rows
+}
+function getBackfilledConversionEventNames(platform: { slug?: string | null; name?: string | null; trackingParamKey?: string | null; eventMapping?: unknown; defaultEventName?: string | null }, row: AnyRecord) {
+  const payload = getPlainRecord(row.rawPayload) ?? {}
+  const match = Object.keys(payload).length ? resolvePlatformEventName(platform, payload) : null
+  const primaryEventName = row.eventName ?? match?.eventName
+  return primaryEventName ? resolveImpactPostbackEventNames(platform, payload, primaryEventName) : []
+}
 function extractClickUuid(payload: AnyRecord, trackingParamKey: string) {
   return getPartnerStackClickUuid(payload) ?? getPayloadString(payload, ['clickUuid', 'click_uuid', 'click_id', 'subid', 'sub_id', 'subid1', 'sid1', 'sid', 'fp_sid', trackingParamKey])
 }
@@ -328,7 +373,7 @@ function buildCapiEnrichment(payload: AnyRecord, money: ReturnType<typeof extrac
   const impactRefClickId = getImpactRefClickId(payload)
   return compactRecord({ value: value !== undefined ? toNumberAmount(value) : undefined, currency: money.currency, contentId: contentIds[0], contentIds: contentIds.length ? contentIds : undefined, contentName: getPayloadString(payload, ['contentName', 'content_name', 'productName', 'product_name', 'offerName', 'offer_name', 'product', 'offer']), contentType: getPayloadString(payload, ['contentType', 'content_type', 'productType', 'product_type']) ?? (contentIds.length ? 'product' : undefined), contentCategory: getPayloadString(payload, ['contentCategory', 'content_category', 'category']), orderId: getPayloadString(payload, ['orderId', 'order_id', 'transactionId', 'transaction_id']), customerId, customerEmail, customerPhone: getPayloadString(payload, ['customerPhone', 'customer_phone', 'phone']), firstName: getPayloadString(payload, ['firstName', 'first_name', 'fn']), lastName: getPayloadString(payload, ['lastName', 'last_name', 'ln']), city: getPayloadString(payload, ['city', 'ct']), state: getPayloadString(payload, ['state', 'st']), zip: getPayloadString(payload, ['zip', 'postalCode', 'postal_code', 'zp']), country: getPayloadString(payload, ['country', 'countryCode', 'country_code']), clickUuid, eventName, impactRefClickId })
 }
-function buildAttributionSnapshot(click: AnyRecord | null | undefined, platform?: AnyRecord | null): AnyRecord { if (!click) return compactRecord({ matched: false, affiliatePlatform: platform ? serializeAffiliatePlatform(platform) : null }); const trackingLink = serializeTrackingLinkForAttribution(click.trackingLink); const brand = trackingLink?.brand ?? null; const campaign = click.campaign ?? trackingLink?.campaign ?? null; const affiliatePlatform = trackingLink?.affiliatePlatform ?? brand?.affiliatePlatform ?? (platform ? serializeAffiliatePlatform(platform) : null); const snapshot = { matched: true, clickEvent: { id: click.id?.toString(), tenantId: click.tenantId, campaignId: click.campaignId, trackingLinkId: click.trackingLinkId, clickUuid: click.clickUuid, ip: click.ip, userAgent: click.userAgent, referrer: click.referrer, fbclid: click.fbclid, ttclid: click.ttclid, fbp: click.fbp, fbc: click.fbc, ttp: click.ttp, createdAt: click.createdAt }, campaign, trackingLink, brand, affiliatePlatform }; return toJsonSafe(snapshot) as AnyRecord }
+function buildAttributionSnapshot(click: AnyRecord | null | undefined, platform?: AnyRecord | null, attributionMethod?: string): AnyRecord { if (!click) return compactRecord({ matched: false, attributionMethod, matchedByRefId: attributionMethod === 'affiliate_ref_id', affiliatePlatform: platform ? serializeAffiliatePlatform(platform) : null }); const trackingLink = serializeTrackingLinkForAttribution(click.trackingLink); const brand = trackingLink?.brand ?? null; const campaign = click.campaign ?? trackingLink?.campaign ?? null; const affiliatePlatform = trackingLink?.affiliatePlatform ?? brand?.affiliatePlatform ?? (platform ? serializeAffiliatePlatform(platform) : null); const method = attributionMethod ?? 'direct_click_uuid'; const snapshot = { matched: true, attributionMethod: method, matchedByRefId: method === 'affiliate_ref_id', clickEvent: { id: click.id?.toString(), tenantId: click.tenantId, campaignId: click.campaignId, trackingLinkId: click.trackingLinkId, clickUuid: click.clickUuid, ip: click.ip, userAgent: click.userAgent, referrer: click.referrer, fbclid: click.fbclid, ttclid: click.ttclid, fbp: click.fbp, fbc: click.fbc, ttp: click.ttp, createdAt: click.createdAt }, campaign, trackingLink, brand, affiliatePlatform }; return toJsonSafe(snapshot) as AnyRecord }
 function normalizeReportFrequency(value: unknown) { const frequency = typeof value === 'string' ? value.trim().toLowerCase() : 'weekly'; return ['daily', 'weekly', 'monthly'].includes(frequency) ? frequency : 'weekly' }
 function getNextReportRunAt(frequency: string, from = new Date()) { const next = new Date(from); next.setUTCSeconds(0, 0); if (frequency === 'daily') next.setUTCDate(next.getUTCDate() + 1); else if (frequency === 'monthly') next.setUTCMonth(next.getUTCMonth() + 1); else next.setUTCDate(next.getUTCDate() + 7); return next }
 function csvEscape(value: unknown) { if (value === null || value === undefined) return ''; const text = value instanceof Date ? value.toISOString() : typeof value === 'object' ? JSON.stringify(toJsonSafe(value)) : String(value); return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text }
@@ -1229,8 +1274,8 @@ app.get('/analytics/export.csv', async (req, reply) => {
     rows = ['byCampaign', 'byBrand', 'byPlatform', 'byRefId', 'byDay'].flatMap((group) => (breakdown as AnyRecord)[group].map((row: AnyRecord) => ({ group, affiliatePlatform: row.affiliatePlatformName, ...row })))
   } else {
     const conversionRows = await attachAttributionToConversions(await prisma.affiliateConversionEvent.findMany({ where: await buildConversionEventWhere(u.id, q), include: { affiliatePlatform: true }, orderBy: { createdAt: 'desc' }, take: limit }))
-    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'affiliateRefId', 'affiliateRefSource', 'partnerStackCustomerKey', 'impactRefClickId', 'matched', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'postbackDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
-    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, affiliateRefId: row.affiliateRefId, affiliateRefSource: row.affiliateRefSource, partnerStackCustomerKey: row.partnerStackCustomerKey, impactRefClickId: row.impactRefClickId, matched: row.attribution?.matched, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, postbackDelaySeconds: row.postbackDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
+    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'affiliateRefId', 'affiliateRefSource', 'partnerStackCustomerKey', 'impactRefClickId', 'matched', 'attributionMethod', 'matchedByRefId', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'postbackDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
+    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, affiliateRefId: row.affiliateRefId, affiliateRefSource: row.affiliateRefSource, partnerStackCustomerKey: row.partnerStackCustomerKey, impactRefClickId: row.impactRefClickId, matched: row.attribution?.matched, attributionMethod: row.attribution?.attributionMethod, matchedByRefId: row.attribution?.matchedByRefId, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, postbackDelaySeconds: row.postbackDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
   }
 
   return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="${type}-export.csv"`).send(toCsv(headers, rows))
@@ -1254,21 +1299,25 @@ app.route({
     if (!platform) return reply.code(404).send({ error: 'Affiliate webhook not found' })
 
     const payload = sanitizeWebhookPayload(normalizeAffiliateWebhookPayload(method === 'GET' ? { ...q } : req.body ?? {}))
-    const clickUuid = extractClickUuid(payload, resolveTrackingParamKey(platform, { preferStored: true }))
+    const rawClickUuid = extractClickUuid(payload, resolveTrackingParamKey(platform, { preferStored: true }))
     const eventMatch = resolvePlatformEventName(platform, payload)
     const eventNamesToSend = resolveImpactPostbackEventNames(platform, payload, eventMatch.eventName)
     const money = extractConversionMoney(payload)
     const affiliateRefs = extractAffiliateRefIds(platform, payload)
-    const capiEnrichment = buildCapiEnrichment(payload, money, clickUuid, eventMatch.eventName)
-    const idempotencyKey = buildAffiliatePostbackIdempotencyKey(req, platform.id, payload, clickUuid, eventMatch.eventName)
+    const idempotencyKey = buildAffiliatePostbackIdempotencyKey(req, platform.id, payload, rawClickUuid, eventMatch.eventName)
     const now = new Date()
-    const clickEvent = clickUuid ? await prisma.clickEvent.findFirst({ where: { tenantId: platform.tenantId, clickUuid }, include: { campaign: true, trackingLink: { include: { campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } } }) : null
-    const attributionSnapshot = buildAttributionSnapshot(clickEvent, platform)
+    const directClickEvent = await findClickEventByUuid(platform.tenantId, rawClickUuid)
+    const learnedAttribution = directClickEvent ? null : await findAffiliateRefAttribution(platform, affiliateRefs)
+    const clickEvent = directClickEvent ?? learnedAttribution?.clickEvent ?? null
+    const resolvedClickUuid = clickEvent?.clickUuid ?? rawClickUuid
+    const attributionMethod = directClickEvent ? 'direct_click_uuid' : learnedAttribution?.clickEvent ? 'affiliate_ref_id' : undefined
+    const attributionSnapshot = buildAttributionSnapshot(clickEvent, platform, attributionMethod)
+    const capiEnrichment = buildCapiEnrichment(payload, money, resolvedClickUuid, eventMatch.eventName)
     const baseData = {
       tenantId: platform.tenantId,
       affiliatePlatformId: platform.id,
       clickEventId: clickEvent?.id,
-      clickUuid,
+      clickUuid: resolvedClickUuid,
       idempotencyKey,
       lastReceivedAt: now,
       eventName: eventMatch.eventName,
@@ -1312,9 +1361,13 @@ app.route({
       }
     }
 
-    if (!duplicate && clickEvent && conversion) await Promise.all(eventNamesToSend.map((eventName) => enqueueClick(clickEvent, eventName, 'affiliate_conversion', conversion.id.toString())))
-    if (conversion) await createActivityLog({ tenantId: platform.tenantId, source: 'affiliate-webhook', eventType: duplicate ? 'affiliate_conversion.duplicate' : 'affiliate_conversion.received', message: `${duplicate ? 'Duplicate' : 'New'} affiliate conversion received from "${platform.name}"`, entityType: 'conversionEvent', entityId: conversion.id, metadata: { conversionEventId: conversion.id, affiliatePlatformId: platform.id, platformSlug: platform.slug, method, eventName: eventMatch.eventName, eventNames: eventNamesToSend, eventRule: eventMatch.eventRule, clickUuid, affiliateRefId: affiliateRefs.affiliateRefId, affiliateRefSource: affiliateRefs.affiliateRefSource, partnerStackCustomerKey: affiliateRefs.partnerStackCustomerKey, impactRefClickId: affiliateRefs.impactRefClickId, matchedClick: Boolean(clickEvent), clickEventId: clickEvent?.id, duplicate, requestCount: conversion.requestCount, idempotencyKey, payoutAmount: money.payoutAmount, impactPayoutNumber: getImpactPayoutNumber(payload), impactActionTrackerName: getImpactActionTrackerEventName(payload), commissionAmount: money.commissionAmount, spendAmount: money.spendAmount, currency: money.currency } })
-    return reply.code(duplicate ? 200 : 201).send({ ok: true, duplicate, id: conversion?.id.toString(), requestCount: conversion?.requestCount, eventName: eventMatch.eventName, eventNames: eventNamesToSend, idempotencyKey, affiliateRefId: affiliateRefs.affiliateRefId, affiliateRefSource: affiliateRefs.affiliateRefSource })
+    const learnedRef = clickEvent ? await upsertAffiliateRefAttribution(platform, affiliateRefs, clickEvent, conversion, attributionMethod, eventMatch) : null
+    const backfilledConversions = clickEvent ? await backfillAffiliateRefConversions(platform, affiliateRefs, clickEvent, attributionSnapshot) : []
+    const shouldEnqueueConversion = Boolean(clickEvent && conversion && (!duplicate || !existing?.clickEventId))
+    if (shouldEnqueueConversion && clickEvent && conversion) await Promise.all(eventNamesToSend.map((eventName) => enqueueClick(clickEvent, eventName, 'affiliate_conversion', conversion.id.toString())))
+    if (clickEvent && backfilledConversions.length) await Promise.all(backfilledConversions.flatMap((row: AnyRecord) => getBackfilledConversionEventNames(platform, row).map((eventName) => enqueueClick(clickEvent, eventName, 'affiliate_conversion', row.id.toString()))))
+    if (conversion) await createActivityLog({ tenantId: platform.tenantId, source: 'affiliate-webhook', eventType: duplicate ? 'affiliate_conversion.duplicate' : 'affiliate_conversion.received', message: `${duplicate ? 'Duplicate' : 'New'} affiliate conversion received from "${platform.name}"`, entityType: 'conversionEvent', entityId: conversion.id, metadata: { conversionEventId: conversion.id, affiliatePlatformId: platform.id, platformSlug: platform.slug, method, eventName: eventMatch.eventName, eventNames: eventNamesToSend, eventRule: eventMatch.eventRule, rawClickUuid, clickUuid: resolvedClickUuid, affiliateRefId: affiliateRefs.affiliateRefId, affiliateRefSource: affiliateRefs.affiliateRefSource, partnerStackCustomerKey: affiliateRefs.partnerStackCustomerKey, impactRefClickId: affiliateRefs.impactRefClickId, matchedClick: Boolean(clickEvent), clickEventId: clickEvent?.id, attributionMethod, learnedRefAttributionId: learnedRef?.id, backfilledConversions: backfilledConversions.length, duplicate, requestCount: conversion.requestCount, idempotencyKey, payoutAmount: money.payoutAmount, impactPayoutNumber: getImpactPayoutNumber(payload), impactActionTrackerName: getImpactActionTrackerEventName(payload), commissionAmount: money.commissionAmount, spendAmount: money.spendAmount, currency: money.currency } })
+    return reply.code(duplicate ? 200 : 201).send({ ok: true, duplicate, id: conversion?.id.toString(), requestCount: conversion?.requestCount, eventName: eventMatch.eventName, eventNames: eventNamesToSend, idempotencyKey, affiliateRefId: affiliateRefs.affiliateRefId, affiliateRefSource: affiliateRefs.affiliateRefSource, attributionMethod, matchedByRefId: attributionMethod === 'affiliate_ref_id' })
   }
 })
 
