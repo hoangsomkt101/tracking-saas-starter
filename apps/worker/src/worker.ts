@@ -103,6 +103,23 @@ function moneyToNumber(value: unknown) {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+function parseEventTime(value: unknown): Date | undefined {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : value
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value > 1_000_000_000_000 ? value : value * 1000)
+    return Number.isNaN(date.getTime()) ? undefined : date
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const text = value.trim()
+    const numeric = Number(text)
+    const date = Number.isFinite(numeric)
+      ? new Date(numeric > 1_000_000_000_000 ? numeric : numeric * 1000)
+      : new Date(text)
+    return Number.isNaN(date.getTime()) ? undefined : date
+  }
+  return undefined
+}
+
 function normalizeContentId(value: unknown) {
   if (value === null || value === undefined) return undefined
   const normalized = String(value).trim().toLowerCase().replace(/\s+/g, '')
@@ -137,6 +154,13 @@ function getConversionEnrichment(conversion: Awaited<ReturnType<typeof loadConve
   const actionTrackerValue = getImpactActionTrackerAmountValue(rawPayload, eventName)
   const value = actionTrackerValue ?? moneyToNumber(extra.value) ?? moneyToNumber(conversion.payoutAmount?.toString()) ?? moneyToNumber(conversion.commissionAmount?.toString()) ?? moneyToNumber(conversion.spendAmount?.toString())
 
+  const eventTime = parseEventTime(extra.eventTimeMs) ?? parseEventTime(extra.eventTime) ?? conversion.createdAt
+  const eventId = typeof extra.eventId === 'string' && extra.eventId.trim()
+    ? extra.eventId.trim()
+    : conversion.clickUuid && eventName
+      ? `${eventName}_${conversion.clickUuid}`
+      : conversion.clickUuid ?? conversion.id.toString()
+
   return compactObject({
     ...clickMetadata,
     ...extra,
@@ -144,8 +168,8 @@ function getConversionEnrichment(conversion: Awaited<ReturnType<typeof loadConve
     currency: extra.currency ?? conversion.currency ?? 'USD',
     customerId: extra.customerId ?? conversion.customerId,
     customerEmail: extra.customerEmail ?? conversion.customerEmail,
-    eventId: conversion.clickUuid && eventName ? `${eventName}_${conversion.clickUuid}` : conversion.clickUuid ?? conversion.id.toString(),
-    eventTime: conversion.createdAt
+    eventId,
+    eventTime
   })
 }
 
@@ -156,7 +180,7 @@ function getPlatformEventName(platform: string, eventName?: string) {
 function buildMetaPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent>>, eventName = 'PageView', conversion: Awaited<ReturnType<typeof loadConversionEvent>> = null) {
   if (!clickEvent) throw new Error('Missing click event')
   const enrichment = getConversionEnrichment(conversion, clickEvent, eventName)
-  const eventTime = enrichment.eventTime instanceof Date ? enrichment.eventTime : clickEvent.createdAt
+  const eventTime = parseEventTime(enrichment.eventTime) ?? clickEvent.createdAt
   const contentIds = normalizeContentIds(enrichment.contentIds) ?? normalizeContentIds(enrichment.contentId) ?? normalizeContentIds(clickEvent.trackingLink.brand?.name ?? clickEvent.trackingLink.slug)
   const contentId = normalizeContentId(enrichment.contentId) ?? contentIds?.[0]
 
@@ -205,7 +229,7 @@ function buildMetaPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent>>
 function buildTikTokPayload(clickEvent: Awaited<ReturnType<typeof loadClickEvent>>, eventName = 'PageView', conversion: Awaited<ReturnType<typeof loadConversionEvent>> = null, dataset: { pixelId: string }) {
   if (!clickEvent) throw new Error('Missing click event')
   const enrichment = getConversionEnrichment(conversion, clickEvent, eventName)
-  const eventTime = enrichment.eventTime instanceof Date ? enrichment.eventTime : clickEvent.createdAt
+  const eventTime = parseEventTime(enrichment.eventTime) ?? clickEvent.createdAt
   const contentIds = normalizeContentIds(enrichment.contentIds) ?? normalizeContentIds(enrichment.contentId) ?? normalizeContentIds(clickEvent.trackingLink.brand?.name ?? clickEvent.trackingLink.slug)
   const contentId = normalizeContentId(enrichment.contentId) ?? contentIds?.[0]
 
