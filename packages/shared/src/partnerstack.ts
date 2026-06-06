@@ -97,6 +97,13 @@ function getMoneyPath(payload: AnyRecord, paths: string[]) {
     return parseMoneyValue(firstFilledPathValue(payload, paths))
 }
 
+function getPartnerStackMoneyPath(payload: AnyRecord, paths: string[]) {
+    const cents = parseMoneyValue(firstFilledPathValue(payload, paths))
+    if (cents === undefined) return undefined
+    const amount = Number(cents) / 100
+    return Number.isFinite(amount) ? String(amount) : undefined
+}
+
 function normalizeEvent(value: unknown) {
     return typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : undefined
 }
@@ -175,13 +182,13 @@ export function getPartnerStackCurrency(payload: PartnerStackPayloadRecord) {
 
 export function getPartnerStackOrderAmount(payload: PartnerStackPayloadRecord) {
     const event = getPartnerStackWebhookEvent(payload)
-    if (event?.startsWith('reward.')) return getMoneyPath(payload, ['data.transaction.amount_usd', 'data.transaction.amount'])
-    return getMoneyPath(payload, ['data.amount_usd', 'data.amount'])
+    if (event?.startsWith('reward.')) return getPartnerStackMoneyPath(payload, ['data.transaction.amount_usd', 'data.transaction.amount'])
+    return getPartnerStackMoneyPath(payload, ['data.amount_usd', 'data.amount'])
 }
 
 export function getPartnerStackRewardAmount(payload: PartnerStackPayloadRecord) {
     const event = getPartnerStackWebhookEvent(payload)
-    return event?.startsWith('reward.') ? getMoneyPath(payload, ['data.amount']) : undefined
+    return event?.startsWith('reward.') ? getPartnerStackMoneyPath(payload, ['data.amount']) : undefined
 }
 
 export function getPartnerStackOrderId(payload: PartnerStackPayloadRecord) {

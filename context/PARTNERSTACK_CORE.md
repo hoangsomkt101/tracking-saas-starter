@@ -21,7 +21,7 @@ Last reviewed: 2026-06-06.
 - `apps/redirect/src/server.ts`
   - Public shortlink redirect.
   - Tạo `ClickEvent`.
-  - Gắn `sid=<clickUuid>` vào PartnerStack affiliate URL.
+  - Gắn `sid1=<clickUuid>` vào PartnerStack affiliate URL.
 - `apps/worker/src/worker.ts`
   - Consume queue `click-events`.
   - Build Meta/TikTok payload.
@@ -34,7 +34,7 @@ Last reviewed: 2026-06-06.
 Trong `packages/shared/src/index.ts`:
 
 ```ts
-{ key: 'partnerstack', label: 'PartnerStack', slug: 'partnerstack', trackingParamKey: 'sid', webhookMethod: 'POST', defaultEventName: 'CompleteRegistration' }
+{ key: 'partnerstack', label: 'PartnerStack', slug: 'partnerstack', trackingParamKey: 'sid1', webhookMethod: 'POST', defaultEventName: 'CompleteRegistration' }
 ```
 
 Aliases được hỗ trợ:
@@ -49,7 +49,7 @@ sid1         -> partnerstack
 
 - Platform key: `partnerstack`.
 - Slug webhook: `partnerstack`.
-- Tracking param truyền sang PartnerStack: `sid`.
+- Tracking param truyền sang PartnerStack: `sid1`.
 - Webhook method mặc định: `POST`.
 - Event fallback: `CompleteRegistration`.
 
@@ -69,7 +69,7 @@ Khi user tạo platform và chọn PartnerStack:
 
 ```ts
 {
-  trackingParamKey: 'sid',
+  trackingParamKey: 'sid1',
   webhookMethod: 'POST',
   defaultEventName: 'CompleteRegistration',
   eventMapping: []
@@ -105,7 +105,7 @@ Khi tạo tracking link:
    - prelander config nếu có
    - `isActive`
 
-Lưu ý: `sid` chưa được append khi tạo tracking link. `sid` chỉ được append runtime khi visitor click shortlink.
+Lưu ý: `sid1` chưa được append khi tạo tracking link. `sid1` chỉ được append runtime khi visitor click shortlink.
 
 ## Luồng click shortlink
 
@@ -164,13 +164,13 @@ buildAffiliateRedirectUrl(
 Với PartnerStack:
 
 ```txt
-resolveTrackingParamKey(...) = sid
+resolveTrackingParamKey(...) = sid1
 ```
 
 Affiliate URL cuối cùng:
 
 ```txt
-https://partnerstack-affiliate-url...?sid=<clickUuid>
+https://partnerstack-affiliate-url...?sid1=<clickUuid>
 ```
 
 Điểm bắt buộc về mặt tracking: PartnerStack phải trả lại click id đã nhận từ affiliate URL. Tuy nhiên payload thực tế không trả top-level `sid`; PartnerStack trả click id trong các mảng nested `sub_ids`.
@@ -348,7 +348,7 @@ Nhận xét:
 - Click id nằm ở `data.customer.sub_ids[0]`.
 - Transaction id nằm ở `data.key` dạng `ch_...`.
 - Customer id nằm ở `data.customer.key` dạng `cus_...`.
-- Giá trị mua hàng nằm ở `data.amount` và `data.amount_usd`.
+- Giá trị mua hàng nằm ở `data.amount` và `data.amount_usd`, PartnerStack gửi theo cents nên cần chia `/100` (`660` → `6.6` USD).
 - Đây là event phù hợp nhất để trigger `Purchase`.
 
 ### Case 4: `reward.created` / commission
@@ -395,8 +395,8 @@ Nhận xét:
 - Click id nằm ở `data.customer.sub_ids[0]`.
 - Reward/commission id nằm ở `data.key` dạng `rwrd_...`.
 - Source transaction id nằm ở `data.source.key`.
-- Customer spend/order amount nằm ở `data.transaction.amount` / `data.transaction.amount_usd`.
-- Commission/reward amount nằm ở `data.amount`.
+- Customer spend/order amount nằm ở `data.transaction.amount` / `data.transaction.amount_usd`, PartnerStack gửi theo cents nên cần chia `/100` (`660` → `6.6` USD).
+- Commission/reward amount nằm ở `data.amount`, cũng là cents nên cần chia `/100` (`145` → `1.45` USD).
 - Đây là event phù hợp để trigger custom event `Payout`/`Commission`, không nên mặc định coi là `Purchase` nếu `transaction.created` đã gửi `Purchase`, để tránh double-count revenue.
 
 ## Field click id thực tế
@@ -637,9 +637,9 @@ Với PartnerStack thực tế, các field cần đọc là nested:
 | transaction id | transaction event | `data.key` | `ch_...` |
 | transaction id | reward event | `data.source.key` | source transaction |
 | reward id | reward event | `data.key` | `rwrd_...` |
-| order amount | transaction event | `data.amount` / `data.amount_usd` | 660 trong sample |
-| order amount | reward event | `data.transaction.amount` / `data.transaction.amount_usd` | 660 trong sample |
-| commission/payout | reward event | `data.amount` | 145 trong sample |
+| order amount | transaction event | `data.amount` / `data.amount_usd` | 660 cents → 6.6 USD |
+| order amount | reward event | `data.transaction.amount` / `data.transaction.amount_usd` | 660 cents → 6.6 USD |
+| commission/payout | reward event | `data.amount` | 145 cents → 1.45 USD |
 | currency | transaction/reward | `data.currency` hoặc `data.transaction.currency` | USD |
 | event time | all | `data.created_at`, `data.updated_at` | milliseconds epoch trong sample |
 
@@ -1010,7 +1010,7 @@ flowchart TD
   A[User tạo PartnerStack AffiliatePlatform] --> B[User tạo TrackingLink]
   B --> C[Visitor click shortlink]
   C --> D[Redirect service tạo ClickEvent]
-  D --> E[Redirect sang PartnerStack URL với sid=clickUuid]
+  D --> E[Redirect sang PartnerStack URL với sid1=clickUuid]
   E --> F[PartnerStack ghi nhận customer/transaction/reward]
   F --> G[PartnerStack POST webhook về /affiliate-webhooks/tenantKey/partnerstack]
   G --> H[API cần extract clickUuid từ data.sub_ids hoặc data.customer.sub_ids]
@@ -1024,8 +1024,8 @@ flowchart TD
 
 ## Hành vi hiện tại cần nhớ
 
-- Hệ thống append `sid=<clickUuid>` vào PartnerStack affiliate URL.
-- PartnerStack thực tế trả click id trong `data.sub_ids` hoặc `data.customer.sub_ids`, không phải top-level `sid`.
+- Hệ thống append `sid1=<clickUuid>` vào PartnerStack affiliate URL.
+- PartnerStack thực tế trả click id trong `data.sub_ids` hoặc `data.customer.sub_ids`, không phải top-level `sid1`.
 - Code hiện tại chưa đọc nested click id nên real PartnerStack postback có thể không attribution được.
 - PartnerStack postback hiện trigger duy nhất `CompleteRegistration` nếu match được click.
 - Nếu sửa nested click extraction nhưng chưa sửa idempotency, `customer.updated` có rủi ro gửi trùng `CompleteRegistration` vì fallback hash thay đổi theo payload/update.
@@ -1173,7 +1173,7 @@ Nếu không sửa phần này, event có thể được gửi nhưng value/emai
 5. Xác nhận redirect URL sang PartnerStack có:
 
 ```txt
-sid=<clickUuid>
+sid1=<clickUuid>
 ```
 
 6. Gửi test `transaction.created` giống PartnerStack thật:
@@ -1232,7 +1232,7 @@ response eventName = CompleteRegistration
 clickUuid = data.customer.sub_ids[0]
 eventName = Purchase
 customerId = data.customer.key
-spendAmount/value = data.amount hoặc data.amount_usd
+spendAmount/value = (data.amount hoặc data.amount_usd) / 100
 currency = data.currency
 matched attribution = true
 idempotency dùng event + data.key

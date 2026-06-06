@@ -86,7 +86,7 @@ export function AnalyticsPage({ ctx }: { ctx: DashboardContext }) {
           <CardContent>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Matched click</th><th>Amount</th><th>Payout</th><th>Created</th><th>Postback time</th><th>Delay</th></tr></thead>
+                <thead><tr><th>Matched click</th><th>Amount</th><th>Payout</th><th>Postback time</th><th>Created</th><th>Delay</th></tr></thead>
                 <tbody>
                   {ctx.tenantConversionEvents.map((event) => <tr key={event.id}><td>{event.attribution?.matched ? <><Badge variant="success">Matched</Badge><br /><small>{event.attribution.trackingLink?.slug ?? event.clickUuid ?? '—'}</small></> : <><Badge variant="muted">Unmatched</Badge><br /><small>{event.clickUuid ?? 'No click UUID'}</small></>}</td><td>{formatCurrencyAmount(event.postbackAmount ?? event.spendAmount, event.currency ?? 'USD')}</td><td>{formatCurrencyAmount(event.postbackPayout ?? event.payoutAmount ?? event.commissionAmount, event.currency ?? 'USD')}</td><td>{formatDate(event.createdAt)}</td><td>{event.postbackEventAt ? <>{formatDate(event.postbackEventAt)}<br /><small>{event.postbackEventDateField ?? 'event date'}: {event.postbackEventDateValue ?? event.postbackEventAt}</small></> : '—'}</td><td>{formatPostbackDelay(event.postbackDelaySeconds)}</td></tr>)}
                   {!ctx.tenantConversionEvents.length && <tr><td colSpan={6}>Chưa có postback.</td></tr>}

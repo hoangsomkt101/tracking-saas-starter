@@ -279,7 +279,7 @@ function extractConversionMoney(payload: AnyRecord) {
   }
 }
 function extractClickUuid(payload: AnyRecord, trackingParamKey: string) {
-  return getPartnerStackClickUuid(payload) ?? getPayloadString(payload, ['clickUuid', 'click_uuid', 'click_id', 'subid', 'sub_id', 'subid1', 'sid', 'sid1', 'fp_sid', trackingParamKey])
+  return getPartnerStackClickUuid(payload) ?? getPayloadString(payload, ['clickUuid', 'click_uuid', 'click_id', 'subid', 'sub_id', 'subid1', 'sid1', 'sid', 'fp_sid', trackingParamKey])
 }
 function resolveImpactPostbackEventNames(platform: { slug?: string | null; name?: string | null; trackingParamKey?: string | null }, payload: AnyRecord, primaryEventName: string) {
   const supported = getSupportedAffiliatePlatform(platform.slug ?? '') ?? getSupportedAffiliatePlatform(platform.trackingParamKey ?? '') ?? getSupportedAffiliatePlatform(platform.name ?? '')

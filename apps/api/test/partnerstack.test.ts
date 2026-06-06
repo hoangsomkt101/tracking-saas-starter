@@ -8,7 +8,8 @@ import {
     getPartnerStackEventDate,
     getPartnerStackEventMatch,
     getPartnerStackFieldMap,
-    getPartnerStackIdempotencyKey
+    getPartnerStackIdempotencyKey,
+    getSupportedAffiliatePlatformParamKey
 } from '@repo/shared'
 
 const clickUuid = '8ecd4270-989e-4eb3-9345-9bebf99a8c98'
@@ -83,6 +84,12 @@ function makeRewardPayload() {
 }
 
 describe('PartnerStack postback helpers', () => {
+    it('uses sid1 as PartnerStack tracking parameter', () => {
+        assert.equal(getSupportedAffiliatePlatformParamKey('partnerstack'), 'sid1')
+        assert.equal(getSupportedAffiliatePlatformParamKey('sid1'), 'sid1')
+        assert.equal(getSupportedAffiliatePlatformParamKey('sid'), 'sid1')
+    })
+
     it('extracts customer updated attribution fields and stable CompleteRegistration idempotency', () => {
         const payload = makeCustomerUpdatedPayload()
         const fields = getPartnerStackFieldMap(payload)
@@ -111,9 +118,9 @@ describe('PartnerStack postback helpers', () => {
 
         assert.equal(getPartnerStackClickUuid(payload), clickUuid)
         assert.equal(match?.eventName, 'Purchase')
-        assert.equal(money?.payoutAmount, '660')
+        assert.equal(money?.payoutAmount, '6.6')
         assert.equal(money?.currency, 'USD')
-        assert.equal(enrichment?.value, 660)
+        assert.equal(enrichment?.value, 6.6)
         assert.equal(enrichment?.orderId, 'ch_3TX2p4LmdOdiMXBs1S7cEV4Y')
         assert.equal(enrichment?.eventTimeMs, 1778779035165)
         assert.equal(enrichment?.eventId, 'Purchase_ch_3TX2p4LmdOdiMXBs1S7cEV4Y')
@@ -127,10 +134,10 @@ describe('PartnerStack postback helpers', () => {
 
         assert.equal(getPartnerStackClickUuid(payload), clickUuid)
         assert.equal(match?.eventName, 'Payout')
-        assert.equal(money?.commissionAmount, '145')
+        assert.equal(money?.commissionAmount, '1.45')
         assert.equal(money?.currency, 'USD')
-        assert.equal(enrichment?.value, 145)
-        assert.equal(enrichment?.orderValue, 660)
+        assert.equal(enrichment?.value, 1.45)
+        assert.equal(enrichment?.orderValue, 6.6)
         assert.equal(enrichment?.orderId, 'ch_3TX2p4LmdOdiMXBs1S7cEV4Y')
         assert.equal(enrichment?.eventTimeMs, 1786555035165)
         assert.equal(enrichment?.eventId, 'Payout_rwrd_GivmMOp9cvu26w')
