@@ -3177,6 +3177,21 @@ td code {
   color: hsl(var(--muted-foreground));
 }
 
+.text-button {
+  background: none;
+  border: 0;
+  color: hsl(var(--foreground));
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.text-button:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 tbody tr {
   background: hsl(var(--card));
   transition: background-color 0.15s ease;
@@ -4492,7 +4507,7 @@ th,
 }
 
 .analytics-stats-grid.analytics-stats-grid {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .analytics-stats-grid .stat-card .space-y-1\.5.p-6,

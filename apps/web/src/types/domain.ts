@@ -208,6 +208,10 @@ export type ConversionEvent = {
   requestCount?: number
   customerId?: string | null
   customerEmail?: string | null
+  affiliateRefId?: string | null
+  affiliateRefSource?: string | null
+  partnerStackCustomerKey?: string | null
+  impactRefClickId?: string | null
   spendAmount?: string | null
   payoutAmount?: string | null
   commissionAmount?: string | null
@@ -241,6 +245,10 @@ export type AnalyticsSummary = {
   payout?: number
   commission?: number
   spend?: number
+  refIds?: number
+  partnerStackRefIds?: number
+  impactRefIds?: number
+  refIdConversions?: number
 }
 
 export type AnalyticsRow = {
@@ -253,6 +261,28 @@ export type AnalyticsRow = {
   commission: number
   spend: number
   conversionRate: number
+}
+
+export type AnalyticsRefRow = {
+  id: string
+  name: string
+  refId: string
+  refSource?: string | null
+  sourceLabel: string
+  affiliatePlatformId?: string | null
+  affiliatePlatformName?: string | null
+  clicks: number
+  uniqueClicks: number
+  conversions: number
+  attributedConversions: number
+  unattributedConversions: number
+  revenue: number
+  payout: number
+  commission: number
+  spend: number
+  conversionRate: number
+  firstSeenAt?: string | null
+  lastSeenAt?: string | null
 }
 
 export type FunnelStep = {
@@ -282,6 +312,7 @@ export type AnalyticsBreakdown = {
   byCampaign: AnalyticsRow[]
   byBrand: AnalyticsRow[]
   byPlatform: AnalyticsRow[]
+  byRefId: AnalyticsRefRow[]
   byDay: AnalyticsRow[]
   funnel: FunnelStep[]
   comparison?: AnalyticsComparison | null
@@ -294,6 +325,8 @@ export type EventFilters = {
   campaignId: string
   trackingLinkId: string
   affiliatePlatformId: string
+  affiliateRefId: string
+  affiliateRefSource: string
   status: string
 }
 

@@ -300,6 +300,10 @@ model AffiliateConversionEvent {
   eventMatchedValue   String?
   customerId          String?
   customerEmail       String?
+  affiliateRefId      String?
+  affiliateRefSource  String?
+  partnerStackCustomerKey String?
+  impactRefClickId    String?
   spendAmount         Decimal?          @db.Decimal(18, 6)
   payoutAmount        Decimal?          @db.Decimal(18, 6)
   commissionAmount    Decimal?          @db.Decimal(18, 6)
@@ -319,8 +323,12 @@ model AffiliateConversionEvent {
   @@index([tenantId, affiliatePlatformId, createdAt])
   @@index([tenantId, clickEventId, createdAt])
   @@index([tenantId, eventName, createdAt])
+  @@index([tenantId, affiliateRefSource, affiliateRefId, createdAt], map: "AffConv_tenant_ref_src_ref_id_created_idx")
+  @@index([tenantId, partnerStackCustomerKey, createdAt], map: "AffConv_tenant_ps_customer_created_idx")
+  @@index([tenantId, impactRefClickId, createdAt], map: "AffConv_tenant_impact_ref_created_idx")
   @@index([affiliatePlatformId, createdAt])
   @@index([clickUuid])
+  @@index([affiliateRefId], map: "AffConv_affiliateRefId_idx")
   @@index([idempotencyKey])
 }
 

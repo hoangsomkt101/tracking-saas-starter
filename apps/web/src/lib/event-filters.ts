@@ -29,6 +29,8 @@ export function eventFilterParams(filters: EventFilters) {
     campaignId: filters.campaignId || undefined,
     trackingLinkId: filters.trackingLinkId || undefined,
     affiliatePlatformId: filters.affiliatePlatformId || undefined,
+    affiliateRefId: filters.affiliateRefId || undefined,
+    affiliateRefSource: filters.affiliateRefSource || undefined,
     status: filters.status || undefined
   }
 }

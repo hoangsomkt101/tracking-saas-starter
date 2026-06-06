@@ -24,6 +24,8 @@ export function EventFiltersForm({ ctx, showStatus = false }: { ctx: DashboardCo
       campaignId: getFormString(form, 'campaignId'),
       trackingLinkId: getFormString(form, 'trackingLinkId'),
       affiliatePlatformId: getFormString(form, 'affiliatePlatformId'),
+      affiliateRefId: getFormString(form, 'affiliateRefId'),
+      affiliateRefSource: getFormString(form, 'affiliateRefSource'),
       status: getFormString(form, 'status')
     })
   }
@@ -36,12 +38,14 @@ export function EventFiltersForm({ ctx, showStatus = false }: { ctx: DashboardCo
       </CardHeader>
       <CardContent>
         <form className="filters-form" onSubmit={handleSubmit}>
-          <label><FieldLabel>Search</FieldLabel><Input name="search" defaultValue={filters.search} placeholder="clickUuid, slug, email, event..." /></label>
+          <label><FieldLabel>Search</FieldLabel><Input name="search" defaultValue={filters.search} placeholder="clickUuid, slug, email, ref ID, event..." /></label>
           <label><FieldLabel>Start date</FieldLabel><Input name="startDate" type="date" defaultValue={filters.startDate} /></label>
           <label><FieldLabel>End date</FieldLabel><Input name="endDate" type="date" defaultValue={filters.endDate} /></label>
           <label><FieldLabel>Campaign</FieldLabel><Select name="campaignId" defaultValue={filters.campaignId}><option value="">All campaigns</option>{ctx.tenantCampaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.name}</option>)}</Select></label>
           <label><FieldLabel>Tracking link</FieldLabel><Select name="trackingLinkId" defaultValue={filters.trackingLinkId}><option value="">All links</option>{ctx.tenantTrackingLinks.map((link) => <option key={link.id} value={link.id}>{link.slug}</option>)}</Select></label>
           <label><FieldLabel>Affiliate platform</FieldLabel><Select name="affiliatePlatformId" defaultValue={filters.affiliatePlatformId}><option value="">All platforms</option>{ctx.tenantAffiliatePlatforms.map((platform) => <option key={platform.id} value={platform.id}>{platform.name}</option>)}</Select></label>
+          <label><FieldLabel>Ref ID</FieldLabel><Input name="affiliateRefId" defaultValue={filters.affiliateRefId} placeholder="PartnerStack customer key / Impact RefClickId" /></label>
+          <label><FieldLabel>Ref source</FieldLabel><Select name="affiliateRefSource" defaultValue={filters.affiliateRefSource}><option value="">All ref sources</option><option value="partnerstack_customer_key">PartnerStack customer key</option><option value="impact_ref_click_id">Impact RefClickId</option></Select></label>
           {showStatus && <label><FieldLabel>CAPI status</FieldLabel><Select name="status" defaultValue={filters.status}><option value="">All statuses</option><option value="PENDING">Pending</option><option value="PROCESSING">Processing</option><option value="DELIVERED">Delivered</option><option value="FAILED">Failed</option></Select></label>}
           {!showStatus && <input type="hidden" name="status" value={filters.status} />}
           <div className="filters-actions">

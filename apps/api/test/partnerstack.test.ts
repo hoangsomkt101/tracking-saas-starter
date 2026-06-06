@@ -5,6 +5,7 @@ import {
     getPartnerStackClickUuid,
     getPartnerStackConversionMoney,
     getPartnerStackCustomerEmail,
+    getPartnerStackCustomerId,
     getPartnerStackEventDate,
     getPartnerStackEventMatch,
     getPartnerStackFieldMap,
@@ -98,6 +99,7 @@ describe('PartnerStack postback helpers', () => {
         const enrichment = getPartnerStackCapiEnrichment(payload, 'CompleteRegistration', clickUuid)
 
         assert.equal(getPartnerStackClickUuid(payload), clickUuid)
+        assert.equal(getPartnerStackCustomerId(payload), 'cus_AcOLfPJYaM7mfF')
         assert.equal(getPartnerStackCustomerEmail(payload), '006c55d38d164e2ca31be397a69304b2@email.com')
         assert.equal(fields.email, '006c55d38d164e2ca31be397a69304b2@email.com')
         assert.equal(fields.source_type, 'link')
@@ -117,6 +119,7 @@ describe('PartnerStack postback helpers', () => {
         const enrichment = getPartnerStackCapiEnrichment(payload, 'Purchase', clickUuid)
 
         assert.equal(getPartnerStackClickUuid(payload), clickUuid)
+        assert.equal(getPartnerStackCustomerId(payload), 'cus_AcOLfPJYaM7mfF')
         assert.equal(match?.eventName, 'Purchase')
         assert.equal(money?.payoutAmount, '6.6')
         assert.equal(money?.currency, 'USD')
@@ -133,6 +136,7 @@ describe('PartnerStack postback helpers', () => {
         const enrichment = getPartnerStackCapiEnrichment(payload, 'Payout', clickUuid)
 
         assert.equal(getPartnerStackClickUuid(payload), clickUuid)
+        assert.equal(getPartnerStackCustomerId(payload), 'cus_AcOLfPJYaM7mfF')
         assert.equal(match?.eventName, 'Payout')
         assert.equal(money?.commissionAmount, '1.45')
         assert.equal(money?.currency, 'USD')

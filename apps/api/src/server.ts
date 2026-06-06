@@ -6,7 +6,7 @@ import rateLimit from '@fastify/rate-limit'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import { Prisma, prisma, type User } from '@repo/db'
-import { createClickEventsQueue, createFbc, createRedisConnection, getImpactActionTrackerEventName, getImpactCapiValue, getImpactEventMatch, getImpactPayoutNumber, getPartnerStackCapiEnrichment, getPartnerStackClickUuid, getPartnerStackConversionMoney, getPartnerStackCustomerEmail, getPartnerStackCustomerId, getPartnerStackEventDate, getPartnerStackEventMatch, getPartnerStackIdempotencyKey, getPayloadString as getSharedPayloadString, getPayloadValue as getSharedPayloadValue, getSupportedAffiliatePlatform, isFilledPayloadValue as isSharedFilledPayloadValue, isImpactPostbackPayload, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, normalizePayloadLookupKey as normalizeSharedPayloadLookupKey, parseEnvList, parseMoneyNumber, requireSupportedAffiliatePlatform, resolveAffiliateEventName, resolveImpactEventNames, validateHttpUrl, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
+import { createClickEventsQueue, createFbc, createRedisConnection, getImpactActionTrackerEventName, getImpactCapiValue, getImpactEventMatch, getImpactPayoutNumber, getImpactRefClickId, getPartnerStackCapiEnrichment, getPartnerStackClickUuid, getPartnerStackConversionMoney, getPartnerStackCustomerEmail, getPartnerStackCustomerId, getPartnerStackEventDate, getPartnerStackEventMatch, getPartnerStackIdempotencyKey, getPayloadString as getSharedPayloadString, getPayloadValue as getSharedPayloadValue, getSupportedAffiliatePlatform, isFilledPayloadValue as isSharedFilledPayloadValue, isImpactPostbackPayload, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, normalizePayloadLookupKey as normalizeSharedPayloadLookupKey, parseEnvList, parseMoneyNumber, requireSupportedAffiliatePlatform, resolveAffiliateEventName, resolveImpactEventNames, validateHttpUrl, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
 
 const app = Fastify({ logger: true })
 await app.register(helmet, { contentSecurityPolicy: false })
@@ -278,6 +278,14 @@ function extractConversionMoney(payload: AnyRecord) {
     currency: (getPayloadString(payload, ['currency', 'currencyCode', 'currency_code']) ?? 'USD').toUpperCase()
   }
 }
+function extractAffiliateRefIds(platform: { slug?: string | null; name?: string | null; trackingParamKey?: string | null }, payload: AnyRecord) {
+  const supported = getSupportedAffiliatePlatform(platform.slug ?? '') ?? getSupportedAffiliatePlatform(platform.trackingParamKey ?? '') ?? getSupportedAffiliatePlatform(platform.name ?? '')
+  const partnerStackCustomerKey = supported?.key === 'partnerstack' ? getPartnerStackCustomerId(payload) : undefined
+  const impactRefClickId = supported?.key === 'impact' ? getImpactRefClickId(payload) : undefined
+  const affiliateRefId = partnerStackCustomerKey ?? impactRefClickId
+  const affiliateRefSource = partnerStackCustomerKey ? 'partnerstack_customer_key' : impactRefClickId ? 'impact_ref_click_id' : undefined
+  return { affiliateRefId, affiliateRefSource, partnerStackCustomerKey, impactRefClickId }
+}
 function extractClickUuid(payload: AnyRecord, trackingParamKey: string) {
   return getPartnerStackClickUuid(payload) ?? getPayloadString(payload, ['clickUuid', 'click_uuid', 'click_id', 'subid', 'sub_id', 'subid1', 'sid1', 'sid', 'fp_sid', trackingParamKey])
 }
@@ -317,7 +325,8 @@ function buildCapiEnrichment(payload: AnyRecord, money: ReturnType<typeof extrac
   const value = getImpactCapiValue(payload) ?? getPayloadMoney(payload, ['value', 'amount', 'sale_amount', 'revenue', 'payout', 'payoutAmount', 'payout_amount']) ?? money.payoutAmount ?? money.commissionAmount ?? money.spendAmount
   const customerEmail = getPayloadString(payload, ['customerEmail', 'customer_email', 'email'])
   const customerId = getPayloadString(payload, ['customerId', 'customer_id', 'userId', 'user_id', 'externalId', 'external_id'])
-  return compactRecord({ value: value !== undefined ? toNumberAmount(value) : undefined, currency: money.currency, contentId: contentIds[0], contentIds: contentIds.length ? contentIds : undefined, contentName: getPayloadString(payload, ['contentName', 'content_name', 'productName', 'product_name', 'offerName', 'offer_name', 'product', 'offer']), contentType: getPayloadString(payload, ['contentType', 'content_type', 'productType', 'product_type']) ?? (contentIds.length ? 'product' : undefined), contentCategory: getPayloadString(payload, ['contentCategory', 'content_category', 'category']), orderId: getPayloadString(payload, ['orderId', 'order_id', 'transactionId', 'transaction_id']), customerId, customerEmail, customerPhone: getPayloadString(payload, ['customerPhone', 'customer_phone', 'phone']), firstName: getPayloadString(payload, ['firstName', 'first_name', 'fn']), lastName: getPayloadString(payload, ['lastName', 'last_name', 'ln']), city: getPayloadString(payload, ['city', 'ct']), state: getPayloadString(payload, ['state', 'st']), zip: getPayloadString(payload, ['zip', 'postalCode', 'postal_code', 'zp']), country: getPayloadString(payload, ['country', 'countryCode', 'country_code']), clickUuid, eventName })
+  const impactRefClickId = getImpactRefClickId(payload)
+  return compactRecord({ value: value !== undefined ? toNumberAmount(value) : undefined, currency: money.currency, contentId: contentIds[0], contentIds: contentIds.length ? contentIds : undefined, contentName: getPayloadString(payload, ['contentName', 'content_name', 'productName', 'product_name', 'offerName', 'offer_name', 'product', 'offer']), contentType: getPayloadString(payload, ['contentType', 'content_type', 'productType', 'product_type']) ?? (contentIds.length ? 'product' : undefined), contentCategory: getPayloadString(payload, ['contentCategory', 'content_category', 'category']), orderId: getPayloadString(payload, ['orderId', 'order_id', 'transactionId', 'transaction_id']), customerId, customerEmail, customerPhone: getPayloadString(payload, ['customerPhone', 'customer_phone', 'phone']), firstName: getPayloadString(payload, ['firstName', 'first_name', 'fn']), lastName: getPayloadString(payload, ['lastName', 'last_name', 'ln']), city: getPayloadString(payload, ['city', 'ct']), state: getPayloadString(payload, ['state', 'st']), zip: getPayloadString(payload, ['zip', 'postalCode', 'postal_code', 'zp']), country: getPayloadString(payload, ['country', 'countryCode', 'country_code']), clickUuid, eventName, impactRefClickId })
 }
 function buildAttributionSnapshot(click: AnyRecord | null | undefined, platform?: AnyRecord | null): AnyRecord { if (!click) return compactRecord({ matched: false, affiliatePlatform: platform ? serializeAffiliatePlatform(platform) : null }); const trackingLink = serializeTrackingLinkForAttribution(click.trackingLink); const brand = trackingLink?.brand ?? null; const campaign = click.campaign ?? trackingLink?.campaign ?? null; const affiliatePlatform = trackingLink?.affiliatePlatform ?? brand?.affiliatePlatform ?? (platform ? serializeAffiliatePlatform(platform) : null); const snapshot = { matched: true, clickEvent: { id: click.id?.toString(), tenantId: click.tenantId, campaignId: click.campaignId, trackingLinkId: click.trackingLinkId, clickUuid: click.clickUuid, ip: click.ip, userAgent: click.userAgent, referrer: click.referrer, fbclid: click.fbclid, ttclid: click.ttclid, fbp: click.fbp, fbc: click.fbc, ttp: click.ttp, createdAt: click.createdAt }, campaign, trackingLink, brand, affiliatePlatform }; return toJsonSafe(snapshot) as AnyRecord }
 function normalizeReportFrequency(value: unknown) { const frequency = typeof value === 'string' ? value.trim().toLowerCase() : 'weekly'; return ['daily', 'weekly', 'monthly'].includes(frequency) ? frequency : 'weekly' }
@@ -339,7 +348,21 @@ function addCreatedAtFilter(where: AnyRecord, q: AnyRecord) { const createdAt = 
 function buildClickEventWhere(userId: string, q: AnyRecord, options: { includeSearch?: boolean; includeDate?: boolean; includeTrackingScriptViewContent?: boolean } = {}) { const f = getEventFilters(q); const includeSearch = options.includeSearch ?? true; const includeDate = options.includeDate ?? true; const includeTrackingScriptViewContent = options.includeTrackingScriptViewContent ?? false; const where: AnyRecord = { tenant: { ownerUserId: userId } }; if (!includeTrackingScriptViewContent) excludeTrackingScriptViewContentClicks(where); if (f.tenantId) where.tenantId = f.tenantId; if (f.campaignId) where.campaignId = f.campaignId; if (f.trackingLinkId) where.trackingLinkId = f.trackingLinkId; if (includeDate) addCreatedAtFilter(where, q); const trackingLink = buildTrackingLinkFilter(q); if (hasKeys(trackingLink)) where.trackingLink = trackingLink; if (includeSearch && f.search) where.OR = [{ clickUuid: containsInsensitive(f.search) }, { fbclid: containsInsensitive(f.search) }, { ttclid: containsInsensitive(f.search) }, { fbp: containsInsensitive(f.search) }, { fbc: containsInsensitive(f.search) }, { ip: containsInsensitive(f.search) }, { referrer: containsInsensitive(f.search) }, { trackingLink: { slug: containsInsensitive(f.search) } }]; return where }
 function buildCapiEventWhere(userId: string, q: AnyRecord) { const f = getEventFilters(q); const where: AnyRecord = { tenant: { ownerUserId: userId } }; if (f.tenantId) where.tenantId = f.tenantId; addCreatedAtFilter(where, q); if (f.status) where.status = f.status.toUpperCase(); const clickEvent: AnyRecord = {}; if (f.campaignId) clickEvent.campaignId = f.campaignId; if (f.trackingLinkId) clickEvent.trackingLinkId = f.trackingLinkId; const trackingLink = buildTrackingLinkFilter(q); if (hasKeys(trackingLink)) clickEvent.trackingLink = trackingLink; if (hasKeys(clickEvent)) where.clickEvent = clickEvent; if (f.search) where.OR = [{ eventName: containsInsensitive(f.search) }, { lastError: containsInsensitive(f.search) }, { platform: containsInsensitive(f.search) }, { clickEvent: { clickUuid: containsInsensitive(f.search) } }, { clickEvent: { trackingLink: { slug: containsInsensitive(f.search) } } }]; return where }
 async function getMatchingClickUuidsForConversionFilters(userId: string, q: AnyRecord) { const f = getEventFilters(q); if (!f.campaignId && !f.brandId && !f.trackingLinkId) return undefined; const rows = await prisma.clickEvent.findMany({ where: buildClickEventWhere(userId, q, { includeSearch: false, includeDate: false }), select: { clickUuid: true } }); return rows.map((row) => row.clickUuid) }
-async function buildConversionEventWhere(userId: string, q: AnyRecord) { const f = getEventFilters(q); const where: AnyRecord = { tenant: { ownerUserId: userId } }; if (f.tenantId) where.tenantId = f.tenantId; addCreatedAtFilter(where, q); if (f.affiliatePlatformId) where.affiliatePlatformId = f.affiliatePlatformId; if (f.search) where.OR = [{ clickUuid: containsInsensitive(f.search) }, { customerId: containsInsensitive(f.search) }, { customerEmail: containsInsensitive(f.search) }, { eventName: containsInsensitive(f.search) }, { eventRule: containsInsensitive(f.search) }, { receivedMethod: containsInsensitive(f.search) }, { affiliatePlatform: { name: containsInsensitive(f.search) } }]; const matchingClickUuids = await getMatchingClickUuidsForConversionFilters(userId, q); if (matchingClickUuids) where.clickUuid = { in: matchingClickUuids.length ? matchingClickUuids : ['__no_matching_click_uuid__'] }; return where }
+async function buildConversionEventWhere(userId: string, q: AnyRecord) {
+  const f = getEventFilters(q)
+  const where: AnyRecord = { tenant: { ownerUserId: userId } }
+  const affiliateRefId = optionalQueryString(q.affiliateRefId) ?? optionalQueryString(q.refId)
+  const affiliateRefSource = optionalQueryString(q.affiliateRefSource) ?? optionalQueryString(q.refSource)
+  if (f.tenantId) where.tenantId = f.tenantId
+  addCreatedAtFilter(where, q)
+  if (f.affiliatePlatformId) where.affiliatePlatformId = f.affiliatePlatformId
+  if (affiliateRefId) where.affiliateRefId = affiliateRefId
+  if (affiliateRefSource) where.affiliateRefSource = affiliateRefSource
+  if (f.search) where.OR = [{ clickUuid: containsInsensitive(f.search) }, { customerId: containsInsensitive(f.search) }, { customerEmail: containsInsensitive(f.search) }, { affiliateRefId: containsInsensitive(f.search) }, { affiliateRefSource: containsInsensitive(f.search) }, { partnerStackCustomerKey: containsInsensitive(f.search) }, { impactRefClickId: containsInsensitive(f.search) }, { eventName: containsInsensitive(f.search) }, { eventRule: containsInsensitive(f.search) }, { receivedMethod: containsInsensitive(f.search) }, { affiliatePlatform: { name: containsInsensitive(f.search) } }]
+  const matchingClickUuids = await getMatchingClickUuidsForConversionFilters(userId, q)
+  if (matchingClickUuids) where.clickUuid = { in: matchingClickUuids.length ? matchingClickUuids : ['__no_matching_click_uuid__'] }
+  return where
+}
 function buildActivityLogSql(userId: string, q: AnyRecord) { const clauses = ['tenant."ownerUserId" = $1']; const params: unknown[] = [userId]; const add = (sql: string, value: unknown) => { params.push(value); clauses.push(sql.replace('?', `$${params.length}`)) }; const tenantId = optionalQueryString(q.tenantId); const source = optionalQueryString(q.source); const eventType = optionalQueryString(q.eventType); const entityType = optionalQueryString(q.entityType); const entityId = optionalQueryString(q.entityId); const search = optionalQueryString(q.search); const level = normalizeActivityLogLevel(q.level); const createdAt = getCreatedAtFilter(q); if (tenantId) add('log."tenantId" = ?', tenantId); if (source) add('log."source" = ?', source); if (eventType) add('log."eventType" = ?', eventType); if (entityType) add('log."entityType" = ?', entityType); if (entityId) add('log."entityId" = ?', entityId); if (level) add('log."level" = ?::"ActivityLogLevel"', level); if (createdAt?.gte) add('log."createdAt" >= ?', createdAt.gte); if (createdAt?.lte) add('log."createdAt" <= ?', createdAt.lte); if (search) { params.push(`%${search}%`); const ref = `$${params.length}`; clauses.push(`(log."message" ILIKE ${ref} OR log."eventType" ILIKE ${ref} OR log."source" ILIKE ${ref} OR log."entityType" ILIKE ${ref} OR log."entityId" ILIKE ${ref})`) } return { whereSql: `WHERE ${clauses.join(' AND ')}`, params } }
 function serializeTrackingLinkForAttribution(link: AnyRecord | null | undefined): AnyRecord | null { if (!link) return null; const brand = link.brand ? { ...link.brand, affiliatePlatform: link.brand.affiliatePlatform ? serializeAffiliatePlatform(link.brand.affiliatePlatform) : link.brand.affiliatePlatform } : null; const affiliatePlatform = link.affiliatePlatform ? serializeAffiliatePlatform(link.affiliatePlatform) : brand?.affiliatePlatform ?? null; return { ...link, brand, affiliatePlatform } }
 const postbackEventDateKeys = ['EventDate', 'eventDate', 'event_date', 'CreationDate', 'creationDate', 'creation_date', 'CreatedDate', 'createdDate', 'created_date', 'ConversionDate', 'conversionDate', 'conversion_date', 'TransactionDate', 'transactionDate', 'transaction_date', 'Timestamp', 'timestamp']
@@ -363,6 +386,31 @@ async function attachAttributionToConversions(rows: AnyRecord[]) { const rowsNee
 function emptyAnalyticsRow(id: string, name: string) { return { id, name, clicks: 0, conversions: 0, revenue: 0, payout: 0, commission: 0, spend: 0, conversionRate: 0 } }
 function addConversionMoney(row: AnyRecord, conversion: AnyRecord) { const payout = toNumberAmount(conversion.payoutAmount); const commission = toNumberAmount(conversion.commissionAmount); const spend = toNumberAmount(conversion.spendAmount); row.payout += payout; row.commission += commission; row.spend += spend; row.revenue += payout || commission }
 function finalizeAnalyticsRows(map: Map<string, AnyRecord>, limit = 20): AnyRecord[] { const rows: AnyRecord[] = ([...map.values()] as AnyRecord[]).map((row) => ({ ...row, conversionRate: row.clicks ? row.conversions / row.clicks : 0 })); return rows.sort((a: AnyRecord, b: AnyRecord) => b.conversions - a.conversions || b.clicks - a.clicks || String(a.name).localeCompare(String(b.name))).slice(0, limit) }
+function getAffiliateRefSourceLabel(source: unknown) { return source === 'partnerstack_customer_key' ? 'PartnerStack customer key' : source === 'impact_ref_click_id' ? 'Impact RefClickId' : 'Affiliate ref ID' }
+function emptyAffiliateRefAnalyticsRow(refId: string, refSource?: string | null, platform?: AnyRecord | null) { return { id: `${refSource ?? 'unknown'}:${refId}`, name: refId, refId, refSource: refSource ?? null, sourceLabel: getAffiliateRefSourceLabel(refSource), affiliatePlatformId: platform?.id ?? null, affiliatePlatformName: platform?.name ?? null, clicks: 0, uniqueClicks: 0, conversions: 0, attributedConversions: 0, unattributedConversions: 0, revenue: 0, payout: 0, commission: 0, spend: 0, conversionRate: 0, firstSeenAt: null as string | null, lastSeenAt: null as string | null, _clickUuids: new Set<string>() } }
+function addAffiliateRefConversion(map: Map<string, AnyRecord>, conversion: AnyRecord) {
+  const refId = typeof conversion.affiliateRefId === 'string' && conversion.affiliateRefId.trim() ? conversion.affiliateRefId.trim() : null
+  if (!refId) return
+  const refSource = typeof conversion.affiliateRefSource === 'string' && conversion.affiliateRefSource.trim() ? conversion.affiliateRefSource.trim() : null
+  const key = `${refSource ?? 'unknown'}:${refId}`
+  if (!map.has(key)) map.set(key, emptyAffiliateRefAnalyticsRow(refId, refSource, conversion.affiliatePlatform))
+  const row = map.get(key) as AnyRecord
+  row.conversions += 1
+  if (conversion.attribution?.matched) row.attributedConversions += 1
+  else row.unattributedConversions += 1
+  if (typeof conversion.clickUuid === 'string' && conversion.clickUuid.trim()) row._clickUuids.add(conversion.clickUuid)
+  const createdAt = conversion.createdAt instanceof Date ? conversion.createdAt.toISOString() : String(conversion.createdAt)
+  row.firstSeenAt = !row.firstSeenAt || createdAt < row.firstSeenAt ? createdAt : row.firstSeenAt
+  row.lastSeenAt = !row.lastSeenAt || createdAt > row.lastSeenAt ? createdAt : row.lastSeenAt
+  addConversionMoney(row, conversion)
+}
+function finalizeAffiliateRefRows(map: Map<string, AnyRecord>, limit = 50): AnyRecord[] {
+  return ([...map.values()] as AnyRecord[]).map((row) => {
+    const uniqueClicks = row._clickUuids instanceof Set ? row._clickUuids.size : 0
+    const { _clickUuids, ...clean } = row
+    return { ...clean, uniqueClicks, clicks: uniqueClicks, conversionRate: uniqueClicks ? clean.conversions / uniqueClicks : 0 }
+  }).sort((a: AnyRecord, b: AnyRecord) => b.conversions - a.conversions || b.payout - a.payout || String(a.refId).localeCompare(String(b.refId))).slice(0, limit)
+}
 function getDayKey(value: string | Date) { return new Date(value).toISOString().slice(0, 10) }
 async function buildAnalyticsBreakdown(userId: string, q: AnyRecord) {
   const clickWhere = buildClickEventWhere(userId, q)
@@ -379,6 +427,7 @@ async function buildAnalyticsBreakdown(userId: string, q: AnyRecord) {
   const byCampaign = new Map<string, AnyRecord>()
   const byBrand = new Map<string, AnyRecord>()
   const byPlatform = new Map<string, AnyRecord>()
+  const byRefId = new Map<string, AnyRecord>()
   const byDay = new Map<string, AnyRecord>()
   const ensure = (map: Map<string, AnyRecord>, id: string, name: string): AnyRecord => { if (!map.has(id)) map.set(id, emptyAnalyticsRow(id, name)); return map.get(id) as AnyRecord }
 
@@ -402,6 +451,7 @@ async function buildAnalyticsBreakdown(userId: string, q: AnyRecord) {
     const day = ensure(byDay, getDayKey(conversion.createdAt), getDayKey(conversion.createdAt))
     day.conversions += 1
     addConversionMoney(day, conversion)
+    addAffiliateRefConversion(byRefId, conversion)
     const attribution = conversion.attribution
     if (attribution?.matched) {
       attributedConversions += 1
@@ -419,13 +469,17 @@ async function buildAnalyticsBreakdown(userId: string, q: AnyRecord) {
   summary.unattributedConversions = conversions.length - attributedConversions
   summary.conversionRate = summary.clicks ? summary.conversions / summary.clicks : 0
   summary.attributedConversionRate = summary.clicks ? attributedConversions / summary.clicks : 0
+  summary.refIds = byRefId.size
+  summary.partnerStackRefIds = [...byRefId.values()].filter((row) => row.refSource === 'partnerstack_customer_key').length
+  summary.impactRefIds = [...byRefId.values()].filter((row) => row.refSource === 'impact_ref_click_id').length
+  summary.refIdConversions = [...byRefId.values()].reduce((total, row) => total + row.conversions, 0)
   const funnel = [
     { key: 'clicks', label: 'Clicks', value: summary.clicks, rateFromPrevious: 1, rateFromStart: 1 },
     { key: 'attributedConversions', label: 'Attributed conversions', value: summary.attributedConversions, rateFromPrevious: summary.clicks ? summary.attributedConversions / summary.clicks : 0, rateFromStart: summary.clicks ? summary.attributedConversions / summary.clicks : 0 },
     { key: 'capiDelivered', label: 'CAPI delivered', value: summary.capiDelivered, rateFromPrevious: summary.attributedConversions ? summary.capiDelivered / summary.attributedConversions : 0, rateFromStart: summary.clicks ? summary.capiDelivered / summary.clicks : 0 }
   ]
   const comparison = await buildPeriodComparison(userId, q, summary)
-  return { summary, byCampaign: finalizeAnalyticsRows(byCampaign), byBrand: finalizeAnalyticsRows(byBrand), byPlatform: finalizeAnalyticsRows(byPlatform), byDay: finalizeAnalyticsRows(byDay, 60).sort((a, b) => String(a.id).localeCompare(String(b.id))), funnel, comparison }
+  return { summary, byCampaign: finalizeAnalyticsRows(byCampaign), byBrand: finalizeAnalyticsRows(byBrand), byPlatform: finalizeAnalyticsRows(byPlatform), byRefId: finalizeAffiliateRefRows(byRefId), byDay: finalizeAnalyticsRows(byDay, 60).sort((a, b) => String(a.id).localeCompare(String(b.id))), funnel, comparison }
 }
 
 app.addHook('onSend', async (req, reply, payload) => { applyCorsHeaders(req, reply); return payload })
@@ -1171,12 +1225,12 @@ app.get('/analytics/export.csv', async (req, reply) => {
     rows = capiRows.map((row: AnyRecord) => ({ id: row.id.toString(), createdAt: row.createdAt, platform: row.platform, eventName: row.eventName, source: row.source, sourceId: row.sourceId, status: row.status, attempts: row.attempts, clickUuid: row.clickEvent?.clickUuid, trackingLink: row.clickEvent?.trackingLink?.slug, lastError: row.lastError }))
   } else if (type === 'breakdown') {
     const breakdown = await buildAnalyticsBreakdown(u.id, q)
-    headers = ['group', 'id', 'name', 'clicks', 'conversions', 'conversionRate', 'revenue', 'payout', 'commission', 'spend']
-    rows = ['byCampaign', 'byBrand', 'byPlatform', 'byDay'].flatMap((group) => (breakdown as AnyRecord)[group].map((row: AnyRecord) => ({ group, ...row })))
+    headers = ['group', 'id', 'name', 'refId', 'refSource', 'sourceLabel', 'affiliatePlatform', 'clicks', 'uniqueClicks', 'conversions', 'attributedConversions', 'unattributedConversions', 'conversionRate', 'revenue', 'payout', 'commission', 'spend']
+    rows = ['byCampaign', 'byBrand', 'byPlatform', 'byRefId', 'byDay'].flatMap((group) => (breakdown as AnyRecord)[group].map((row: AnyRecord) => ({ group, affiliatePlatform: row.affiliatePlatformName, ...row })))
   } else {
     const conversionRows = await attachAttributionToConversions(await prisma.affiliateConversionEvent.findMany({ where: await buildConversionEventWhere(u.id, q), include: { affiliatePlatform: true }, orderBy: { createdAt: 'desc' }, take: limit }))
-    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'matched', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'postbackDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
-    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, matched: row.attribution?.matched, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, postbackDelaySeconds: row.postbackDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
+    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'affiliateRefId', 'affiliateRefSource', 'partnerStackCustomerKey', 'impactRefClickId', 'matched', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'postbackDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
+    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, affiliateRefId: row.affiliateRefId, affiliateRefSource: row.affiliateRefSource, partnerStackCustomerKey: row.partnerStackCustomerKey, impactRefClickId: row.impactRefClickId, matched: row.attribution?.matched, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, postbackDelaySeconds: row.postbackDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
   }
 
   return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="${type}-export.csv"`).send(toCsv(headers, rows))
@@ -1204,6 +1258,7 @@ app.route({
     const eventMatch = resolvePlatformEventName(platform, payload)
     const eventNamesToSend = resolveImpactPostbackEventNames(platform, payload, eventMatch.eventName)
     const money = extractConversionMoney(payload)
+    const affiliateRefs = extractAffiliateRefIds(platform, payload)
     const capiEnrichment = buildCapiEnrichment(payload, money, clickUuid, eventMatch.eventName)
     const idempotencyKey = buildAffiliatePostbackIdempotencyKey(req, platform.id, payload, clickUuid, eventMatch.eventName)
     const now = new Date()
@@ -1222,6 +1277,10 @@ app.route({
       eventMatchedValue: eventMatch.eventMatchedValue,
       customerId: getPartnerStackCustomerId(payload) ?? getPayloadString(payload, ['customerId', 'customer_id', 'userId', 'user_id', 'externalId', 'external_id']),
       customerEmail: getPartnerStackCustomerEmail(payload) ?? getPayloadString(payload, ['customerEmail', 'customer_email', 'email']),
+      affiliateRefId: affiliateRefs.affiliateRefId,
+      affiliateRefSource: affiliateRefs.affiliateRefSource,
+      partnerStackCustomerKey: affiliateRefs.partnerStackCustomerKey,
+      impactRefClickId: affiliateRefs.impactRefClickId,
       spendAmount: money.spendAmount,
       payoutAmount: money.payoutAmount,
       commissionAmount: money.commissionAmount,
@@ -1254,8 +1313,8 @@ app.route({
     }
 
     if (!duplicate && clickEvent && conversion) await Promise.all(eventNamesToSend.map((eventName) => enqueueClick(clickEvent, eventName, 'affiliate_conversion', conversion.id.toString())))
-    if (conversion) await createActivityLog({ tenantId: platform.tenantId, source: 'affiliate-webhook', eventType: duplicate ? 'affiliate_conversion.duplicate' : 'affiliate_conversion.received', message: `${duplicate ? 'Duplicate' : 'New'} affiliate conversion received from "${platform.name}"`, entityType: 'conversionEvent', entityId: conversion.id, metadata: { conversionEventId: conversion.id, affiliatePlatformId: platform.id, platformSlug: platform.slug, method, eventName: eventMatch.eventName, eventNames: eventNamesToSend, eventRule: eventMatch.eventRule, clickUuid, matchedClick: Boolean(clickEvent), clickEventId: clickEvent?.id, duplicate, requestCount: conversion.requestCount, idempotencyKey, payoutAmount: money.payoutAmount, impactPayoutNumber: getImpactPayoutNumber(payload), impactActionTrackerName: getImpactActionTrackerEventName(payload), commissionAmount: money.commissionAmount, spendAmount: money.spendAmount, currency: money.currency } })
-    return reply.code(duplicate ? 200 : 201).send({ ok: true, duplicate, id: conversion?.id.toString(), requestCount: conversion?.requestCount, eventName: eventMatch.eventName, eventNames: eventNamesToSend, idempotencyKey })
+    if (conversion) await createActivityLog({ tenantId: platform.tenantId, source: 'affiliate-webhook', eventType: duplicate ? 'affiliate_conversion.duplicate' : 'affiliate_conversion.received', message: `${duplicate ? 'Duplicate' : 'New'} affiliate conversion received from "${platform.name}"`, entityType: 'conversionEvent', entityId: conversion.id, metadata: { conversionEventId: conversion.id, affiliatePlatformId: platform.id, platformSlug: platform.slug, method, eventName: eventMatch.eventName, eventNames: eventNamesToSend, eventRule: eventMatch.eventRule, clickUuid, affiliateRefId: affiliateRefs.affiliateRefId, affiliateRefSource: affiliateRefs.affiliateRefSource, partnerStackCustomerKey: affiliateRefs.partnerStackCustomerKey, impactRefClickId: affiliateRefs.impactRefClickId, matchedClick: Boolean(clickEvent), clickEventId: clickEvent?.id, duplicate, requestCount: conversion.requestCount, idempotencyKey, payoutAmount: money.payoutAmount, impactPayoutNumber: getImpactPayoutNumber(payload), impactActionTrackerName: getImpactActionTrackerEventName(payload), commissionAmount: money.commissionAmount, spendAmount: money.spendAmount, currency: money.currency } })
+    return reply.code(duplicate ? 200 : 201).send({ ok: true, duplicate, id: conversion?.id.toString(), requestCount: conversion?.requestCount, eventName: eventMatch.eventName, eventNames: eventNamesToSend, idempotencyKey, affiliateRefId: affiliateRefs.affiliateRefId, affiliateRefSource: affiliateRefs.affiliateRefSource })
   }
 })
 

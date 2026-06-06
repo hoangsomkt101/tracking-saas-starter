@@ -5,6 +5,7 @@ import {
     getImpactCapiValue,
     getImpactEventMatch,
     getImpactPayoutNumber,
+    getImpactRefClickId,
     isImpactPostbackPayload,
     parseMoneyNumber,
     resolveImpactEventNames
@@ -110,6 +111,7 @@ describe('Impact postback helpers', () => {
             assert.ok(primaryEvent)
             assert.deepEqual(resolveImpactEventNames(payload, primaryEvent.eventName), fixture.expectedEventNames)
             assert.equal(getImpactActionTrackerAmountValue(payload, fixture.actionTrackerName), fixture.expectedActionValue)
+            assert.equal(getImpactRefClickId(payload), 'impact-ref-click-id')
         })
     }
 

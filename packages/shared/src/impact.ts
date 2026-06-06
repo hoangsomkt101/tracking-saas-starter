@@ -93,6 +93,10 @@ export function getImpactActionTrackerEventName(payload: ImpactPayloadRecord) {
     return getPayloadString(payload, ['ActionTrackerName', 'actionTrackerName', 'action_tracker_name'])
 }
 
+export function getImpactRefClickId(payload: ImpactPayloadRecord) {
+    return getPayloadString(payload, ['RefClickId', 'refClickId', 'ref_click_id', 'refclickid'])
+}
+
 export function resolveImpactEventNames(payload: ImpactPayloadRecord, primaryEventName: string) {
     const names = [primaryEventName]
 
