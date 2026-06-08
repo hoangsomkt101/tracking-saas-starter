@@ -423,10 +423,10 @@ function getPostbackEventDate(payload: AnyRecord) {
   }
   return null
 }
-function getPostbackDelaySeconds(receivedAt: unknown, eventAt: Date) { const received = receivedAt instanceof Date ? receivedAt : new Date(String(receivedAt)); if (Number.isNaN(received.getTime())) return null; return Math.round((received.getTime() - eventAt.getTime()) / 1000) }
+function getPostbackDelaySeconds(receivedAt: unknown, eventAt: unknown) { const received = receivedAt instanceof Date ? receivedAt : new Date(String(receivedAt)); const event = eventAt instanceof Date ? eventAt : new Date(String(eventAt)); if (Number.isNaN(received.getTime()) || Number.isNaN(event.getTime())) return null; return Math.round((received.getTime() - event.getTime()) / 1000) }
 type PartnerStackMoneyInfo = AnyRecord & { transactionKey?: string; rewardKey?: string; orderAmount?: unknown; payoutAmount?: unknown; commissionAmount?: unknown; rewardStatus?: unknown }
 type PartnerStackPairing = { pairedTransactionKeys: Set<string> }
-type ConversionCapiTiming = { sentAt: Date; status?: string | null }
+type ConversionCapiTiming = { updatedAt: Date; status?: string | null }
 function getPartnerStackMoneyInfo(payload: AnyRecord): PartnerStackMoneyInfo | null { return getPartnerStackConversionMoney(payload) as PartnerStackMoneyInfo | null }
 function partnerStackPairKey(tenantId: unknown, affiliatePlatformId: unknown, transactionKey: unknown) { const key = typeof transactionKey === 'string' && transactionKey.trim() ? transactionKey.trim() : undefined; return typeof tenantId === 'string' && typeof affiliatePlatformId === 'string' && key ? `${tenantId}\u0000${affiliatePlatformId}\u0000${key}` : undefined }
 function partnerStackTransactionIdempotencyKey(transactionKey: string) { return `partnerstack:transaction:${transactionKey}` }
@@ -491,9 +491,9 @@ function serializeConversion(e: AnyRecord, click?: AnyRecord, pairing?: PartnerS
     postbackEventDateValue: postbackEventDate?.raw ?? null,
     postbackDelaySeconds: postbackEventDate ? getPostbackDelaySeconds(e.createdAt, postbackEventDate.date) : null,
     lastPostbackDelaySeconds: postbackEventDate ? getPostbackDelaySeconds(e.lastReceivedAt, postbackEventDate.date) : null,
-    capiSentAt: capiTiming?.sentAt ? capiTiming.sentAt.toISOString() : null,
+    capiUpdatedAt: capiTiming?.updatedAt ? capiTiming.updatedAt.toISOString() : null,
     capiStatus: capiTiming?.status ?? null,
-    capiDelaySeconds: postbackEventDate && capiTiming?.sentAt ? getPostbackDelaySeconds(capiTiming.sentAt, postbackEventDate.date) : null
+    capiDelaySeconds: capiTiming?.updatedAt ? getPostbackDelaySeconds(capiTiming.updatedAt, e.createdAt) : null
   }
 }
 async function attachAttributionToConversions(rows: AnyRecord[]) {
@@ -505,16 +505,16 @@ async function attachAttributionToConversions(rows: AnyRecord[]) {
   const [clicks, partnerStackPairing, capiEvents] = await Promise.all([
     uuids.length ? prisma.clickEvent.findMany({ where: { clickUuid: { in: uuids }, ...(tenantIds.length ? { tenantId: { in: tenantIds } } : {}) }, include: { campaign: true, trackingLink: { include: { campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } } }) : Promise.resolve([]),
     buildPartnerStackPairing(rows),
-    conversionSourceIds.length ? prisma.capiEvent.findMany({ where: { source: 'affiliate_conversion', sourceId: { in: conversionSourceIds } }, select: { sourceId: true, status: true, createdAt: true } }) : Promise.resolve([])
+    conversionSourceIds.length ? prisma.capiEvent.findMany({ where: { source: 'affiliate_conversion', sourceId: { in: conversionSourceIds } }, select: { sourceId: true, status: true, updatedAt: true } }) : Promise.resolve([])
   ])
   const byUuid = new Map(clicks.map((click) => [click.clickUuid, click]))
   const capiTimingBySourceId = new Map<string, ConversionCapiTiming>()
   for (const capiEvent of capiEvents as AnyRecord[]) {
     const sourceId = typeof capiEvent.sourceId === 'string' ? capiEvent.sourceId : ''
-    const sentAt = capiEvent.createdAt instanceof Date ? capiEvent.createdAt : new Date(String(capiEvent.createdAt))
-    if (!sourceId || Number.isNaN(sentAt.getTime())) continue
+    const updatedAt = capiEvent.updatedAt instanceof Date ? capiEvent.updatedAt : new Date(String(capiEvent.updatedAt))
+    if (!sourceId || Number.isNaN(updatedAt.getTime())) continue
     const current = capiTimingBySourceId.get(sourceId)
-    if (!current || sentAt.getTime() < current.sentAt.getTime()) capiTimingBySourceId.set(sourceId, { sentAt, status: typeof capiEvent.status === 'string' ? capiEvent.status : null })
+    if (!current || updatedAt.getTime() < current.updatedAt.getTime()) capiTimingBySourceId.set(sourceId, { updatedAt, status: typeof capiEvent.status === 'string' ? capiEvent.status : null })
   }
   return rows.map((row) => serializeConversion(row, !row.attributionSnapshot && row.clickUuid ? byUuid.get(row.clickUuid) : undefined, partnerStackPairing, capiTimingBySourceId.get(row.id.toString())))
 }
@@ -1364,8 +1364,8 @@ app.get('/analytics/export.csv', async (req, reply) => {
     rows = ['byCampaign', 'byBrand', 'byPlatform', 'byRefId', 'byDay'].flatMap((group) => (breakdown as AnyRecord)[group].map((row: AnyRecord) => ({ group, affiliatePlatform: row.affiliatePlatformName, ...row })))
   } else {
     const conversionRows = await attachAttributionToConversions(await prisma.affiliateConversionEvent.findMany({ where: await buildConversionEventWhere(u.id, q), include: { affiliatePlatform: true }, orderBy: { createdAt: 'desc' }, take: limit }))
-    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'affiliateRefId', 'affiliateRefSource', 'partnerStackCustomerKey', 'impactRefClickId', 'matched', 'attributionMethod', 'matchedByRefId', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'capiSentAt', 'capiStatus', 'capiDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
-    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, affiliateRefId: row.affiliateRefId, affiliateRefSource: row.affiliateRefSource, partnerStackCustomerKey: row.partnerStackCustomerKey, impactRefClickId: row.impactRefClickId, matched: row.attribution?.matched, attributionMethod: row.attribution?.attributionMethod, matchedByRefId: row.attribution?.matchedByRefId, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, capiSentAt: row.capiSentAt, capiStatus: row.capiStatus, capiDelaySeconds: row.capiDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
+    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'affiliateRefId', 'affiliateRefSource', 'partnerStackCustomerKey', 'impactRefClickId', 'matched', 'attributionMethod', 'matchedByRefId', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'capiUpdatedAt', 'capiStatus', 'capiDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
+    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, affiliateRefId: row.affiliateRefId, affiliateRefSource: row.affiliateRefSource, partnerStackCustomerKey: row.partnerStackCustomerKey, impactRefClickId: row.impactRefClickId, matched: row.attribution?.matched, attributionMethod: row.attribution?.attributionMethod, matchedByRefId: row.attribution?.matchedByRefId, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, capiUpdatedAt: row.capiUpdatedAt, capiStatus: row.capiStatus, capiDelaySeconds: row.capiDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
   }
 
   return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="${type}-export.csv"`).send(toCsv(headers, rows))
