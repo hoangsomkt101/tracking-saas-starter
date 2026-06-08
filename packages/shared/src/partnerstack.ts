@@ -244,6 +244,14 @@ export function getPartnerStackEventDate(payload: PartnerStackPayloadRecord) {
     return { field: 'data.updated_at', raw: raw instanceof Date ? raw.toISOString() : String(raw), date }
 }
 
+export function getPartnerStackCreatedDate(payload: PartnerStackPayloadRecord) {
+    if (!isPartnerStackPostbackPayload(payload)) return null
+    const raw = firstFilledPathValue(payload, ['data.created_at'])
+    const date = parsePartnerStackTimestamp(raw)
+    if (!date || Number.isNaN(date.getTime())) return null
+    return { field: 'data.created_at', raw: raw instanceof Date ? raw.toISOString() : String(raw), date }
+}
+
 export function getPartnerStackUpdateDate(payload: PartnerStackPayloadRecord) {
     if (!isPartnerStackPostbackPayload(payload)) return null
     const raw = firstFilledPathValue(payload, ['data.updated_at'])

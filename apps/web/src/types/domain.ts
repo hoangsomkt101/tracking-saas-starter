@@ -222,6 +222,9 @@ export type ConversionEvent = {
   postbackEventAt?: string | null
   postbackEventDateField?: string | null
   postbackEventDateValue?: string | null
+  firstReceivedAt?: string | null
+  firstReceivedField?: string | null
+  firstReceivedValue?: string | null
   postbackDelaySeconds?: number | null
   capiUpdatedAt?: string | null
   capiStatus?: CapiEvent['status'] | string | null

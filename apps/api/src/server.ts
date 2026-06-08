@@ -6,7 +6,7 @@ import rateLimit from '@fastify/rate-limit'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import { Prisma, prisma, type User } from '@repo/db'
-import { createClickEventsQueue, createFbc, createRedisConnection, getImpactActionTrackerEventName, getImpactCapiValue, getImpactEventMatch, getImpactPayoutNumber, getImpactRefClickId, getPartnerStackCapiEnrichment, getPartnerStackClickUuid, getPartnerStackConversionMoney, getPartnerStackCustomerEmail, getPartnerStackCustomerId, getPartnerStackEventDate, getPartnerStackEventMatch, getPartnerStackIdempotencyKey, getPayloadString as getSharedPayloadString, getPayloadValue as getSharedPayloadValue, getSupportedAffiliatePlatform, isFilledPayloadValue as isSharedFilledPayloadValue, isImpactPostbackPayload, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, normalizePayloadLookupKey as normalizeSharedPayloadLookupKey, parseEnvList, parseMoneyNumber, requireSupportedAffiliatePlatform, resolveAffiliateEventName, resolveImpactEventNames, validateHttpUrl, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
+import { createClickEventsQueue, createFbc, createRedisConnection, getImpactActionTrackerEventName, getImpactCapiValue, getImpactEventMatch, getImpactPayoutNumber, getImpactRefClickId, getPartnerStackCapiEnrichment, getPartnerStackClickUuid, getPartnerStackConversionMoney, getPartnerStackCreatedDate, getPartnerStackCustomerEmail, getPartnerStackCustomerId, getPartnerStackEventDate, getPartnerStackEventMatch, getPartnerStackIdempotencyKey, getPayloadString as getSharedPayloadString, getPayloadValue as getSharedPayloadValue, getSupportedAffiliatePlatform, isFilledPayloadValue as isSharedFilledPayloadValue, isImpactPostbackPayload, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, normalizePayloadLookupKey as normalizeSharedPayloadLookupKey, parseEnvList, parseMoneyNumber, requireSupportedAffiliatePlatform, resolveAffiliateEventName, resolveImpactEventNames, validateHttpUrl, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
 
 const app = Fastify({ logger: true })
 await app.register(helmet, { contentSecurityPolicy: false })
@@ -423,6 +423,11 @@ function getPostbackEventDate(payload: AnyRecord) {
   }
   return null
 }
+function getPostbackFirstReceivedDate(payload: AnyRecord) {
+  const partnerStackDate = getPartnerStackCreatedDate(payload)
+  if (partnerStackDate) return partnerStackDate
+  return getPostbackEventDate(payload)
+}
 function getPostbackDelaySeconds(receivedAt: unknown, eventAt: unknown) { const received = receivedAt instanceof Date ? receivedAt : new Date(String(receivedAt)); const event = eventAt instanceof Date ? eventAt : new Date(String(eventAt)); if (Number.isNaN(received.getTime()) || Number.isNaN(event.getTime())) return null; return Math.round((received.getTime() - event.getTime()) / 1000) }
 type PartnerStackMoneyInfo = AnyRecord & { transactionKey?: string; rewardKey?: string; orderAmount?: unknown; payoutAmount?: unknown; commissionAmount?: unknown; rewardStatus?: unknown }
 type PartnerStackPairing = { pairedTransactionKeys: Set<string> }
@@ -469,6 +474,8 @@ function serializeConversion(e: AnyRecord, click?: AnyRecord, pairing?: PartnerS
   const storedSnapshot = e.attributionSnapshot && typeof e.attributionSnapshot === 'object' ? e.attributionSnapshot as AnyRecord : null
   const rawPayload = getPlainRecord(e.rawPayload) ?? {}
   const postbackEventDate = getPostbackEventDate(rawPayload)
+  const postbackFirstReceivedDate = getPostbackFirstReceivedDate(rawPayload)
+  const firstReceivedAt = postbackFirstReceivedDate?.date ?? e.createdAt
   const partnerStackMoney = getPartnerStackMoneyInfo(rawPayload)
   const suppressRewardOrderAmount = shouldSuppressPartnerStackRewardOrderAmount(e, rawPayload, pairing)
   return {
@@ -489,11 +496,14 @@ function serializeConversion(e: AnyRecord, click?: AnyRecord, pairing?: PartnerS
     postbackEventAt: postbackEventDate ? postbackEventDate.date.toISOString() : null,
     postbackEventDateField: postbackEventDate?.field ?? null,
     postbackEventDateValue: postbackEventDate?.raw ?? null,
-    postbackDelaySeconds: postbackEventDate ? getPostbackDelaySeconds(e.createdAt, postbackEventDate.date) : null,
+    firstReceivedAt: firstReceivedAt instanceof Date ? firstReceivedAt.toISOString() : new Date(String(firstReceivedAt)).toISOString(),
+    firstReceivedField: postbackFirstReceivedDate?.field ?? 'createdAt',
+    firstReceivedValue: postbackFirstReceivedDate?.raw ?? (e.createdAt instanceof Date ? e.createdAt.toISOString() : String(e.createdAt)),
+    postbackDelaySeconds: postbackEventDate ? getPostbackDelaySeconds(firstReceivedAt, postbackEventDate.date) : null,
     lastPostbackDelaySeconds: postbackEventDate ? getPostbackDelaySeconds(e.lastReceivedAt, postbackEventDate.date) : null,
     capiUpdatedAt: capiTiming?.updatedAt ? capiTiming.updatedAt.toISOString() : null,
     capiStatus: capiTiming?.status ?? null,
-    capiDelaySeconds: capiTiming?.updatedAt ? getPostbackDelaySeconds(capiTiming.updatedAt, e.createdAt) : null
+    capiDelaySeconds: capiTiming?.updatedAt ? getPostbackDelaySeconds(capiTiming.updatedAt, firstReceivedAt) : null
   }
 }
 async function attachAttributionToConversions(rows: AnyRecord[]) {
@@ -1364,8 +1374,8 @@ app.get('/analytics/export.csv', async (req, reply) => {
     rows = ['byCampaign', 'byBrand', 'byPlatform', 'byRefId', 'byDay'].flatMap((group) => (breakdown as AnyRecord)[group].map((row: AnyRecord) => ({ group, affiliatePlatform: row.affiliatePlatformName, ...row })))
   } else {
     const conversionRows = await attachAttributionToConversions(await prisma.affiliateConversionEvent.findMany({ where: await buildConversionEventWhere(u.id, q), include: { affiliatePlatform: true }, orderBy: { createdAt: 'desc' }, take: limit }))
-    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'affiliateRefId', 'affiliateRefSource', 'partnerStackCustomerKey', 'impactRefClickId', 'matched', 'attributionMethod', 'matchedByRefId', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'capiUpdatedAt', 'capiStatus', 'capiDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
-    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, affiliateRefId: row.affiliateRefId, affiliateRefSource: row.affiliateRefSource, partnerStackCustomerKey: row.partnerStackCustomerKey, impactRefClickId: row.impactRefClickId, matched: row.attribution?.matched, attributionMethod: row.attribution?.attributionMethod, matchedByRefId: row.attribution?.matchedByRefId, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, capiUpdatedAt: row.capiUpdatedAt, capiStatus: row.capiStatus, capiDelaySeconds: row.capiDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
+    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'affiliateRefId', 'affiliateRefSource', 'partnerStackCustomerKey', 'impactRefClickId', 'matched', 'attributionMethod', 'matchedByRefId', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'firstReceivedAt', 'firstReceivedField', 'capiUpdatedAt', 'capiStatus', 'capiDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
+    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, affiliateRefId: row.affiliateRefId, affiliateRefSource: row.affiliateRefSource, partnerStackCustomerKey: row.partnerStackCustomerKey, impactRefClickId: row.impactRefClickId, matched: row.attribution?.matched, attributionMethod: row.attribution?.attributionMethod, matchedByRefId: row.attribution?.matchedByRefId, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, firstReceivedAt: row.firstReceivedAt, firstReceivedField: row.firstReceivedField, capiUpdatedAt: row.capiUpdatedAt, capiStatus: row.capiStatus, capiDelaySeconds: row.capiDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
   }
 
   return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="${type}-export.csv"`).send(toCsv(headers, rows))
