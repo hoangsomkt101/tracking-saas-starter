@@ -6,7 +6,7 @@ import rateLimit from '@fastify/rate-limit'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
 import { Prisma, prisma, type User } from '@repo/db'
-import { createClickEventsQueue, createFbc, createRedisConnection, getImpactActionTrackerEventName, getImpactCapiValue, getImpactEventMatch, getImpactPayoutNumber, getImpactRefClickId, getPartnerStackCapiEnrichment, getPartnerStackClickUuid, getPartnerStackConversionMoney, getPartnerStackCreatedDate, getPartnerStackCustomerEmail, getPartnerStackCustomerId, getPartnerStackEventDate, getPartnerStackEventMatch, getPartnerStackIdempotencyKey, getPayloadString as getSharedPayloadString, getPayloadValue as getSharedPayloadValue, getSupportedAffiliatePlatform, isFilledPayloadValue as isSharedFilledPayloadValue, isImpactPostbackPayload, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, normalizePayloadLookupKey as normalizeSharedPayloadLookupKey, parseEnvList, parseMoneyNumber, requireSupportedAffiliatePlatform, resolveAffiliateEventName, resolveImpactEventNames, validateHttpUrl, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
+import { createClickEventsQueue, createFbc, createRedisConnection, getImpactActionTrackerEventName, getImpactCapiValue, getImpactEventMatch, getImpactPayoutNumber, getImpactRefClickId, getPartnerStackCapiEnrichment, getPartnerStackClickUuid, getPartnerStackConversionMoney, getPartnerStackCustomerEmail, getPartnerStackCustomerId, getPartnerStackEventDate, getPartnerStackEventMatch, getPartnerStackIdempotencyKey, getPayloadString as getSharedPayloadString, getPayloadValue as getSharedPayloadValue, getSupportedAffiliatePlatform, isFilledPayloadValue as isSharedFilledPayloadValue, isImpactPostbackPayload, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, normalizePayloadLookupKey as normalizeSharedPayloadLookupKey, parseEnvList, parseMoneyNumber, requireSupportedAffiliatePlatform, resolveAffiliateEventName, resolveImpactEventNames, validateHttpUrl, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
 
 const app = Fastify({ logger: true })
 await app.register(helmet, { contentSecurityPolicy: false })
@@ -424,9 +424,7 @@ function getPostbackEventDate(payload: AnyRecord) {
   return null
 }
 function getPostbackFirstReceivedDate(payload: AnyRecord) {
-  const partnerStackDate = getPartnerStackCreatedDate(payload)
-  if (partnerStackDate) return partnerStackDate
-  return getPostbackEventDate(payload)
+  return isImpactPostbackPayload(payload) ? getPostbackEventDate(payload) : null
 }
 function getPostbackDelaySeconds(receivedAt: unknown, eventAt: unknown) { const received = receivedAt instanceof Date ? receivedAt : new Date(String(receivedAt)); const event = eventAt instanceof Date ? eventAt : new Date(String(eventAt)); if (Number.isNaN(received.getTime()) || Number.isNaN(event.getTime())) return null; return Math.round((received.getTime() - event.getTime()) / 1000) }
 type PartnerStackMoneyInfo = AnyRecord & { transactionKey?: string; rewardKey?: string; orderAmount?: unknown; payoutAmount?: unknown; commissionAmount?: unknown; rewardStatus?: unknown }
