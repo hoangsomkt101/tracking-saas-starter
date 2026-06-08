@@ -75,6 +75,7 @@ function makeRewardPayload() {
                 amount_usd: 660
             },
             amount: 145,
+            reward_status: 'scheduled',
             currency: 'USD',
             key: 'rwrd_GivmMOp9cvu26w',
             created_at: 1786555035165,
@@ -107,9 +108,9 @@ describe('PartnerStack postback helpers', () => {
         assert.equal(getPartnerStackIdempotencyKey(payload, 'CompleteRegistration', clickUuid), 'partnerstack:complete_registration:cus_AcOLfPJYaM7mfF')
         assert.equal(getPartnerStackIdempotencyKey(makeCustomerUpdatedPayload(1778779999999), 'CompleteRegistration', clickUuid), 'partnerstack:complete_registration:cus_AcOLfPJYaM7mfF')
         assert.equal(getPartnerStackIdempotencyKey({ ...payload, data: { ...payload.data, sub_ids: [] } }, 'CompleteRegistration'), 'partnerstack:complete_registration:cus_AcOLfPJYaM7mfF')
-        assert.equal(eventDate?.field, 'data.created_at')
-        assert.equal(eventDate?.date.getTime(), 1778778601000)
-        assert.equal(enrichment?.eventTimeMs, 1778778601000)
+        assert.equal(eventDate?.field, 'data.updated_at')
+        assert.equal(eventDate?.date.getTime(), 1778779035345)
+        assert.equal(enrichment?.eventTimeMs, 1778779035345)
         assert.equal(enrichment?.eventId, `CompleteRegistration_${clickUuid}`)
     })
 
@@ -122,15 +123,17 @@ describe('PartnerStack postback helpers', () => {
         assert.equal(getPartnerStackClickUuid(payload), clickUuid)
         assert.equal(getPartnerStackCustomerId(payload), 'cus_AcOLfPJYaM7mfF')
         assert.equal(match?.eventName, 'Purchase')
-        assert.equal(money?.payoutAmount, '6.6')
+        assert.equal(money?.transactionKey, 'ch_3TX2p4LmdOdiMXBs1S7cEV4Y')
+        assert.equal(money?.orderAmount, '6.6')
+        assert.equal(money?.payoutAmount, undefined)
         assert.equal(money?.currency, 'USD')
         assert.equal(enrichment?.value, 6.6)
         assert.equal(enrichment?.orderId, 'ch_3TX2p4LmdOdiMXBs1S7cEV4Y')
-        assert.equal(enrichment?.eventTimeMs, 1778779035165)
+        assert.equal(enrichment?.eventTimeMs, 1778779035182)
         assert.equal(enrichment?.eventId, 'Purchase_ch_3TX2p4LmdOdiMXBs1S7cEV4Y')
     })
 
-    it('maps reward.created to Payout with commission value and source transaction id', () => {
+    it('maps reward.created to Payout with reward amount, scheduled status, and source transaction id', () => {
         const payload = makeRewardPayload()
         const match = getPartnerStackEventMatch(payload)
         const money = getPartnerStackConversionMoney(payload)
@@ -139,12 +142,19 @@ describe('PartnerStack postback helpers', () => {
         assert.equal(getPartnerStackClickUuid(payload), clickUuid)
         assert.equal(getPartnerStackCustomerId(payload), 'cus_AcOLfPJYaM7mfF')
         assert.equal(match?.eventName, 'Payout')
-        assert.equal(money?.commissionAmount, '1.45')
+        assert.equal(money?.transactionKey, 'ch_3TX2p4LmdOdiMXBs1S7cEV4Y')
+        assert.equal(money?.rewardKey, 'rwrd_GivmMOp9cvu26w')
+        assert.equal(money?.orderAmount, '6.6')
+        assert.equal(money?.payoutAmount, '1.45')
+        assert.equal(money?.commissionAmount, undefined)
+        assert.equal(money?.rewardStatus, 'scheduled')
         assert.equal(money?.currency, 'USD')
         assert.equal(enrichment?.value, 1.45)
         assert.equal(enrichment?.orderValue, 6.6)
+        assert.equal(enrichment?.payoutValue, 1.45)
+        assert.equal(enrichment?.partnerstackRewardStatus, 'scheduled')
         assert.equal(enrichment?.orderId, 'ch_3TX2p4LmdOdiMXBs1S7cEV4Y')
-        assert.equal(enrichment?.eventTimeMs, 1786555035165)
+        assert.equal(enrichment?.eventTimeMs, 1778779102063)
         assert.equal(enrichment?.eventId, 'Payout_rwrd_GivmMOp9cvu26w')
     })
 })

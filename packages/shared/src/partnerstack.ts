@@ -191,6 +191,11 @@ export function getPartnerStackRewardAmount(payload: PartnerStackPayloadRecord) 
     return event?.startsWith('reward.') ? getPartnerStackMoneyPath(payload, ['data.amount']) : undefined
 }
 
+export function getPartnerStackRewardStatus(payload: PartnerStackPayloadRecord) {
+    const event = getPartnerStackWebhookEvent(payload)
+    return event?.startsWith('reward.') ? getStringPath(payload, ['data.reward_status']) : undefined
+}
+
 export function getPartnerStackOrderId(payload: PartnerStackPayloadRecord) {
     const event = getPartnerStackWebhookEvent(payload)
     if (event?.startsWith('transaction.')) return getStringPath(payload, ['data.key'])
@@ -208,11 +213,11 @@ export function getPartnerStackConversionMoney(payload: PartnerStackPayloadRecor
     const currency = getPartnerStackCurrency(payload)
 
     if (event?.startsWith('transaction.')) {
-        return compactRecord({ payoutAmount: getPartnerStackOrderAmount(payload), currency })
+        return compactRecord({ transactionKey: getPartnerStackOrderId(payload), orderAmount: getPartnerStackOrderAmount(payload), currency })
     }
 
     if (event?.startsWith('reward.')) {
-        return compactRecord({ commissionAmount: getPartnerStackRewardAmount(payload), currency })
+        return compactRecord({ transactionKey: getPartnerStackOrderId(payload), rewardKey: getPartnerStackObjectKey(payload), orderAmount: getPartnerStackOrderAmount(payload), payoutAmount: getPartnerStackRewardAmount(payload), currency, rewardStatus: getPartnerStackRewardStatus(payload) })
     }
 
     return compactRecord({ currency })
@@ -233,10 +238,10 @@ export function parsePartnerStackTimestamp(value: unknown): Date | null {
 
 export function getPartnerStackEventDate(payload: PartnerStackPayloadRecord) {
     if (!isPartnerStackPostbackPayload(payload)) return null
-    const raw = firstFilledPathValue(payload, ['data.created_at'])
+    const raw = firstFilledPathValue(payload, ['data.updated_at'])
     const date = parsePartnerStackTimestamp(raw)
     if (!date || Number.isNaN(date.getTime())) return null
-    return { field: 'data.created_at', raw: raw instanceof Date ? raw.toISOString() : String(raw), date }
+    return { field: 'data.updated_at', raw: raw instanceof Date ? raw.toISOString() : String(raw), date }
 }
 
 export function getPartnerStackUpdateDate(payload: PartnerStackPayloadRecord) {
@@ -266,11 +271,12 @@ export function getPartnerStackEventMatch(payload: PartnerStackPayloadRecord): P
 
     if (event?.startsWith('reward.')) {
         const amount = getPartnerStackRewardAmount(payload)
+        const rewardStatus = getPartnerStackRewardStatus(payload)
         return {
             eventName: 'Payout',
             eventRule: `PartnerStack ${event}`,
-            eventMatchedField: 'event, data.customer.sub_ids[0], data.amount',
-            eventMatchedValue: toMatchedValue({ event, clickUuid, rewardKey: objectKey, amount })
+            eventMatchedField: 'event, data.customer.sub_ids[0], data.amount, data.reward_status',
+            eventMatchedValue: toMatchedValue({ event, clickUuid, rewardKey: objectKey, amount, rewardStatus })
         }
     }
 
@@ -278,7 +284,7 @@ export function getPartnerStackEventMatch(payload: PartnerStackPayloadRecord): P
         return {
             eventName: 'CompleteRegistration',
             eventRule: `PartnerStack ${event}`,
-            eventMatchedField: 'event, data.key, data.sub_ids[0], data.created_at',
+            eventMatchedField: 'event, data.key, data.sub_ids[0], data.updated_at',
             eventMatchedValue: toMatchedValue({ event, clickUuid, customerKey })
         }
     }
@@ -320,7 +326,8 @@ export function getPartnerStackCapiEnrichment(payload: PartnerStackPayloadRecord
     const customerName = getPartnerStackCustomerName(payload)
     const orderId = getPartnerStackOrderId(payload)
     const orderValue = getPartnerStackOrderAmount(payload)
-    const commissionValue = getPartnerStackRewardAmount(payload)
+    const payoutValue = getPartnerStackRewardAmount(payload)
+    const rewardStatus = getPartnerStackRewardStatus(payload)
     const companyName = valueToString(fields.company_name) ?? getStringPath(payload, ['data.company.name'])
     const website = valueToString(fields.website)
     const sourceType = valueToString(fields.source_type)
@@ -347,7 +354,8 @@ export function getPartnerStackCapiEnrichment(payload: PartnerStackPayloadRecord
         website,
         sourceType,
         orderValue: orderValue === undefined ? undefined : Number(orderValue),
-        commissionValue: commissionValue === undefined ? undefined : Number(commissionValue),
+        payoutValue: payoutValue === undefined ? undefined : Number(payoutValue),
+        partnerstackRewardStatus: rewardStatus,
         partnerstackEvent: event,
         partnerstackCustomerKey: customerId,
         partnerstackObjectKey: objectKey,
