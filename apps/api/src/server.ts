@@ -120,7 +120,8 @@ function trackingEventHeaders(reply: FastifyReply, allowedOrigin?: string | null
   if (allowedOrigin) response.header('access-control-allow-origin', allowedOrigin).header('access-control-allow-credentials', 'true')
   return response
 }
-function getClientIp(req: FastifyRequest) { return getHeaderString(req, 'x-forwarded-for')?.split(',')[0]?.trim() || req.ip }
+function getFirstHeaderValue(value?: string) { return value?.split(',')[0]?.trim() || undefined }
+function getClientIp(req: FastifyRequest) { return getFirstHeaderValue(getHeaderString(req, 'cf-connecting-ip')) ?? getFirstHeaderValue(getHeaderString(req, 'true-client-ip')) ?? getFirstHeaderValue(getHeaderString(req, 'x-real-ip')) ?? getFirstHeaderValue(getHeaderString(req, 'x-forwarded-for')) ?? req.ip }
 function getPublicRequestOrigin(req: FastifyRequest) {
   const proto = (getHeaderString(req, 'x-forwarded-proto') ?? 'http').split(',')[0]?.trim().toLowerCase() === 'https' ? 'https' : 'http'
   const host = (getHeaderString(req, 'x-forwarded-host') ?? getHeaderString(req, 'host') ?? '').split(',')[0]?.trim()

@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import Fastify from 'fastify'
+import Fastify, { type FastifyRequest } from 'fastify'
 import cookie from '@fastify/cookie'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
@@ -85,6 +85,10 @@ function resolveTrackingParamKey(platform: { slug?: string | null; name?: string
   const supported = getSupportedAffiliatePlatform(platform.slug ?? '') ?? getSupportedAffiliatePlatform(platform.trackingParamKey ?? '') ?? getSupportedAffiliatePlatform(platform.name ?? '')
   return supported?.trackingParamKey ?? platform.trackingParamKey ?? 'subid1'
 }
+
+function getFirstHeaderValue(value?: string | null) { return value?.split(',')[0]?.trim() || undefined }
+function getHeaderString(req: FastifyRequest, name: string) { const value = req.headers[name.toLowerCase()]; return Array.isArray(value) ? value[0] : typeof value === 'string' && value.trim() ? value.trim() : undefined }
+function getClientIp(req: FastifyRequest) { return getFirstHeaderValue(getHeaderString(req, 'cf-connecting-ip')) ?? getFirstHeaderValue(getHeaderString(req, 'true-client-ip')) ?? getFirstHeaderValue(getHeaderString(req, 'x-real-ip')) ?? getFirstHeaderValue(getHeaderString(req, 'x-forwarded-for')) ?? req.ip }
 
 function buildAffiliateRedirectUrl(affiliateUrl: string, trackingParamKey: string, clickUuid: string) {
   const url = new URL(validateHttpUrl(affiliateUrl, 'affiliateUrl'))
@@ -266,7 +270,7 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
       campaignId: trackingLink.campaignId ?? null,
       trackingLinkId: trackingLink.id,
       clickUuid: randomUUID(),
-      ip: req.ip,
+      ip: getClientIp(req),
       userAgent: normalizeHeaderValue(req.headers['user-agent']),
       referrer: normalizeHeaderValue(req.headers.referer),
       fbp: cookies._fbp,
