@@ -426,6 +426,7 @@ function getPostbackEventDate(payload: AnyRecord) {
 function getPostbackDelaySeconds(receivedAt: unknown, eventAt: Date) { const received = receivedAt instanceof Date ? receivedAt : new Date(String(receivedAt)); if (Number.isNaN(received.getTime())) return null; return Math.round((received.getTime() - eventAt.getTime()) / 1000) }
 type PartnerStackMoneyInfo = AnyRecord & { transactionKey?: string; rewardKey?: string; orderAmount?: unknown; payoutAmount?: unknown; commissionAmount?: unknown; rewardStatus?: unknown }
 type PartnerStackPairing = { pairedTransactionKeys: Set<string> }
+type ConversionCapiTiming = { sentAt: Date; status?: string | null }
 function getPartnerStackMoneyInfo(payload: AnyRecord): PartnerStackMoneyInfo | null { return getPartnerStackConversionMoney(payload) as PartnerStackMoneyInfo | null }
 function partnerStackPairKey(tenantId: unknown, affiliatePlatformId: unknown, transactionKey: unknown) { const key = typeof transactionKey === 'string' && transactionKey.trim() ? transactionKey.trim() : undefined; return typeof tenantId === 'string' && typeof affiliatePlatformId === 'string' && key ? `${tenantId}\u0000${affiliatePlatformId}\u0000${key}` : undefined }
 function partnerStackTransactionIdempotencyKey(transactionKey: string) { return `partnerstack:transaction:${transactionKey}` }
@@ -464,8 +465,59 @@ function getPostbackAmount(payload: AnyRecord, e: AnyRecord, options: { suppress
 function getPostbackPayout(payload: AnyRecord, e: AnyRecord) { const partnerStackMoney = getPartnerStackMoneyInfo(payload); if (partnerStackMoney) return serializeMoneyValue(partnerStackMoney.commissionAmount ?? partnerStackMoney.payoutAmount); return serializeMoneyValue(getPayloadMoney(payload, ['Payout', 'payout', 'payoutAmount', 'payout_amount', 'commissionAmount', 'commission_amount', 'commission']) ?? e.payoutAmount ?? e.commissionAmount) }
 function getSerializedPayoutAmount(payload: AnyRecord, e: AnyRecord) { const partnerStackMoney = getPartnerStackMoneyInfo(payload); return serializeMoneyValue(partnerStackMoney ? partnerStackMoney.payoutAmount : e.payoutAmount) }
 function getSerializedCommissionAmount(payload: AnyRecord, e: AnyRecord) { const partnerStackMoney = getPartnerStackMoneyInfo(payload); return serializeMoneyValue(partnerStackMoney ? partnerStackMoney.commissionAmount : e.commissionAmount) }
-function serializeConversion(e: AnyRecord, click?: AnyRecord, pairing?: PartnerStackPairing) { const storedSnapshot = e.attributionSnapshot && typeof e.attributionSnapshot === 'object' ? e.attributionSnapshot as AnyRecord : null; const rawPayload = getPlainRecord(e.rawPayload) ?? {}; const postbackEventDate = getPostbackEventDate(rawPayload); const partnerStackMoney = getPartnerStackMoneyInfo(rawPayload); const suppressRewardOrderAmount = shouldSuppressPartnerStackRewardOrderAmount(e, rawPayload, pairing); return { ...e, id: e.id.toString(), clickEventId: e.clickEventId ? e.clickEventId.toString() : null, spendAmount: serializeMoneyValue(e.spendAmount), payoutAmount: getSerializedPayoutAmount(rawPayload, e), commissionAmount: getSerializedCommissionAmount(rawPayload, e), partnerStackTransactionKey: partnerStackMoney?.transactionKey ?? null, partnerStackRewardKey: partnerStackMoney?.rewardKey ?? null, partnerStackRewardStatus: partnerStackMoney?.rewardStatus ?? null, affiliatePlatform: e.affiliatePlatform ? serializeAffiliatePlatform(e.affiliatePlatform) : null, attribution: storedSnapshot ?? buildAttributionSnapshot(click, e.affiliatePlatform), capiEnrichment: e.capiEnrichment ?? null, postbackAmount: getPostbackAmount(rawPayload, e, { suppressPartnerStackRewardOrderAmount: suppressRewardOrderAmount }), postbackPayout: getPostbackPayout(rawPayload, e), postbackEventAt: postbackEventDate ? postbackEventDate.date.toISOString() : null, postbackEventDateField: postbackEventDate?.field ?? null, postbackEventDateValue: postbackEventDate?.raw ?? null, postbackDelaySeconds: postbackEventDate ? getPostbackDelaySeconds(e.createdAt, postbackEventDate.date) : null, lastPostbackDelaySeconds: postbackEventDate ? getPostbackDelaySeconds(e.lastReceivedAt, postbackEventDate.date) : null } }
-async function attachAttributionToConversions(rows: AnyRecord[]) { const rowsNeedingFallback = rows.filter((row) => !row.attributionSnapshot && typeof row.clickUuid === 'string' && row.clickUuid.length > 0); const uuids = [...new Set(rowsNeedingFallback.map((row) => row.clickUuid as string))]; const tenantIds = [...new Set(rowsNeedingFallback.map((row) => row.tenantId).filter((value): value is string => typeof value === 'string'))]; const [clicks, partnerStackPairing] = await Promise.all([uuids.length ? prisma.clickEvent.findMany({ where: { clickUuid: { in: uuids }, ...(tenantIds.length ? { tenantId: { in: tenantIds } } : {}) }, include: { campaign: true, trackingLink: { include: { campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } } }) : Promise.resolve([]), buildPartnerStackPairing(rows)]); const byUuid = new Map(clicks.map((click) => [click.clickUuid, click])); return rows.map((row) => serializeConversion(row, !row.attributionSnapshot && row.clickUuid ? byUuid.get(row.clickUuid) : undefined, partnerStackPairing)) }
+function serializeConversion(e: AnyRecord, click?: AnyRecord, pairing?: PartnerStackPairing, capiTiming?: ConversionCapiTiming) {
+  const storedSnapshot = e.attributionSnapshot && typeof e.attributionSnapshot === 'object' ? e.attributionSnapshot as AnyRecord : null
+  const rawPayload = getPlainRecord(e.rawPayload) ?? {}
+  const postbackEventDate = getPostbackEventDate(rawPayload)
+  const partnerStackMoney = getPartnerStackMoneyInfo(rawPayload)
+  const suppressRewardOrderAmount = shouldSuppressPartnerStackRewardOrderAmount(e, rawPayload, pairing)
+  return {
+    ...e,
+    id: e.id.toString(),
+    clickEventId: e.clickEventId ? e.clickEventId.toString() : null,
+    spendAmount: serializeMoneyValue(e.spendAmount),
+    payoutAmount: getSerializedPayoutAmount(rawPayload, e),
+    commissionAmount: getSerializedCommissionAmount(rawPayload, e),
+    partnerStackTransactionKey: partnerStackMoney?.transactionKey ?? null,
+    partnerStackRewardKey: partnerStackMoney?.rewardKey ?? null,
+    partnerStackRewardStatus: partnerStackMoney?.rewardStatus ?? null,
+    affiliatePlatform: e.affiliatePlatform ? serializeAffiliatePlatform(e.affiliatePlatform) : null,
+    attribution: storedSnapshot ?? buildAttributionSnapshot(click, e.affiliatePlatform),
+    capiEnrichment: e.capiEnrichment ?? null,
+    postbackAmount: getPostbackAmount(rawPayload, e, { suppressPartnerStackRewardOrderAmount: suppressRewardOrderAmount }),
+    postbackPayout: getPostbackPayout(rawPayload, e),
+    postbackEventAt: postbackEventDate ? postbackEventDate.date.toISOString() : null,
+    postbackEventDateField: postbackEventDate?.field ?? null,
+    postbackEventDateValue: postbackEventDate?.raw ?? null,
+    postbackDelaySeconds: postbackEventDate ? getPostbackDelaySeconds(e.createdAt, postbackEventDate.date) : null,
+    lastPostbackDelaySeconds: postbackEventDate ? getPostbackDelaySeconds(e.lastReceivedAt, postbackEventDate.date) : null,
+    capiSentAt: capiTiming?.sentAt ? capiTiming.sentAt.toISOString() : null,
+    capiStatus: capiTiming?.status ?? null,
+    capiDelaySeconds: postbackEventDate && capiTiming?.sentAt ? getPostbackDelaySeconds(capiTiming.sentAt, postbackEventDate.date) : null
+  }
+}
+async function attachAttributionToConversions(rows: AnyRecord[]) {
+  if (!rows.length) return []
+  const rowsNeedingFallback = rows.filter((row) => !row.attributionSnapshot && typeof row.clickUuid === 'string' && row.clickUuid.length > 0)
+  const uuids = [...new Set(rowsNeedingFallback.map((row) => row.clickUuid as string))]
+  const tenantIds = [...new Set(rowsNeedingFallback.map((row) => row.tenantId).filter((value): value is string => typeof value === 'string'))]
+  const conversionSourceIds = rows.map((row) => row.id?.toString()).filter((value): value is string => typeof value === 'string' && value.length > 0)
+  const [clicks, partnerStackPairing, capiEvents] = await Promise.all([
+    uuids.length ? prisma.clickEvent.findMany({ where: { clickUuid: { in: uuids }, ...(tenantIds.length ? { tenantId: { in: tenantIds } } : {}) }, include: { campaign: true, trackingLink: { include: { campaign: true, affiliatePlatform: true, brand: { include: { affiliatePlatform: true } } } } } }) : Promise.resolve([]),
+    buildPartnerStackPairing(rows),
+    conversionSourceIds.length ? prisma.capiEvent.findMany({ where: { source: 'affiliate_conversion', sourceId: { in: conversionSourceIds } }, select: { sourceId: true, status: true, createdAt: true } }) : Promise.resolve([])
+  ])
+  const byUuid = new Map(clicks.map((click) => [click.clickUuid, click]))
+  const capiTimingBySourceId = new Map<string, ConversionCapiTiming>()
+  for (const capiEvent of capiEvents as AnyRecord[]) {
+    const sourceId = typeof capiEvent.sourceId === 'string' ? capiEvent.sourceId : ''
+    const sentAt = capiEvent.createdAt instanceof Date ? capiEvent.createdAt : new Date(String(capiEvent.createdAt))
+    if (!sourceId || Number.isNaN(sentAt.getTime())) continue
+    const current = capiTimingBySourceId.get(sourceId)
+    if (!current || sentAt.getTime() < current.sentAt.getTime()) capiTimingBySourceId.set(sourceId, { sentAt, status: typeof capiEvent.status === 'string' ? capiEvent.status : null })
+  }
+  return rows.map((row) => serializeConversion(row, !row.attributionSnapshot && row.clickUuid ? byUuid.get(row.clickUuid) : undefined, partnerStackPairing, capiTimingBySourceId.get(row.id.toString())))
+}
 function emptyAnalyticsRow(id: string, name: string) { return { id, name, clicks: 0, conversions: 0, revenue: 0, payout: 0, commission: 0, spend: 0, conversionRate: 0 } }
 function addConversionMoney(row: AnyRecord, conversion: AnyRecord) { const amount = toNumberAmount(conversion.postbackAmount); const payout = toNumberAmount(conversion.postbackPayout ?? conversion.payoutAmount); const commission = toNumberAmount(conversion.commissionAmount); const spend = toNumberAmount(conversion.spendAmount); row.payout += payout; row.commission += commission; row.spend += spend || amount; row.revenue += payout || commission }
 function finalizeAnalyticsRows(map: Map<string, AnyRecord>, limit = 20): AnyRecord[] { const rows: AnyRecord[] = ([...map.values()] as AnyRecord[]).map((row) => ({ ...row, conversionRate: row.clicks ? row.conversions / row.clicks : 0 })); return rows.sort((a: AnyRecord, b: AnyRecord) => b.conversions - a.conversions || b.clicks - a.clicks || String(a.name).localeCompare(String(b.name))).slice(0, limit) }
@@ -1312,8 +1364,8 @@ app.get('/analytics/export.csv', async (req, reply) => {
     rows = ['byCampaign', 'byBrand', 'byPlatform', 'byRefId', 'byDay'].flatMap((group) => (breakdown as AnyRecord)[group].map((row: AnyRecord) => ({ group, affiliatePlatform: row.affiliatePlatformName, ...row })))
   } else {
     const conversionRows = await attachAttributionToConversions(await prisma.affiliateConversionEvent.findMany({ where: await buildConversionEventWhere(u.id, q), include: { affiliatePlatform: true }, orderBy: { createdAt: 'desc' }, take: limit }))
-    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'affiliateRefId', 'affiliateRefSource', 'partnerStackCustomerKey', 'impactRefClickId', 'matched', 'attributionMethod', 'matchedByRefId', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'postbackDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
-    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, affiliateRefId: row.affiliateRefId, affiliateRefSource: row.affiliateRefSource, partnerStackCustomerKey: row.partnerStackCustomerKey, impactRefClickId: row.impactRefClickId, matched: row.attribution?.matched, attributionMethod: row.attribution?.attributionMethod, matchedByRefId: row.attribution?.matchedByRefId, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, postbackDelaySeconds: row.postbackDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
+    headers = ['id', 'createdAt', 'tenantId', 'affiliatePlatform', 'eventName', 'clickUuid', 'affiliateRefId', 'affiliateRefSource', 'partnerStackCustomerKey', 'impactRefClickId', 'matched', 'attributionMethod', 'matchedByRefId', 'amount', 'payout', 'currency', 'postbackEventAt', 'postbackDateField', 'capiSentAt', 'capiStatus', 'capiDelaySeconds', 'trackingLink', 'requestCount', 'idempotencyKey']
+    rows = conversionRows.map((row: AnyRecord) => ({ id: row.id, createdAt: row.createdAt, tenantId: row.tenantId, affiliatePlatform: row.affiliatePlatform?.name, eventName: row.eventName, clickUuid: row.clickUuid, affiliateRefId: row.affiliateRefId, affiliateRefSource: row.affiliateRefSource, partnerStackCustomerKey: row.partnerStackCustomerKey, impactRefClickId: row.impactRefClickId, matched: row.attribution?.matched, attributionMethod: row.attribution?.attributionMethod, matchedByRefId: row.attribution?.matchedByRefId, amount: row.postbackAmount, payout: row.postbackPayout, currency: row.currency, postbackEventAt: row.postbackEventAt, postbackDateField: row.postbackEventDateField, capiSentAt: row.capiSentAt, capiStatus: row.capiStatus, capiDelaySeconds: row.capiDelaySeconds, trackingLink: row.attribution?.trackingLink?.slug, requestCount: row.requestCount, idempotencyKey: row.idempotencyKey }))
   }
 
   return reply.header('content-type', 'text/csv; charset=utf-8').header('content-disposition', `attachment; filename="${type}-export.csv"`).send(toCsv(headers, rows))
