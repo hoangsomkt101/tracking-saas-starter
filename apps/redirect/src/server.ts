@@ -158,24 +158,103 @@ function buildBrowserPixelScripts(pixels: BrowserPixelDataset[], clickUuid: stri
   return `${metaScript}${tiktokScript}`
 }
 
-function buildRedirectHtml(url: string, prelander?: { title?: string | null; headline: string; body: string; ctaText: string; ctaDelaySeconds: number; theme: string } | null, options: { pixelScripts?: string; directRedirectDelayMs?: number } = {}) {
+type BridgePrelander = { title?: string | null; headline: string; body: string; ctaText: string; ctaDelaySeconds: number; theme: string }
+type RedirectSocialMeta = { title: string; description: string; url?: string; siteName?: string; locale?: string; type?: string }
+
+function normalizeMetaText(value: string, maxLength = 220) {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= maxLength) return normalized
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
+}
+
+function normalizeAbsoluteHttpUrl(value?: string | null) {
+  if (!value) return undefined
+  try {
+    const url = new URL(value)
+    if (!['http:', 'https:'].includes(url.protocol)) return undefined
+    url.hash = ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return undefined
+  }
+}
+
+function getPublicOrigin(req: FastifyRequest) {
+  const proto = getFirstHeaderValue(getHeaderString(req, 'x-forwarded-proto'))
+  const host = getFirstHeaderValue(getHeaderString(req, 'x-forwarded-host')) ?? getHeaderString(req, 'host')
+  if (host && /^[a-z0-9.-]+(?::\d+)?$/i.test(host)) {
+    const inferredProto = /^(localhost|127\.0\.0\.1)(:\d+)?$/i.test(host) ? 'http' : 'https'
+    const safeProto = proto === 'http' || proto === 'https' ? proto : inferredProto
+    return `${safeProto}://${host}`
+  }
+  return normalizeAbsoluteHttpUrl(process.env.REDIRECT_PUBLIC_ORIGIN ?? process.env.PUBLIC_REDIRECT_URL ?? process.env.VITE_REDIRECT_URL)
+}
+
+function buildCanonicalShortlinkUrl(publicOrigin: string | undefined, slug: string, tenantKey: string) {
+  if (!publicOrigin) return undefined
+  return new URL(`${encodeURIComponent(slug)}/${encodeURIComponent(tenantKey)}`, `${publicOrigin}/`).toString()
+}
+
+function buildSocialMetaTags(meta?: RedirectSocialMeta) {
+  if (!meta) return ''
+  const title = normalizeMetaText(meta.title, 90)
+  const description = normalizeMetaText(meta.description, 220)
+  const siteName = normalizeMetaText(meta.siteName ?? meta.title, 80)
+  const locale = normalizeMetaText(meta.locale ?? process.env.REDIRECT_OG_LOCALE ?? 'en_US', 16)
+  const tags = [
+    `<meta name="description" content="${escapeHtml(description)}" />`,
+    `<meta property="og:title" content="${escapeHtml(title)}" />`,
+    `<meta property="og:type" content="${escapeHtml(meta.type ?? 'website')}" />`,
+    `<meta property="og:description" content="${escapeHtml(description)}" />`,
+    `<meta property="og:site_name" content="${escapeHtml(siteName)}" />`,
+    `<meta property="og:locale" content="${escapeHtml(locale)}" />`,
+    `<meta name="twitter:card" content="summary" />`,
+    `<meta name="twitter:title" content="${escapeHtml(title)}" />`,
+    `<meta name="twitter:description" content="${escapeHtml(description)}" />`
+  ]
+  if (meta.url) {
+    tags.splice(1, 0, `<link rel="canonical" href="${escapeHtml(meta.url)}" />`)
+    tags.splice(5, 0, `<meta property="og:url" content="${escapeHtml(meta.url)}" />`)
+  }
+  return tags.join('\n          ')
+}
+
+function buildTrackingLinkSocialMeta(input: { trackingLink: AnyRecord; prelander?: BridgePrelander | null; slug: string; tenantKey: string; publicOrigin?: string }): RedirectSocialMeta {
+  const title = input.prelander?.title || input.prelander?.headline || input.trackingLink.prelanderTitle || input.trackingLink.brand?.name || input.trackingLink.campaign?.name || input.trackingLink.slug
+  const description = input.prelander?.body || input.trackingLink.prelanderBody || input.trackingLink.prelanderHeadline || `Continue to ${input.trackingLink.brand?.name ?? input.trackingLink.slug}.`
+  const siteName = input.prelander?.title || input.prelander?.headline || input.trackingLink.brand?.name || input.trackingLink.campaign?.name || input.trackingLink.tenant?.name || title
+  return {
+    title,
+    description,
+    url: buildCanonicalShortlinkUrl(input.publicOrigin, input.slug, input.tenantKey),
+    siteName,
+    locale: process.env.REDIRECT_OG_LOCALE ?? 'en_US',
+    type: 'website'
+  }
+}
+
+function buildRedirectHtml(url: string, prelander?: BridgePrelander | null, options: { pixelScripts?: string; directRedirectDelayMs?: number; socialMeta?: RedirectSocialMeta; requestId?: string } = {}) {
   const encodedUrl = jsonForHtml(url)
   const pixelScripts = options.pixelScripts ?? ''
   const directRedirectDelay = options.directRedirectDelayMs ?? 250
+  const socialMetaTags = buildSocialMetaTags(options.socialMeta)
 
   if (!prelander) {
-    return `
-      <html>
+    return `<!doctype html>
+      <html lang="en" prefix="og: https://ogp.me/ns#">
         <head>
+          <meta charset="utf-8" />
           <title>Redirecting...</title>
           <meta name="robots" content="noindex,nofollow" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          ${socialMetaTags}
           ${pixelScripts}
         </head>
         <body>
           <h3>Redirecting...</h3>
           <script>
             setTimeout(() => {
-              window.location.href = ${encodedUrl}
+              window.location.replace(${encodedUrl})
             }, ${directRedirectDelay})
           </script>
         </body>
@@ -185,38 +264,79 @@ function buildRedirectHtml(url: string, prelander?: { title?: string | null; hea
 
   const delay = Math.max(Math.max(0, prelander.ctaDelaySeconds) * 1000, directRedirectDelay)
   const isDark = prelander.theme === 'dark'
-  const background = isDark ? '#09090b' : prelander.theme === 'warm' ? '#fff7ed' : '#f8fafc'
-  const foreground = isDark ? '#fafafa' : '#111827'
-  const card = isDark ? '#18181b' : '#ffffff'
-
+  const isWarm = prelander.theme === 'warm'
+  const background = isDark ? '#0f0f10' : isWarm ? '#fbf7ef' : '#f8f8f8'
+  const foreground = isDark ? '#f5f5f5' : '#1f1f1f'
+  const muted = isDark ? '#b8b8b8' : '#5f6368'
+  const softMuted = isDark ? '#8f8f8f' : '#777777'
+  const card = isDark ? '#1c1c1f' : '#ffffff'
+  const border = isDark ? '#36363a' : '#dedede'
+  const inset = isDark ? '#151518' : '#f7f7f7'
+  const accent = isDark ? '#f6b44b' : '#f38020'
   const title = prelander.title || prelander.headline
+  const requestId = options.requestId ? options.requestId.slice(0, 18) : undefined
 
-  return `
-    <html>
+  return `<!doctype html>
+    <html lang="en" prefix="og: https://ogp.me/ns#">
       <head>
+        <meta charset="utf-8" />
         <title>${escapeHtml(title)}</title>
         <meta name="robots" content="noindex,nofollow" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        ${socialMetaTags}
         ${pixelScripts}
         <style>
-          body { align-items: center; background: ${background}; color: ${foreground}; display: flex; font-family: Inter, system-ui, sans-serif; justify-content: center; margin: 0; min-height: 100vh; padding: 24px; }
-          main { background: ${card}; border: 1px solid rgba(148, 163, 184, 0.22); border-radius: 24px; box-shadow: 0 24px 80px rgba(15, 23, 42, 0.16); max-width: 680px; padding: clamp(28px, 6vw, 56px); text-align: center; }
-          h1 { font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -0.06em; line-height: 1; margin: 0 0 18px; }
-          p { color: ${isDark ? '#d4d4d8' : '#475569'}; font-size: 1.05rem; line-height: 1.7; margin: 0 0 28px; white-space: pre-wrap; }
-          a { background: ${isDark ? '#fafafa' : '#111827'}; border-radius: 999px; color: ${isDark ? '#111827' : '#fafafa'}; display: inline-flex; font-weight: 700; padding: 14px 22px; text-decoration: none; }
-          small { color: ${isDark ? '#a1a1aa' : '#64748b'}; display: block; margin-top: 18px; }
+          :root { color-scheme: ${isDark ? 'dark' : 'light'}; }
+          * { box-sizing: border-box; }
+          body { background: ${background}; color: ${foreground}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; min-height: 100vh; }
+          .page { align-items: center; display: flex; justify-content: center; min-height: 100vh; padding: clamp(28px, 6vw, 72px) 20px; }
+          main { width: min(100%, 720px); }
+          .brand-line { color: ${softMuted}; font-size: 13px; margin-bottom: 28px; }
+          h1 { font-size: clamp(30px, 5vw, 46px); font-weight: 500; letter-spacing: -0.035em; line-height: 1.12; margin: 0 0 18px; }
+          .lead { color: ${muted}; font-size: clamp(16px, 2.4vw, 18px); line-height: 1.65; margin: 0 0 30px; max-width: 62ch; white-space: pre-wrap; }
+          .challenge { background: ${card}; border: 1px solid ${border}; border-radius: 6px; box-shadow: 0 2px 8px rgba(0, 0, 0, ${isDark ? '.24' : '.08'}); margin: 0 0 22px; overflow: hidden; }
+          .challenge-main { align-items: center; display: grid; gap: 18px; grid-template-columns: auto 1fr; min-height: 96px; padding: 22px; }
+          .check { align-items: center; background: ${inset}; border: 2px solid ${border}; border-radius: 3px; display: inline-flex; height: 34px; justify-content: center; position: relative; width: 34px; }
+          .check::before { animation: spin .9s linear infinite; border: 3px solid rgba(127, 127, 127, .22); border-top-color: ${accent}; border-radius: 999px; content: ""; height: 20px; width: 20px; }
+          .challenge-title { display: block; font-size: 17px; font-weight: 600; line-height: 1.3; }
+          .challenge-copy { color: ${muted}; display: block; font-size: 14px; line-height: 1.5; margin-top: 4px; }
+          .progress { background: ${isDark ? '#2b2b2f' : '#ececec'}; height: 3px; overflow: hidden; }
+          .progress span { animation: progress ${delay}ms linear forwards; background: ${accent}; display: block; height: 100%; transform-origin: left center; width: 100%; }
+          .notice { color: ${muted}; font-size: 14px; line-height: 1.65; margin: 0 0 16px; }
+          .fallback { align-items: center; background: transparent; border: 1px solid ${border}; border-radius: 4px; color: ${foreground}; display: inline-flex; font-size: 14px; font-weight: 600; min-height: 42px; padding: 0 16px; text-decoration: none; transition: border-color .15s ease, color .15s ease; }
+          .fallback:hover { border-color: ${accent}; color: ${accent}; }
+          footer { border-top: 1px solid ${border}; color: ${softMuted}; display: flex; flex-wrap: wrap; font-size: 12px; gap: 8px 14px; justify-content: space-between; margin-top: 42px; padding-top: 18px; }
+          @keyframes spin { to { transform: rotate(360deg); } }
+          @keyframes progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+          @media (max-width: 560px) {
+            .challenge-main { padding: 18px; }
+          }
         </style>
       </head>
       <body>
-        <main>
-          <h1>${escapeHtml(prelander.headline)}</h1>
-          <p>${escapeHtml(prelander.body)}</p>
-          <a href="${escapeHtml(url)}" rel="nofollow">${escapeHtml(prelander.ctaText)}</a>
-          <small>Auto-redirecting...</small>
-        </main>
+        <div class="page">
+          <main>
+            <div class="brand-line">Secure redirect verification</div>
+            <h1>${escapeHtml(prelander.headline)}</h1>
+            <p class="lead">${escapeHtml(prelander.body)}</p>
+            <section class="challenge" aria-label="Human verification">
+              <div class="challenge-main">
+                <span class="check" aria-hidden="true"></span>
+                <span>
+                  <span class="challenge-title">Verifying you are human</span>
+                  <span class="challenge-copy">Checking your browser before continuing. This usually takes a few seconds.</span>
+                </span>
+              </div>
+              <div class="progress" aria-hidden="true"><span></span></div>
+            </section>
+            <p class="notice">You will be redirected automatically after the verification finishes. If nothing happens, use the button below.</p>
+            <a class="fallback" href="${escapeHtml(url)}" rel="nofollow noreferrer">${escapeHtml(prelander.ctaText)}</a>
+            <footer><span>Security check in progress</span>${requestId ? `<span>Request ID: ${escapeHtml(requestId)}</span>` : ''}</footer>
+          </main>
+        </div>
         <script>
           setTimeout(() => {
-            window.location.href = ${encodedUrl}
+            window.location.replace(${encodedUrl})
           }, ${delay})
         </script>
       </body>
@@ -304,6 +424,8 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
     theme: trackingLink.prelanderTheme || 'clean'
   } : null
   const usesPrelander = Boolean(inlinePrelander)
+  const publicOrigin = getPublicOrigin(req)
+  const socialMeta = buildTrackingLinkSocialMeta({ trackingLink, prelander: inlinePrelander, slug, tenantKey, publicOrigin })
   const contentName = trackingLink.brand?.name ?? trackingLink.prelanderTitle ?? trackingLink.slug
   const pixelScripts = buildBrowserPixelScripts(browserPixels, clickEvent.clickUuid, contentName)
   await createActivityLog({
@@ -334,7 +456,7 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
     }
   })
   if (!usesPrelander && !browserPixels.length) return reply.redirect(redirectUrl, 302)
-  return reply.type('text/html').send(buildRedirectHtml(redirectUrl, inlinePrelander, { pixelScripts, directRedirectDelayMs: browserPixels.length ? browserPixelRedirectDelayMs : 250 }))
+  return reply.type('text/html').send(buildRedirectHtml(redirectUrl, inlinePrelander, { pixelScripts, directRedirectDelayMs: browserPixels.length ? browserPixelRedirectDelayMs : 250, socialMeta, requestId: clickEvent.clickUuid }))
 })
 
 app.addHook('onClose', async () => { await clickEventsQueue.close(); await readinessRedis.quit() })

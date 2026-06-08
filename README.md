@@ -72,6 +72,10 @@ API_PORT=3001
 REDIRECT_PORT=3002
 WORKER_CONCURRENCY=5
 CLERK_SECRET_KEY="sk_test_your_clerk_secret_key"
+# Bridge page OGP title/description/url/site_name are generated from Bridge page fields and the current shortlink host.
+# Set REDIRECT_PUBLIC_ORIGIN only if your proxy does not preserve the public Host header.
+REDIRECT_PUBLIC_ORIGIN=""
+REDIRECT_OG_LOCALE="vi_VN"
 VITE_CLERK_PUBLISHABLE_KEY="pk_test_your_clerk_publishable_key"
 VITE_API_URL="http://localhost:3001"
 VITE_REDIRECT_URL="http://localhost:3002"
