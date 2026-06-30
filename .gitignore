@@ -42,6 +42,7 @@ tmp-*.cjs
 tmp-*.js
 tmp-*.mjs
 /tmp-*
+/project-audit-checklist.html
 /row.startsWith(name
 /typeof
 /tsc
