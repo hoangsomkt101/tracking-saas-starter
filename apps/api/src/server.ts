@@ -777,6 +777,10 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     return url ? url.searchParams.get(name) || '' : '';
   }
 
+  function setUrlParam(url, name, value) {
+    if (value) url.searchParams.set(name, value);
+  }
+
   function readCookie(name) {
     const prefix = name + '=';
     const item = (document.cookie || '').split(';').map((part) => part.trim()).find((part) => part.indexOf(prefix) === 0);
@@ -833,6 +837,33 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     const url = toUrl(href);
     if (!url) return '';
     url.searchParams.set(getTrackingParamKey(trackingLink), clickUuid);
+    return url.href;
+  }
+
+  function getSourceAttribution(detection) {
+    const currentHref = detection ? getCandidateUrl(detection) || detection.href : '';
+    const originalHref = detection ? detection.originalHref || detection.href : '';
+    const cookies = getKnownCookies();
+    return {
+      cookies,
+      fbp: cookies.fbp,
+      fbc: cookies.fbc,
+      ttp: cookies.ttp,
+      fbclid: getSearchParam(window.location.href, 'fbclid') || getSearchParam(currentHref, 'fbclid') || getSearchParam(originalHref, 'fbclid'),
+      ttclid: getSearchParam(window.location.href, 'ttclid') || getSearchParam(currentHref, 'ttclid') || getSearchParam(originalHref, 'ttclid')
+    };
+  }
+
+  function withShortlinkAttribution(href, detection) {
+    const url = toUrl(href);
+    if (!url) return '';
+    const attribution = getSourceAttribution(detection);
+    setUrlParam(url, 'atp_source', '1');
+    setUrlParam(url, 'atp_fbp', attribution.fbp);
+    setUrlParam(url, 'atp_fbc', attribution.fbc);
+    setUrlParam(url, 'atp_ttp', attribution.ttp);
+    if (!url.searchParams.get('fbclid')) setUrlParam(url, 'fbclid', attribution.fbclid);
+    if (!url.searchParams.get('ttclid')) setUrlParam(url, 'ttclid', attribution.ttclid);
     return url.href;
   }
 
@@ -919,6 +950,30 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     }
   }
 
+  function applyShortlinkAttribution(detection, trackingLink) {
+    if (!detection.element || detection.type !== 'shortlink') return;
+    const binding = getElementBinding(detection.element, trackingLink);
+    const originalHref = detection.originalHref || detection.href;
+    const currentHref = getCandidateUrl(detection) || detection.href;
+    const nextHref = withShortlinkAttribution(currentHref, detection);
+    if (nextHref) {
+      if (detection.source === 'form') detection.element.setAttribute('action', nextHref);
+      else detection.element.setAttribute('href', nextHref);
+      detection.originalHref = originalHref;
+      detection.href = nextHref;
+    }
+    if (!binding.bound) {
+      detection.element.addEventListener(detection.source === 'form' ? 'submit' : 'click', () => {
+        const freshHref = withShortlinkAttribution(getCandidateUrl(detection) || detection.href, detection);
+        if (!freshHref) return;
+        if (detection.source === 'form') detection.element.setAttribute('action', freshHref);
+        else detection.element.setAttribute('href', freshHref);
+        detection.href = freshHref;
+      }, { capture: true });
+      binding.bound = true;
+    }
+  }
+
   function getCandidates() {
     const links = Array.from(document.querySelectorAll('a[href], area[href]')).map((element, index) => ({
       element,
@@ -968,6 +1023,7 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
           shortlinkPaths: trackingLink.shortlinkPaths
         };
         if (matchType === 'affiliate_url') applyAffiliateClickUuid(detection, trackingLink);
+        else if (matchType === 'shortlink') applyShortlinkAttribution(detection, trackingLink);
         detections.push({ ...detection, element: undefined });
       }
     }
@@ -1117,6 +1173,16 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
       }
 
       if (!clickEvent) throw new Error('Click event was not created')
+      if (duplicate) {
+        const missingClickData = compactRecord({
+          fbp: clickEvent.fbp ? undefined : fbp,
+          fbc: clickEvent.fbc ? undefined : fbc,
+          ttp: clickEvent.ttp ? undefined : ttp,
+          ttclid: clickEvent.ttclid ? undefined : ttclid,
+          fbclid: clickEvent.fbclid ? undefined : fbclid
+        })
+        if (hasKeys(missingClickData)) clickEvent = await prisma.clickEvent.update({ where: { id: clickEvent.id }, data: missingClickData })
+      }
       if (!duplicate) {
         await enqueueClick(clickEvent, TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME)
         await createActivityLog({ tenantId: tenant.id, source: 'atp.js', eventType: 'tracking_script.affiliate_click', message: `Affiliate URL click tracked for "${trackingLink.slug}"`, entityType: 'clickEvent', entityId: clickEvent.id, metadata: { clickEventId: clickEvent.id, clickUuid, trackingLinkId: trackingLink.id, campaignId: trackingLink.campaignId, trackingParamKey, matchedHref, originalHref, pageUrl, capiEventName: TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME } })
@@ -1487,4 +1553,3 @@ app.setErrorHandler((error, _req, reply) => {
 })
 
 app.listen({ port: Number(process.env.API_PORT ?? 3001), host: '0.0.0.0' })
-

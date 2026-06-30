@@ -29,6 +29,13 @@ type RedirectParams = {
 type RedirectQuery = {
   fbclid?: string
   ttclid?: string
+  atp_fbp?: string
+  atp_fbc?: string
+  atp_ttp?: string
+  atp_source?: string
+  fbp?: string
+  fbc?: string
+  ttp?: string
 }
 
 async function getTenantPlanOrDefault(tenantId: string) {
@@ -52,6 +59,9 @@ type BrowserPixelDataset = { platform: 'meta' | 'tiktok'; pixelId: string }
 type BrowserPixelEventName = 'AddToCart'
 
 const browserPixelEventNames: BrowserPixelEventName[] = ['AddToCart']
+
+function compactRecord<T extends AnyRecord>(value: T): AnyRecord { return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== null && entry !== undefined && entry !== '')) }
+function getPlainRecord(value: unknown): AnyRecord { return value && typeof value === 'object' && !Array.isArray(value) ? value as AnyRecord : {} }
 
 function toJsonSafe(value: unknown): unknown {
   if (value === null || value === undefined) return value
@@ -89,6 +99,7 @@ function resolveTrackingParamKey(platform: { slug?: string | null; name?: string
 function getFirstHeaderValue(value?: string | null) { return value?.split(',')[0]?.trim() || undefined }
 function getHeaderString(req: FastifyRequest, name: string) { const value = req.headers[name.toLowerCase()]; return Array.isArray(value) ? value[0] : typeof value === 'string' && value.trim() ? value.trim() : undefined }
 function getClientIp(req: FastifyRequest) { return getFirstHeaderValue(getHeaderString(req, 'cf-connecting-ip')) ?? getFirstHeaderValue(getHeaderString(req, 'true-client-ip')) ?? getFirstHeaderValue(getHeaderString(req, 'x-real-ip')) ?? getFirstHeaderValue(getHeaderString(req, 'x-forwarded-for')) ?? req.ip }
+function optionalLimitedString(value: unknown, maxLength = 512) { return typeof value === 'string' && value.trim() ? value.trim().slice(0, maxLength) : undefined }
 
 function buildAffiliateRedirectUrl(affiliateUrl: string, trackingParamKey: string, clickUuid: string) {
   const url = new URL(validateHttpUrl(affiliateUrl, 'affiliateUrl'))
@@ -233,11 +244,67 @@ function buildTrackingLinkSocialMeta(input: { trackingLink: AnyRecord; prelander
   }
 }
 
-function buildRedirectHtml(url: string, prelander?: BridgePrelander | null, options: { pixelScripts?: string; directRedirectDelayMs?: number; socialMeta?: RedirectSocialMeta; requestId?: string } = {}) {
+function buildSourceAttributionQueryCleanupScript() {
+  return `<script>
+            (() => {
+              try {
+                const url = new URL(window.location.href);
+                const sourceParams = ['atp_source', 'atp_fbp', 'atp_fbc', 'atp_ttp', 'fbp', 'fbc', 'ttp'];
+                let changed = false;
+                for (const param of sourceParams) {
+                  if (url.searchParams.has(param)) {
+                    url.searchParams.delete(param);
+                    changed = true;
+                  }
+                }
+                if (changed) window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+              } catch (_) {}
+            })();
+          </script>`
+}
+
+function buildBridgeCookieAttributionScript(clickUuid?: string, enabled = false) {
+  if (!enabled || !clickUuid) return ''
+  const scriptBody = `(() => {
+              const clickUuid = ${jsonForHtml(clickUuid)};
+              let sent = false;
+              const readCookie = (name) => {
+                const prefix = name + '=';
+                const item = (document.cookie || '').split(';').map((part) => part.trim()).find((part) => part.indexOf(prefix) === 0);
+                if (!item) return '';
+                const value = item.slice(prefix.length);
+                try { return decodeURIComponent(value); } catch (_) { return value; }
+              };
+              const send = () => {
+                if (sent) return;
+                const payload = { clickUuid, fbp: readCookie('_fbp'), fbc: readCookie('_fbc'), ttp: readCookie('_ttp') };
+                if (!payload.fbp && !payload.fbc && !payload.ttp) return;
+                sent = true;
+                const body = JSON.stringify(payload);
+                if (navigator.sendBeacon) {
+                  try {
+                    const blob = new Blob([body], { type: 'application/json' });
+                    if (navigator.sendBeacon('/_atp/bridge-attribution', blob)) return;
+                  } catch (_) {}
+                }
+                if (window.fetch) fetch('/_atp/bridge-attribution', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true, credentials: 'same-origin' }).catch(() => {});
+              };
+              window.setTimeout(send, 900);
+              window.addEventListener('pagehide', send, { once: true });
+            })();`
+  return `<script>
+            ${scriptBody}
+          </script>`
+}
+
+function buildRedirectHtml(url: string, prelander?: BridgePrelander | null, options: { pixelScripts?: string; directRedirectDelayMs?: number; socialMeta?: RedirectSocialMeta; requestId?: string; allowBridgeCookieAttribution?: boolean } = {}) {
   const encodedUrl = jsonForHtml(url)
   const pixelScripts = options.pixelScripts ?? ''
   const directRedirectDelay = options.directRedirectDelayMs ?? 250
   const socialMetaTags = buildSocialMetaTags(options.socialMeta)
+  const sourceAttributionCleanupScript = buildSourceAttributionQueryCleanupScript()
+  const bridgeCookieAttributionScript = buildBridgeCookieAttributionScript(options.requestId, options.allowBridgeCookieAttribution)
+  const bridgeCookieAttributionScriptBody = bridgeCookieAttributionScript.replace(/^<script>\s*|\s*<\/script>$/g, '')
 
   if (!prelander) {
     return `<!doctype html>
@@ -248,10 +315,12 @@ function buildRedirectHtml(url: string, prelander?: BridgePrelander | null, opti
           <meta name="robots" content="noindex,nofollow" />
           <meta name="viewport" content="width=device-width, initial-scale=1" />
           ${socialMetaTags}
+          ${sourceAttributionCleanupScript}
           ${pixelScripts}
         </head>
         <body>
           <h3>Redirecting...</h3>
+          ${bridgeCookieAttributionScript}
           <script>
             setTimeout(() => {
               window.location.replace(${encodedUrl})
@@ -284,6 +353,7 @@ function buildRedirectHtml(url: string, prelander?: BridgePrelander | null, opti
         <meta name="robots" content="noindex,nofollow" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         ${socialMetaTags}
+        ${sourceAttributionCleanupScript}
         ${pixelScripts}
         <style>
           :root { color-scheme: ${isDark ? 'dark' : 'light'}; }
@@ -335,6 +405,7 @@ function buildRedirectHtml(url: string, prelander?: BridgePrelander | null, opti
           </main>
         </div>
         <script>
+          ${bridgeCookieAttributionScriptBody}
           setTimeout(() => {
             window.location.replace(${encodedUrl})
           }, ${delay})
@@ -365,10 +436,37 @@ app.get('/metrics', async () => {
   return { service: 'redirect', queue: { clickEvents: { waiting, active, delayed, failed } } }
 })
 
+app.post('/_atp/bridge-attribution', async (req, reply) => {
+  const body = getPlainRecord(req.body)
+  const clickUuid = optionalLimitedString(body.clickUuid, 160)
+  if (!clickUuid) return reply.code(400).send({ error: 'clickUuid is required' })
+
+  const clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
+  if (!clickEvent) return reply.code(404).send({ error: 'Click event not found' })
+
+  const metadata = getPlainRecord(clickEvent.metadata)
+  if (metadata.sourceAttribution === 'atp.js') return { ok: true, skipped: true, reason: 'source attribution already captured' }
+
+  const bridgeClickData = compactRecord({
+    fbp: optionalLimitedString(body.fbp),
+    fbc: optionalLimitedString(body.fbc),
+    ttp: optionalLimitedString(body.ttp)
+  })
+  if (!Object.keys(bridgeClickData).length) return { ok: true, skipped: true, reason: 'no bridge attribution values' }
+
+  await prisma.clickEvent.update({
+    where: { id: clickEvent.id },
+    data: {
+      ...bridgeClickData,
+      metadata: compactRecord({ ...metadata, sourceAttribution: 'bridge', bridgeCookieAttribution: true }) as Prisma.InputJsonValue
+    }
+  })
+  return { ok: true }
+})
+
 app.get('/:slug/:tenantKey', async (req, reply) => {
   const { tenantKey, slug } = req.params as RedirectParams
   const query = req.query as RedirectQuery
-  const cookies = req.cookies
 
   const trackingLink = await prisma.trackingLink.findFirst({
     where: { slug, tenant: { OR: [{ id: tenantKey }, { publicKey: tenantKey }] } },
@@ -384,6 +482,13 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
 
   await assertClickLimit(trackingLink.tenantId)
 
+  const fbclid = optionalLimitedString(query.fbclid)
+  const ttclid = optionalLimitedString(query.ttclid)
+  const sourceFbp = optionalLimitedString(query.atp_fbp ?? query.fbp)
+  const sourceFbc = optionalLimitedString(query.atp_fbc ?? query.fbc)
+  const sourceTtp = optionalLimitedString(query.atp_ttp ?? query.ttp)
+  const hasSourceAttribution = optionalLimitedString(query.atp_source) === '1' || Boolean(sourceFbp || sourceFbc || sourceTtp)
+
   const clickEvent = await prisma.clickEvent.create({
     data: {
       tenantId: trackingLink.tenantId,
@@ -393,12 +498,12 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
       ip: getClientIp(req),
       userAgent: normalizeHeaderValue(req.headers['user-agent']),
       referrer: normalizeHeaderValue(req.headers.referer),
-      fbp: cookies._fbp,
-      fbc: createFbc(query.fbclid),
-      ttp: cookies._ttp,
-      ttclid: query.ttclid,
-      fbclid: query.fbclid,
-      metadata: { slug, tenantKey, tenantId: trackingLink.tenantId, source: 'redirect' }
+      fbp: sourceFbp,
+      fbc: sourceFbc ?? createFbc(fbclid),
+      ttp: sourceTtp,
+      ttclid,
+      fbclid,
+      metadata: compactRecord({ slug, tenantKey, tenantId: trackingLink.tenantId, source: 'redirect', sourceAttribution: hasSourceAttribution ? 'atp.js' : undefined }) as Prisma.InputJsonValue
     }
   })
 
@@ -450,13 +555,13 @@ app.get('/:slug/:tenantKey', async (req, reply) => {
       usesPrelander,
       ip: clickEvent.ip,
       referrer: clickEvent.referrer,
-      fbclid: query.fbclid,
-      ttclid: query.ttclid,
+      fbclid,
+      ttclid,
       browserPixelEvents: browserPixels.length ? browserPixelEventNames.map((eventName) => ({ eventName, eventId: getPixelEventId(eventName, clickEvent.clickUuid) })) : []
     }
   })
-  if (!usesPrelander && !browserPixels.length) return reply.redirect(redirectUrl, 302)
-  return reply.type('text/html').send(buildRedirectHtml(redirectUrl, inlinePrelander, { pixelScripts, directRedirectDelayMs: browserPixels.length ? browserPixelRedirectDelayMs : 250, socialMeta, requestId: clickEvent.clickUuid }))
+  if (!usesPrelander && !browserPixels.length && !hasSourceAttribution) return reply.redirect(redirectUrl, 302)
+  return reply.type('text/html').send(buildRedirectHtml(redirectUrl, inlinePrelander, { pixelScripts, directRedirectDelayMs: browserPixels.length ? browserPixelRedirectDelayMs : 250, socialMeta, requestId: clickEvent.clickUuid, allowBridgeCookieAttribution: !hasSourceAttribution }))
 })
 
 app.addHook('onClose', async () => { await clickEventsQueue.close(); await readinessRedis.quit() })
