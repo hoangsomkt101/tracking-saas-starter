@@ -55,7 +55,7 @@ function stableStringify(value: unknown): string { if (value === null || value =
 function sha256Hex(value: string) { return createHash('sha256').update(value).digest('hex') }
 function getAffiliatePlatformChoice(input: AnyRecord, fallback?: { name?: string | null; slug?: string | null; trackingParamKey?: string | null }) { const candidates = [input.platform, input.platformKey, input.network, input.slug, input.trackingParamKey, fallback?.slug, fallback?.trackingParamKey, fallback?.name, input.name]; for (const candidate of candidates) { const platform = getSupportedAffiliatePlatform(candidate); if (platform) return platform } return requireSupportedAffiliatePlatform(input.platform ?? input.platformKey ?? input.network ?? input.slug ?? input.trackingParamKey ?? input.name) }
 function getAffiliatePlatformBaseData(definition: SupportedAffiliatePlatformDefinition) { return { trackingParamKey: definition.trackingParamKey, webhookMethod: definition.webhookMethod, defaultEventName: definition.defaultEventName, eventMapping: [] as Prisma.InputJsonValue } }
-function resolveTrackingParamKey(platform?: { slug?: string | null; name?: string | null; trackingParamKey?: string | null }, options: { preferStored?: boolean } = {}) { const stored = optionalString(platform?.trackingParamKey); if (options.preferStored && stored) return stored; const supported = getSupportedAffiliatePlatform(platform?.slug ?? '') ?? getSupportedAffiliatePlatform(stored ?? '') ?? getSupportedAffiliatePlatform(platform?.name ?? ''); return supported?.trackingParamKey ?? stored ?? 'subid1' }
+function resolveTrackingParamKey(platform?: { slug?: string | null; name?: string | null; trackingParamKey?: string | null }, options: { preferStored?: boolean } = {}) { const stored = optionalString(platform?.trackingParamKey); if (options.preferStored && stored) return stored; const supported = getSupportedAffiliatePlatform(platform?.slug ?? '') ?? getSupportedAffiliatePlatform(stored ?? '') ?? getSupportedAffiliatePlatform(platform?.name ?? ''); return supported?.trackingParamKey ?? stored ?? 'subId1' }
 function getBearerToken(req: FastifyRequest) { const h = req.headers.authorization; return h?.startsWith('Bearer ') ? h.slice('Bearer '.length).trim() : null }
 function isClerkConfigured() { return Boolean(process.env.CLERK_SECRET_KEY && !process.env.CLERK_SECRET_KEY.includes('your_clerk_secret_key') && !process.env.CLERK_SECRET_KEY.includes('replace_me')) }
 function isPublicRoute(req: FastifyRequest) { const path = req.url.split('?')[0]; return path === '/health' || path === '/health/live' || path === '/health/ready' || path === '/metrics' || path === '/atp.js' || path === '/atp/events' || req.method === 'OPTIONS' || path.startsWith('/affiliate-webhooks/') }
@@ -73,7 +73,7 @@ const trackingTenantKeyPattern = /^[a-zA-Z0-9_-]{1,128}$/
 function parseTrackingPropertyId(value: unknown) { const propertyId = optionalQueryString(value); if (!propertyId?.startsWith(TRACKING_PROPERTY_PREFIX)) return null; const tenantKey = propertyId.slice(TRACKING_PROPERTY_PREFIX.length).trim(); return tenantKey && trackingTenantKeyPattern.test(tenantKey) ? { propertyId, tenantKey } : null }
 function parseHttpUrl(value: string) { try { const text = value.trim(); const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`; const url = new URL(candidate); return ['http:', 'https:'].includes(url.protocol) && url.hostname ? url : null } catch { return null } }
 function cleanUrlPath(pathname: string) { return (pathname || '/').replace(/\/+$/, '') || '/' }
-function trackingAffiliateUrlMatches(href: string | undefined, affiliateUrl: string) { if (!href) return false; const current = parseHttpUrl(href); const expected = parseHttpUrl(affiliateUrl); if (!current || !expected) return false; current.hash = ''; expected.hash = ''; if (current.origin !== expected.origin) return false; if (cleanUrlPath(current.pathname) !== cleanUrlPath(expected.pathname)) return false; for (const [key, value] of expected.searchParams.entries()) { if (current.searchParams.get(key) !== value) return false } return true }
+function trackingAffiliateUrlMatches(href: string | undefined, affiliateUrl: string, trackingParamKey: string) { if (!href) return false; const current = parseHttpUrl(href); const expected = parseHttpUrl(affiliateUrl); if (!current || !expected) return false; current.hash = ''; expected.hash = ''; if (current.origin !== expected.origin) return false; if (cleanUrlPath(current.pathname) !== cleanUrlPath(expected.pathname)) return false; for (const [key, value] of expected.searchParams.entries()) { if (!(trackingParamKey.toLowerCase() === 'subid1' && key.toLowerCase() === 'subid1') && current.searchParams.get(key) !== value) return false } return true }
 function normalizeUrlHost(url: URL) { const hostname = url.hostname.toLowerCase().replace(/\.$/, ''); return url.port ? `${hostname}:${url.port}` : hostname }
 const websiteHostPattern = /^(localhost|\[[0-9a-f:.]+\]|\d{1,3}(?:\.\d{1,3}){3}|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*)(?::\d{1,5})?$/
 function normalizeWebsiteDomainInput(value: unknown) {
@@ -129,6 +129,7 @@ function getPublicRequestOrigin(req: FastifyRequest) {
 }
 function optionalLimitedString(value: unknown, maxLength = 1024) { const text = optionalString(value); return text ? text.slice(0, maxLength) : undefined }
 function getUrlSearchParam(value: string | undefined, key: string) { if (!value) return undefined; const url = parseHttpUrl(value); return optionalLimitedString(url?.searchParams.get(key), 512) }
+function getUrlSearchParamsIgnoreCase(value: string | undefined, key: string) { if (!value) return []; const url = parseHttpUrl(value); if (!url) return []; return [...url.searchParams.entries()].filter(([candidate]) => candidate.toLowerCase() === key.toLowerCase()).map(([, candidate]) => candidate).filter(Boolean) }
 const TRACKING_SCRIPT_VIEW_CONTENT_CLICK_UUID_PREFIX = 'atp_'
 const TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME = 'AddToCart'
 function normalizeTrackingEventId(value: unknown) { const raw = optionalLimitedString(value, 160) ?? randomUUID(); const normalized = raw.replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 160); return normalized || randomUUID() }
@@ -333,7 +334,7 @@ function getBackfilledConversionEventNames(platform: { slug?: string | null; nam
   return primaryEventName ? resolveImpactPostbackEventNames(platform, payload, primaryEventName) : []
 }
 function extractClickUuid(payload: AnyRecord, trackingParamKey: string) {
-  return getPartnerStackClickUuid(payload) ?? getPayloadString(payload, ['clickUuid', 'click_uuid', 'click_id', 'subid', 'sub_id', 'subid1', 'sid1', 'sid', 'fp_sid', trackingParamKey])
+  return getPartnerStackClickUuid(payload) ?? getPayloadString(payload, ['clickUuid', 'click_uuid', 'click_id', 'subid', 'sub_id', 'subId1', 'subid1', 'sid1', 'sid', 'fp_sid', trackingParamKey])
 }
 function resolveImpactPostbackEventNames(platform: { slug?: string | null; name?: string | null; trackingParamKey?: string | null }, payload: AnyRecord, primaryEventName: string) {
   const supported = getSupportedAffiliatePlatform(platform.slug ?? '') ?? getSupportedAffiliatePlatform(platform.trackingParamKey ?? '') ?? getSupportedAffiliatePlatform(platform.name ?? '')
@@ -762,7 +763,7 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     return shortlinkPaths.some((path) => cleanPath(path) === currentPath);
   }
 
-  function affiliateUrlMatches(href, affiliateUrl) {
+  function affiliateUrlMatches(href, affiliateUrl, trackingParamKey) {
     const current = toUrl(href);
     const expected = toUrl(affiliateUrl);
     if (!current || !expected) return false;
@@ -771,7 +772,7 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     if (current.origin !== expected.origin) return false;
     if (cleanPath(current.pathname) !== cleanPath(expected.pathname)) return false;
     for (const [key, value] of expected.searchParams.entries()) {
-      if (current.searchParams.get(key) !== value) return false;
+      if (!(String(trackingParamKey || '').toLowerCase() === 'subid1' && key.toLowerCase() === 'subid1') && current.searchParams.get(key) !== value) return false;
     }
     return true;
   }
@@ -861,8 +862,8 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
   }
 
   function getTrackingParamKey(trackingLink) {
-    const key = String(trackingLink.trackingParamKey || 'subid1').trim();
-    return key || 'subid1';
+    const key = String(trackingLink.trackingParamKey || 'subId1').trim();
+    return key || 'subId1';
   }
 
   function getClickUuidScope(trackingLink) {
@@ -902,7 +903,13 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
   function withClickUuid(href, trackingLink, clickUuid) {
     const url = toUrl(href);
     if (!url) return '';
-    url.searchParams.set(getTrackingParamKey(trackingLink), clickUuid);
+    const trackingParamKey = getTrackingParamKey(trackingLink);
+    if (trackingParamKey.toLowerCase() === 'subid1') {
+      for (const key of Array.from(url.searchParams.keys())) {
+        if (key.toLowerCase() === 'subid1') url.searchParams.delete(key);
+      }
+    }
+    url.searchParams.set(trackingParamKey, clickUuid);
     return url.href;
   }
 
@@ -1075,7 +1082,7 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     for (const candidate of candidates) {
       if (!candidate.href) continue;
       for (const trackingLink of config.trackingLinks) {
-        const matchType = affiliateUrlMatches(candidate.href, trackingLink.affiliateUrl)
+        const matchType = affiliateUrlMatches(candidate.href, trackingLink.affiliateUrl, getTrackingParamKey(trackingLink))
           ? 'affiliate_url'
           : shortlinkPathMatches(candidate.href, trackingLink.shortlinkPaths)
             ? 'shortlink'
@@ -1206,9 +1213,11 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
   if (normalizedRequestedEventName === 'affiliateclick' || normalizedRequestedEventName === 'click') {
     const clickUuid = normalizeClientClickUuid(body.clickUuid) ?? randomUUID()
     const trackingParamKey = resolveTrackingParamKey(trackingLink.affiliatePlatform)
-    const paramClickUuid = getUrlSearchParam(matchedHref, trackingParamKey)
-    if (paramClickUuid && paramClickUuid !== clickUuid) return send(409, { error: 'clickUuid does not match affiliate URL tracking parameter' })
-    if (![matchedHref, originalHref].some((href) => trackingAffiliateUrlMatches(href, trackingLink.affiliateUrl))) return send(400, { error: 'Affiliate URL does not match tracking link' })
+    const paramClickUuids = trackingParamKey.toLowerCase() === 'subid1'
+      ? getUrlSearchParamsIgnoreCase(matchedHref, trackingParamKey)
+      : [getUrlSearchParam(matchedHref, trackingParamKey)].filter((value): value is string => Boolean(value))
+    if (new Set(paramClickUuids).size > 1 || paramClickUuids.some((value) => value !== clickUuid)) return send(409, { error: 'clickUuid does not match affiliate URL tracking parameter' })
+    if (![matchedHref, originalHref].some((href) => trackingAffiliateUrlMatches(href, trackingLink.affiliateUrl, trackingParamKey))) return send(400, { error: 'Affiliate URL does not match tracking link' })
 
     const metadata = compactRecord({ ...commonMetadata, source: 'atp.affiliate_click', eventName: 'AffiliateClick', capiEventName: TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME, trackingParamKey, clickUuid })
     try {

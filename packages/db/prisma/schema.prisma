@@ -168,7 +168,7 @@ model AffiliatePlatform {
   tenantId         String
   name             String
   slug             String
-  trackingParamKey String                     @default("subid1")
+  trackingParamKey String                     @default("subId1")
   webhookMethod    String                     @default("POST")
   webhookToken     String                     @default(uuid())
   eventMapping     Json                       @default("[]")

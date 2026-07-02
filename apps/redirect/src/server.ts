@@ -93,7 +93,7 @@ async function createActivityLog(input: { tenantId: string; level?: 'DEBUG' | 'I
 
 function resolveTrackingParamKey(platform: { slug?: string | null; name?: string | null; trackingParamKey?: string | null }) {
   const supported = getSupportedAffiliatePlatform(platform.slug ?? '') ?? getSupportedAffiliatePlatform(platform.trackingParamKey ?? '') ?? getSupportedAffiliatePlatform(platform.name ?? '')
-  return supported?.trackingParamKey ?? platform.trackingParamKey ?? 'subid1'
+  return supported?.trackingParamKey ?? platform.trackingParamKey ?? 'subId1'
 }
 
 function getFirstHeaderValue(value?: string | null) { return value?.split(',')[0]?.trim() || undefined }
@@ -103,6 +103,9 @@ function optionalLimitedString(value: unknown, maxLength = 512) { return typeof 
 
 function buildAffiliateRedirectUrl(affiliateUrl: string, trackingParamKey: string, clickUuid: string) {
   const url = new URL(validateHttpUrl(affiliateUrl, 'affiliateUrl'))
+  if (trackingParamKey.toLowerCase() === 'subid1') {
+    for (const key of [...url.searchParams.keys()]) if (key.toLowerCase() === 'subid1') url.searchParams.delete(key)
+  }
   url.searchParams.set(trackingParamKey, clickUuid)
   return url.toString()
 }

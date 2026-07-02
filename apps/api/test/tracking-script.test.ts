@@ -108,8 +108,8 @@ function executeTrackingScript(linkHref: string | string[], options: { execution
             brandId: 'brand-id',
             slug: 'offer',
             affiliateUrl: 'https://affiliate.example.com/offer',
-            trackingParamKey: 'subid1',
-            affiliatePlatform: { name: 'Test', slug: 'test', trackingParamKey: 'subid1' },
+            trackingParamKey: 'subId1',
+            affiliatePlatform: { name: 'Impact', slug: 'impact', trackingParamKey: 'subId1' },
             shortlinkPaths: ['/offer/tenant', '/offer/tenant-id']
         }]
     }
@@ -224,13 +224,22 @@ describe('atp.js affiliate URL decoration', () => {
             'https://affiliate.example.com/offer'
         ])
 
-        const clickUuids = result.links.map((link) => new URL(link.href).searchParams.get('subid1'))
+        const clickUuids = result.links.map((link) => new URL(link.href).searchParams.get('subId1'))
         assert.deepEqual(clickUuids, ['click-1', 'click-1'])
         assert.equal(result.generatedId, 1)
     })
 
+    it('replaces legacy Impact subid1 with canonical subId1', () => {
+        const result = executeTrackingScript('https://affiliate.example.com/offer?subid1=legacy&campaign=test')
+        const url = new URL(result.links[0].href)
+
+        assert.equal(url.searchParams.get('subId1'), 'click-1')
+        assert.equal(url.searchParams.get('subid1'), null)
+        assert.equal(url.searchParams.get('campaign'), 'test')
+    })
+
     it('shares a UUID between tracking links for the same brand', () => {
-        const affiliatePlatform = { name: 'Test', slug: 'test', trackingParamKey: 'subid1' }
+        const affiliatePlatform = { name: 'Impact', slug: 'impact', trackingParamKey: 'subId1' }
         const result = executeTrackingScript([
             'https://affiliate.example.com/offer-a',
             'https://affiliate.example.com/offer-b'
@@ -240,7 +249,7 @@ describe('atp.js affiliate URL decoration', () => {
                 brandId: 'shared-brand-id',
                 slug: 'offer-a',
                 affiliateUrl: 'https://affiliate.example.com/offer-a',
-                trackingParamKey: 'subid1',
+                trackingParamKey: 'subId1',
                 affiliatePlatform,
                 shortlinkPaths: ['/offer-a/tenant', '/offer-a/tenant-id']
             }, {
@@ -248,13 +257,13 @@ describe('atp.js affiliate URL decoration', () => {
                 brandId: 'shared-brand-id',
                 slug: 'offer-b',
                 affiliateUrl: 'https://affiliate.example.com/offer-b',
-                trackingParamKey: 'subid1',
+                trackingParamKey: 'subId1',
                 affiliatePlatform,
                 shortlinkPaths: ['/offer-b/tenant', '/offer-b/tenant-id']
             }]
         })
 
-        const clickUuids = result.links.map((link) => new URL(link.href).searchParams.get('subid1'))
+        const clickUuids = result.links.map((link) => new URL(link.href).searchParams.get('subId1'))
         assert.deepEqual(clickUuids, ['click-1', 'click-1'])
         assert.equal(result.generatedId, 1)
     })
@@ -263,8 +272,8 @@ describe('atp.js affiliate URL decoration', () => {
         const firstPage = executeTrackingScript('https://affiliate.example.com/offer', { uuidPrefix: 'first-page' })
         const secondPage = executeTrackingScript('https://affiliate.example.com/offer', { uuidPrefix: 'second-page' })
 
-        assert.equal(new URL(firstPage.links[0].href).searchParams.get('subid1'), 'first-page-1')
-        assert.equal(new URL(secondPage.links[0].href).searchParams.get('subid1'), 'second-page-1')
+        assert.equal(new URL(firstPage.links[0].href).searchParams.get('subId1'), 'first-page-1')
+        assert.equal(new URL(secondPage.links[0].href).searchParams.get('subId1'), 'second-page-1')
         assert.equal(secondPage.generatedId, 1)
     })
 
@@ -276,12 +285,12 @@ describe('atp.js affiliate URL decoration', () => {
         result.mutationCallback()
         result.timers.find((timer) => timer.delay === 250)?.callback()
 
-        assert.equal(new URL(result.links[0].href).searchParams.get('subid1'), 'click-1')
+        assert.equal(new URL(result.links[0].href).searchParams.get('subId1'), 'click-1')
         assert.equal(result.generatedId, 1)
     })
 
     it('uses different UUIDs for different brands', () => {
-        const affiliatePlatform = { name: 'Test', slug: 'test', trackingParamKey: 'subid1' }
+        const affiliatePlatform = { name: 'Impact', slug: 'impact', trackingParamKey: 'subId1' }
         const result = executeTrackingScript([
             'https://affiliate.example.com/offer-a',
             'https://affiliate.example.com/offer-b'
@@ -291,7 +300,7 @@ describe('atp.js affiliate URL decoration', () => {
                 brandId: 'brand-a',
                 slug: 'offer-a',
                 affiliateUrl: 'https://affiliate.example.com/offer-a',
-                trackingParamKey: 'subid1',
+                trackingParamKey: 'subId1',
                 affiliatePlatform,
                 shortlinkPaths: ['/offer-a/tenant', '/offer-a/tenant-id']
             }, {
@@ -299,13 +308,13 @@ describe('atp.js affiliate URL decoration', () => {
                 brandId: 'brand-b',
                 slug: 'offer-b',
                 affiliateUrl: 'https://affiliate.example.com/offer-b',
-                trackingParamKey: 'subid1',
+                trackingParamKey: 'subId1',
                 affiliatePlatform,
                 shortlinkPaths: ['/offer-b/tenant', '/offer-b/tenant-id']
             }]
         })
 
-        const clickUuids = result.links.map((link) => new URL(link.href).searchParams.get('subid1'))
+        const clickUuids = result.links.map((link) => new URL(link.href).searchParams.get('subId1'))
         assert.deepEqual(clickUuids, ['click-1', 'click-2'])
     })
 })

@@ -6,6 +6,7 @@ import {
     getImpactEventMatch,
     getImpactPayoutNumber,
     getImpactRefClickId,
+    getSupportedAffiliatePlatformParamKey,
     isImpactPostbackPayload,
     parseMoneyNumber,
     resolveImpactEventNames
@@ -94,6 +95,13 @@ const sourceFixtures: ImpactFixture[] = [
 ]
 
 describe('Impact postback helpers', () => {
+    it('uses subId1 as the canonical Impact tracking parameter', () => {
+        assert.equal(getSupportedAffiliatePlatformParamKey('impact'), 'subId1')
+        assert.equal(getSupportedAffiliatePlatformParamKey('subid1'), 'subId1')
+        assert.equal(getSupportedAffiliatePlatformParamKey('subId1'), 'subId1')
+        assert.equal(getSupportedAffiliatePlatformParamKey('SubId1'), 'subId1')
+    })
+
     it('parses Impact money string values before comparison', () => {
         assert.equal(parseMoneyNumber('0.00'), 0)
         assert.equal(parseMoneyNumber('100.00'), 100)
