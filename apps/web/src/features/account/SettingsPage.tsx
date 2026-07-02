@@ -73,7 +73,7 @@ export function SettingsPage({ ctx }: { ctx: DashboardContext }) {
                     <CardContent>
                         <div className="tracking-code-box">
                             <pre className="webhook-code-sample"><code>{trackingScript || 'Không tìm thấy workspace để tạo mã tracking.'}</code></pre>
-                            <p className="form-hint">Mã sẽ quét Affiliate URL/Shortlink thuộc Tracking Links và tự gắn click ID vào Affiliate URL; chỉ khi người dùng click thật mới gửi click và CAPI AddToCart.</p>
+                            <p className="form-hint">Mã sẽ quét Affiliate URL/Shortlink thuộc Tracking Links. Khi phát hiện link, mã gọi fbq sẵn có để gửi PageView, TimeOnPage và ScrollDepth, không tự nạp Facebook Pixel; chỉ khi người dùng click thật mới gửi click và CAPI AddToCart.</p>
                         </div>
                     </CardContent>
                 </Card>

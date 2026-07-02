@@ -687,6 +687,7 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
       where: { tenantId: tenant.id, isActive: true },
       select: {
         id: true,
+        brandId: true,
         slug: true,
         affiliateUrl: true,
         affiliatePlatform: { select: { name: true, slug: true, trackingParamKey: true } }
@@ -702,6 +703,7 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     eventEndpointPath: `/atp/events?property_id=${encodeURIComponent(parsed.propertyId)}`,
     trackingLinks: trackingLinks.map((link) => ({
       id: link.id,
+      brandId: link.brandId,
       slug: link.slug,
       affiliateUrl: link.affiliateUrl,
       trackingParamKey: resolveTrackingParamKey(link.affiliatePlatform),
@@ -712,9 +714,11 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
 
   return scriptHeaders(allowedOrigin).send(`(() => {
   const config = ${JSON.stringify(payload)};
-  const detectedKeys = new Set();
   const sentClickKeys = new Set();
+  const firedFacebookPixelEvents = new Set();
+  const pageClickUuids = window.__affTrackProPageClickUuids || (window.__affTrackProPageClickUuids = {});
   let loggedEmpty = false;
+  let engagementTrackingStarted = false;
   let mutationTimer = null;
   const scriptBaseUrl = document.currentScript && document.currentScript.src ? document.currentScript.src : window.location.href;
   const eventEndpointUrl = resolveEventEndpoint();
@@ -808,9 +812,67 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
     return String(value || '').replace(/[^a-zA-Z0-9:_-]/g, '_').slice(0, 80) || createId();
   }
 
+  function fireFacebookPixel(eventName, data) {
+    if (typeof window.fbq !== 'function') return;
+    const eventId = eventName + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
+    const method = eventName.indexOf('TimeOnPage_') === 0 || eventName.indexOf('ScrollDepth_') === 0 ? 'trackCustom' : 'track';
+    try {
+      window.fbq(method, eventName, data || {}, { eventID: eventId });
+    } catch (error) {
+      console.warn('[AffTrackPro] Không gửi được Meta Pixel event', eventName, error);
+    }
+  }
+
+  function fireFacebookPixelOnce(eventName, data) {
+    if (firedFacebookPixelEvents.has(eventName)) return;
+    firedFacebookPixelEvents.add(eventName);
+    fireFacebookPixel(eventName, data);
+  }
+
+  function setupScrollDepthTracking() {
+    const thresholds = [25, 50, 75, 100];
+    const fired = {};
+    const checkScroll = () => {
+      const scrollPercent = (window.scrollY + window.innerHeight) / document.documentElement.scrollHeight * 100;
+      thresholds.forEach((threshold) => {
+        if (scrollPercent < threshold || fired[threshold]) return;
+        fired[threshold] = true;
+        fireFacebookPixel('ScrollDepth_' + threshold + '_percent', { depth: threshold });
+      });
+    };
+    window.addEventListener('scroll', () => window.requestAnimationFrame(checkScroll), { passive: true });
+  }
+
+  function setupTimeOnPageTracking() {
+    [10, 30, 60, 120, 180].forEach((seconds) => {
+      window.setTimeout(() => {
+        fireFacebookPixelOnce('TimeOnPage_' + seconds + '_seconds', { time_spent: seconds });
+      }, seconds * 1000);
+    });
+  }
+
+  function startEngagementTracking() {
+    if (engagementTrackingStarted || window.__affTrackProEngagementTrackingStarted) return;
+    engagementTrackingStarted = true;
+    window.__affTrackProEngagementTrackingStarted = true;
+    fireFacebookPixel('PageView', { url: window.location.href, referrer: document.referrer || '' });
+    setupScrollDepthTracking();
+    setupTimeOnPageTracking();
+  }
+
   function getTrackingParamKey(trackingLink) {
     const key = String(trackingLink.trackingParamKey || 'subid1').trim();
     return key || 'subid1';
+  }
+
+  function getClickUuidScope(trackingLink) {
+    return trackingLink.brandId ? 'brand:' + trackingLink.brandId : 'tracking-link:' + trackingLink.id;
+  }
+
+  function getPageClickUuid(trackingLink) {
+    const scope = config.propertyId + ':' + getClickUuidScope(trackingLink);
+    if (!pageClickUuids[scope]) pageClickUuids[scope] = createId();
+    return pageClickUuids[scope];
   }
 
   function getCandidateUrl(detection) {
@@ -829,7 +891,11 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
         element.__affTrackProBindings = bindings;
       }
     }
-    if (!bindings[trackingLink.id]) bindings[trackingLink.id] = { clickUuid: createId(), bound: false };
+    if (!bindings[trackingLink.id]) bindings[trackingLink.id] = { clickUuid: getPageClickUuid(trackingLink), bound: false, detectedTypes: {} };
+    else {
+      bindings[trackingLink.id].clickUuid = getPageClickUuid(trackingLink);
+      if (!bindings[trackingLink.id].detectedTypes) bindings[trackingLink.id].detectedTypes = {};
+    }
     return bindings[trackingLink.id];
   }
 
@@ -931,14 +997,18 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
   }
 
   function applyAffiliateClickUuid(detection, trackingLink) {
-    if (!detection.element || detection.type !== 'affiliate_url') return;
+    if (!detection.element || detection.type !== 'affiliate_url') return false;
     const binding = getElementBinding(detection.element, trackingLink);
+    const isNewDetection = !binding.detectedTypes.affiliate_url;
+    binding.detectedTypes.affiliate_url = true;
     const originalHref = detection.originalHref || detection.href;
     const currentHref = getCandidateUrl(detection) || detection.href;
     const nextHref = withClickUuid(currentHref, trackingLink, binding.clickUuid);
     if (nextHref) {
-      if (detection.source === 'form') detection.element.setAttribute('action', nextHref);
-      else detection.element.setAttribute('href', nextHref);
+      if (nextHref !== currentHref) {
+        if (detection.source === 'form') detection.element.setAttribute('action', nextHref);
+        else detection.element.setAttribute('href', nextHref);
+      }
       detection.originalHref = originalHref;
       detection.href = nextHref;
       detection.clickUuid = binding.clickUuid;
@@ -948,17 +1018,22 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
       detection.element.addEventListener(detection.source === 'form' ? 'submit' : 'click', () => sendAffiliateClickEvent(detection, trackingLink, binding.clickUuid), { capture: true });
       binding.bound = true;
     }
+    return isNewDetection;
   }
 
   function applyShortlinkAttribution(detection, trackingLink) {
-    if (!detection.element || detection.type !== 'shortlink') return;
+    if (!detection.element || detection.type !== 'shortlink') return false;
     const binding = getElementBinding(detection.element, trackingLink);
+    const isNewDetection = !binding.detectedTypes.shortlink;
+    binding.detectedTypes.shortlink = true;
     const originalHref = detection.originalHref || detection.href;
     const currentHref = getCandidateUrl(detection) || detection.href;
     const nextHref = withShortlinkAttribution(currentHref, detection);
     if (nextHref) {
-      if (detection.source === 'form') detection.element.setAttribute('action', nextHref);
-      else detection.element.setAttribute('href', nextHref);
+      if (nextHref !== currentHref) {
+        if (detection.source === 'form') detection.element.setAttribute('action', nextHref);
+        else detection.element.setAttribute('href', nextHref);
+      }
       detection.originalHref = originalHref;
       detection.href = nextHref;
     }
@@ -972,6 +1047,7 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
       }, { capture: true });
       binding.bound = true;
     }
+    return isNewDetection;
   }
 
   function getCandidates() {
@@ -1005,9 +1081,6 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
             ? 'shortlink'
             : null;
         if (!matchType) continue;
-        const key = trackingLink.id + ':' + matchType + ':' + candidate.href;
-        if (detectedKeys.has(key)) continue;
-        detectedKeys.add(key);
         const detection = {
           detected: true,
           type: matchType,
@@ -1022,13 +1095,15 @@ app.get('/atp.js', { config: { rateLimit: { max: Number(process.env.PUBLIC_SCRIP
           trackingParamKey: getTrackingParamKey(trackingLink),
           shortlinkPaths: trackingLink.shortlinkPaths
         };
-        if (matchType === 'affiliate_url') applyAffiliateClickUuid(detection, trackingLink);
-        else if (matchType === 'shortlink') applyShortlinkAttribution(detection, trackingLink);
-        detections.push({ ...detection, element: undefined });
+        const isNewDetection = matchType === 'affiliate_url'
+          ? applyAffiliateClickUuid(detection, trackingLink)
+          : applyShortlinkAttribution(detection, trackingLink);
+        if (isNewDetection) detections.push({ ...detection, element: undefined });
       }
     }
 
     if (detections.length) {
+      startEngagementTracking();
       console.log('[AffTrackPro] Đã phát hiện Affiliate URL hoặc Shortlink', detections);
     } else if (!loggedEmpty) {
       loggedEmpty = true;
@@ -1076,6 +1151,7 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
     where: { id: trackingLinkId, tenantId: tenant.id, isActive: true },
     select: {
       id: true,
+      brandId: true,
       slug: true,
       affiliateUrl: true,
       campaignId: true,
@@ -1137,11 +1213,10 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
     const metadata = compactRecord({ ...commonMetadata, source: 'atp.affiliate_click', eventName: 'AffiliateClick', capiEventName: TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME, trackingParamKey, clickUuid })
     try {
       let duplicate = false
-      let clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
+      let clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid }, include: { trackingLink: { select: { brandId: true } } } })
 
       if (clickEvent) {
         duplicate = true
-        if (clickEvent.tenantId !== tenant.id || clickEvent.trackingLinkId !== trackingLink.id) return send(409, { error: 'Duplicate clickUuid conflict' })
       } else {
         await assertBillingLimit(tenant.id, 'clicks')
         try {
@@ -1160,12 +1235,13 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
               ttclid,
               fbclid,
               metadata: metadata as Prisma.InputJsonValue
-            }
+            },
+            include: { trackingLink: { select: { brandId: true } } }
           })
         } catch (error) {
           if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
             duplicate = true
-            clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid } })
+            clickEvent = await prisma.clickEvent.findUnique({ where: { clickUuid }, include: { trackingLink: { select: { brandId: true } } } })
           } else {
             throw error
           }
@@ -1173,6 +1249,9 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
       }
 
       if (!clickEvent) throw new Error('Click event was not created')
+      const sameTrackingLink = clickEvent.trackingLinkId === trackingLink.id
+      const sameBrand = Boolean(trackingLink.brandId && clickEvent.trackingLink.brandId === trackingLink.brandId)
+      if (clickEvent.tenantId !== tenant.id || (!sameTrackingLink && !sameBrand)) return send(409, { error: 'Duplicate clickUuid conflict' })
       if (duplicate) {
         const missingClickData = compactRecord({
           fbp: clickEvent.fbp ? undefined : fbp,
@@ -1181,7 +1260,7 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
           ttclid: clickEvent.ttclid ? undefined : ttclid,
           fbclid: clickEvent.fbclid ? undefined : fbclid
         })
-        if (hasKeys(missingClickData)) clickEvent = await prisma.clickEvent.update({ where: { id: clickEvent.id }, data: missingClickData })
+        if (hasKeys(missingClickData)) clickEvent = await prisma.clickEvent.update({ where: { id: clickEvent.id }, data: missingClickData, include: { trackingLink: { select: { brandId: true } } } })
       }
       if (!duplicate) {
         await enqueueClick(clickEvent, TRACKING_SCRIPT_AFFILIATE_CLICK_CAPI_EVENT_NAME)
