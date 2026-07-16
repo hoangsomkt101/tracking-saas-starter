@@ -122,6 +122,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   const isActivityLogsRoute = isPath(routePath, '/logs')
   const isAnalyticsRoute = isPath(routePath, '/analytics')
   const isSettingsRoute = isPath(routePath, '/websites') || isPath(routePath, '/settings')
+  const isSubscriptionsRoute = isPath(routePath, '/subscriptions')
   const isSuperAdminRoute = isPath(routePath, '/superadmin')
 
   const shouldLoadCampaigns = Boolean(tenantId && (isDashboardRoute || isCampaignRoute || isTrackingLinkRoute || isClickEventsRoute || isAnalyticsRoute))
@@ -137,6 +138,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   const shouldLoadActivityLogs = Boolean(tenantId && isActivityLogsRoute)
   const shouldLoadAnalytics = Boolean(tenantId && (isDashboardRoute || isAnalyticsRoute))
   const shouldLoadSuperAdmin = Boolean(isSuperAdmin && isSuperAdminRoute)
+  const shouldLoadSubscriptions = Boolean(isSubscriptionsRoute || shouldLoadSuperAdmin)
 
   const campaignsQuery = useQuery({
     queryKey: ['campaigns', tenantId],
@@ -242,9 +244,9 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   })
 
   const subscriptionsQuery = useQuery({
-    queryKey: ['subscriptions'],
-    queryFn: () => fetchJson<Subscription[]>('/superadmin/subscriptions'),
-    enabled: shouldLoadSuperAdmin,
+    queryKey: ['subscriptions', isSuperAdmin ? 'admin' : 'catalog'],
+    queryFn: () => fetchJson<Subscription[]>(isSuperAdmin ? '/superadmin/subscriptions' : '/subscriptions'),
+    enabled: shouldLoadSubscriptions,
     staleTime: 30_000,
     placeholderData: (previousData) => previousData ?? []
   })
@@ -304,7 +306,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     { query: activityLogsQuery, enabled: shouldLoadActivityLogs },
     { query: analyticsQuery, enabled: shouldLoadAnalytics },
     { query: superAdminUsersQuery, enabled: shouldLoadSuperAdmin },
-    { query: subscriptionsQuery, enabled: shouldLoadSuperAdmin },
+    { query: subscriptionsQuery, enabled: shouldLoadSubscriptions },
     { query: menuFeaturesQuery, enabled: shouldLoadSuperAdmin }
   ]
   const isLoading = queryStates.some(({ query, enabled }) => enabled && (query.isLoading || query.isFetching))

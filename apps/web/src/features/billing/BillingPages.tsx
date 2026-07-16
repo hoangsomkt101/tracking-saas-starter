@@ -48,7 +48,7 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
 }
 
 export function SubscriptionsPage({ ctx }: { ctx: DashboardContext }) {
-  const subscription = ctx.selectedTenant?.subscription
+  const currentSubscription = ctx.selectedTenant?.subscription
 
   return (
     <section className="single-page-grid">
@@ -56,36 +56,51 @@ export function SubscriptionsPage({ ctx }: { ctx: DashboardContext }) {
         <CardHeader className="section-heading">
           <div>
             <CardTitle><CreditCard size={18} /> Subscriptions</CardTitle>
-            <CardDescription>Gói dịch vụ, chu kỳ gia hạn và quota vận hành sẽ được quản lý độc lập với thanh toán.</CardDescription>
+            <CardDescription>Xem tất cả gói dịch vụ và quota vận hành. Gói đang áp dụng cho workspace được làm nổi bật.</CardDescription>
           </div>
-          <Badge variant={subscription?.isActive ? 'active' : 'secondary'}>{subscription?.isActive ? 'Active' : 'No subscription'}</Badge>
+          <Badge variant={currentSubscription?.isActive ? 'active' : 'secondary'}>{currentSubscription?.isActive ? 'Active' : 'No subscription'}</Badge>
         </CardHeader>
         <CardContent>
           <WorkspaceContext ctx={ctx} />
-          {subscription ? (
+          {currentSubscription ? (
             <div className="detail-grid">
-              <span>Subscription hiện tại</span><strong>{subscription.name}{subscription.isDefault ? ' · Default' : ''}</strong>
-              <span>Giá subscription</span><strong>{formatMoney(subscription.monthlyPriceCents, subscription.currency)} / tháng</strong>
-              <span>Trạng thái</span><strong>{subscription.isActive ? 'Đang hoạt động' : 'Ngừng cung cấp'}</strong>
-              <span>Mô tả</span><strong>{subscription.description || 'Chưa có mô tả cho subscription này'}</strong>
+              <span>Subscription hiện tại</span><strong>{currentSubscription.name}{currentSubscription.isDefault ? ' · Default' : ''}</strong>
+              <span>Giá subscription</span><strong>{formatMoney(currentSubscription.monthlyPriceCents, currentSubscription.currency)} / tháng</strong>
+              <span>Trạng thái</span><strong>{currentSubscription.isActive ? 'Đang hoạt động' : 'Ngừng cung cấp'}</strong>
+              <span>Mô tả</span><strong>{currentSubscription.description || 'Chưa có mô tả cho subscription này'}</strong>
             </div>
           ) : <p className="empty-state">Workspace chưa có subscription. Hệ thống sẽ tự gán gói mặc định khi dữ liệu được đồng bộ.</p>}
         </CardContent>
       </Card>
       <Card className="table-card">
         <CardHeader>
-          <CardTitle><CalendarClock size={18} /> Quota subscription</CardTitle>
-          <CardDescription>Giới hạn hiện được áp dụng theo gói đang gắn với workspace. Các quota click, CAPI và EAPI tự tính lại từ đầu tháng UTC.</CardDescription>
+          <CardTitle><CalendarClock size={18} /> Tất cả subscription</CardTitle>
+          <CardDescription>{ctx.subscriptions.length} gói đã cấu hình. Các gói ngừng cung cấp vẫn được hiển thị để đối chiếu.</CardDescription>
         </CardHeader>
         <CardContent>
-           {subscription ? (
-            <div className="detail-grid">
-              <span><MousePointerClick size={15} /> Click / tháng</span><strong>{subscription.clickLimit.toLocaleString('en-US')}</strong>
-              <span><Webhook size={15} /> CAPI event / tháng</span><strong>{subscription.capiEventLimit.toLocaleString('en-US')}</strong>
-              <span><CheckCircle2 size={15} /> EAPI event / tháng</span><strong>{subscription.eapiEventLimit.toLocaleString('en-US')}</strong>
-              <span><Database size={15} /> Dataset / campaign</span><strong>{subscription.campaignDatasetLimit.toLocaleString('en-US')}</strong>
-            </div>
-          ) : <p className="empty-state">Chưa thể xác định quota vì workspace chưa có subscription.</p>}
+          {ctx.subscriptions.length ? <div className="subscription-plan-grid">
+            {ctx.subscriptions.map((subscription) => {
+              const isCurrentSubscription = subscription.id === currentSubscription?.id
+
+              return <article className={`subscription-plan-card${isCurrentSubscription ? ' is-current' : ''}`} key={subscription.id}>
+                <div className="subscription-plan-heading">
+                  <div><h3>{subscription.name}</h3><span>{subscription.slug}</span></div>
+                  <div className="subscription-plan-badges">
+                    {isCurrentSubscription && <Badge variant="active">Gói hiện tại</Badge>}
+                    <Badge variant={subscription.isActive ? 'success' : 'muted'}>{subscription.isActive ? 'Đang cung cấp' : 'Ngừng cung cấp'}</Badge>
+                  </div>
+                </div>
+                <strong className="subscription-plan-price">{formatMoney(subscription.monthlyPriceCents, subscription.currency)}<small>/ tháng</small></strong>
+                <p>{subscription.description || 'Chưa có mô tả cho subscription này.'}</p>
+                <div className="subscription-plan-limits">
+                  <span><MousePointerClick size={15} /> {subscription.clickLimit.toLocaleString('en-US')} click / tháng</span>
+                  <span><Webhook size={15} /> {subscription.capiEventLimit.toLocaleString('en-US')} CAPI / tháng</span>
+                  <span><CheckCircle2 size={15} /> {subscription.eapiEventLimit.toLocaleString('en-US')} EAPI / tháng</span>
+                  <span><Database size={15} /> {subscription.campaignDatasetLimit.toLocaleString('en-US')} dataset / campaign</span>
+                </div>
+              </article>
+            })}
+          </div> : <p className="empty-state">Chưa có subscription nào được cấu hình.</p>}
         </CardContent>
       </Card>
     </section>
