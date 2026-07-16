@@ -1,7 +1,8 @@
-import { CalendarClock, CreditCard, History, ReceiptText, WalletCards } from 'lucide-react'
+import { CalendarClock, CheckCircle2, CreditCard, Database, History, MousePointerClick, ReceiptText, Webhook, WalletCards } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
+import { formatMoney } from '../../lib/format'
 import type { DashboardContext } from '../../types/domain'
 
 function WorkspaceContext({ ctx }: { ctx: DashboardContext }) {
@@ -47,6 +48,8 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
 }
 
 export function SubscriptionsPage({ ctx }: { ctx: DashboardContext }) {
+  const plan = ctx.selectedTenant?.billingPlan
+
   return (
     <section className="single-page-grid">
       <Card className="page-card">
@@ -55,24 +58,34 @@ export function SubscriptionsPage({ ctx }: { ctx: DashboardContext }) {
             <CardTitle><CreditCard size={18} /> Subscriptions</CardTitle>
             <CardDescription>Gói dịch vụ, chu kỳ gia hạn và quota vận hành sẽ được quản lý độc lập với thanh toán.</CardDescription>
           </div>
-          <Badge variant="secondary">Coming soon</Badge>
+          <Badge variant={plan?.isActive ? 'active' : 'secondary'}>{plan?.isActive ? 'Active' : 'No subscription'}</Badge>
         </CardHeader>
         <CardContent>
           <WorkspaceContext ctx={ctx} />
-          <div className="detail-grid">
-            <span>Gói hiện tại</span><strong>Chưa chuyển đổi dữ liệu subscription</strong>
-            <span>Chu kỳ gia hạn</span><strong>Chưa thiết lập</strong>
-            <span>Quota</span><strong>Sẽ hiển thị theo subscription đang hoạt động</strong>
-          </div>
+          {plan ? (
+            <div className="detail-grid">
+              <span>Gói hiện tại</span><strong>{plan.name}{plan.isDefault ? ' · Default' : ''}</strong>
+              <span>Giá gói</span><strong>{formatMoney(plan.monthlyPriceCents, plan.currency)} / tháng</strong>
+              <span>Trạng thái</span><strong>{plan.isActive ? 'Đang hoạt động' : 'Ngừng cung cấp'}</strong>
+              <span>Mô tả</span><strong>{plan.description || 'Chưa có mô tả cho gói này'}</strong>
+            </div>
+          ) : <p className="empty-state">Workspace chưa có subscription. Hệ thống sẽ tự gán gói mặc định khi dữ liệu được đồng bộ.</p>}
         </CardContent>
       </Card>
       <Card className="table-card">
         <CardHeader>
-          <CardTitle><CalendarClock size={18} /> Vòng đời subscription</CardTitle>
-          <CardDescription>Khung này sẽ quản lý đăng ký mới, nâng/hạ gói, gia hạn, tạm dừng và hết hạn.</CardDescription>
+          <CardTitle><CalendarClock size={18} /> Quota subscription</CardTitle>
+          <CardDescription>Giới hạn hiện được áp dụng theo gói đang gắn với workspace. Các quota click, CAPI và EAPI tự tính lại từ đầu tháng UTC.</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="empty-state">Subscription sẽ trở thành nguồn dữ liệu cho quota. Model `BillingPlan` hiện tại chưa bị thay đổi để không ảnh hưởng tracking đang chạy.</p>
+          {plan ? (
+            <div className="detail-grid">
+              <span><MousePointerClick size={15} /> Click / tháng</span><strong>{plan.clickLimit.toLocaleString('en-US')}</strong>
+              <span><Webhook size={15} /> CAPI event / tháng</span><strong>{plan.capiEventLimit.toLocaleString('en-US')}</strong>
+              <span><CheckCircle2 size={15} /> EAPI event / tháng</span><strong>{plan.eapiEventLimit.toLocaleString('en-US')}</strong>
+              <span><Database size={15} /> Dataset / campaign</span><strong>{plan.campaignDatasetLimit.toLocaleString('en-US')}</strong>
+            </div>
+          ) : <p className="empty-state">Chưa thể xác định quota vì workspace chưa có subscription.</p>}
         </CardContent>
       </Card>
     </section>
