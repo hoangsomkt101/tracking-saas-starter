@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
-import { NavLink, useParams } from 'react-router'
-import { Check, CreditCard, Crown, Loader2, Plus, RefreshCw, Settings, Trash2, WalletCards, X } from 'lucide-react'
+import { NavLink, useParams, useSearchParams } from 'react-router'
+import { Check, CreditCard, Crown, Loader2, Plus, RefreshCw, Settings, Trash2, Users, WalletCards, X } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -19,6 +19,9 @@ function getAccountLabel(account: SuperAdminUser) {
 }
 
 export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = searchParams.get('tab') === 'users' ? 'users' : 'subscriptions'
+
   if (!ctx.isSuperAdmin) {
     return (
       <Card className="page-card placeholder-card">
@@ -90,87 +93,100 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
     }, `Đã từ chối yêu cầu nạp tiền ${topUp.reference}`)
   }
 
+  function handleTabChange(tab: 'subscriptions' | 'users') {
+    if (tab === 'subscriptions') setSearchParams({})
+    else setSearchParams({ tab })
+  }
+
   return (
     <>
       <StatusBanner status={ctx.status} />
-      <section className="single-page-grid">
-        <Card className="form-card">
-          <CardHeader>
-            <CardTitle><WalletCards size={18} /> Create subscription</CardTitle>
-            <CardDescription>Tạo gói subscription với quota tháng cho click data, CAPI và EAPI/affiliate webhook.</CardDescription>
+      <div className="superadmin-tabs" role="tablist" aria-label="Super Admin management">
+        <button className="superadmin-tab" type="button" role="tab" id="superadmin-subscriptions-tab" aria-selected={activeTab === 'subscriptions'} aria-controls="superadmin-subscriptions-panel" onClick={() => handleTabChange('subscriptions')}><CreditCard size={16} /> Subscription <span>{ctx.subscriptions.length}</span></button>
+        <button className="superadmin-tab" type="button" role="tab" id="superadmin-users-tab" aria-selected={activeTab === 'users'} aria-controls="superadmin-users-panel" onClick={() => handleTabChange('users')}><Users size={16} /> User <span>{ctx.superAdminUsers.length}</span></button>
+      </div>
+      {activeTab === 'subscriptions' && <section id="superadmin-subscriptions-panel" role="tabpanel" aria-labelledby="superadmin-subscriptions-tab" className="superadmin-tab-panel">
+        <section className="single-page-grid">
+          <Card className="form-card">
+            <CardHeader>
+              <CardTitle><WalletCards size={18} /> Create subscription</CardTitle>
+              <CardDescription>Tạo gói subscription với quota tháng cho click data, CAPI và EAPI/affiliate webhook.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleCreateSubscription}>
+                <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Free / Pro / Agency" required /></label>
+                <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="free" /></label>
+                <label><FieldLabel>Description</FieldLabel><Input name="description" placeholder="Plan description" /></label>
+                <label><FieldLabel>Monthly price cents</FieldLabel><Input name="monthlyPriceCents" type="number" min="0" defaultValue="0" /></label>
+                <label><FieldLabel>Currency</FieldLabel><Input name="currency" defaultValue="USD" /></label>
+                <label><FieldLabel>Click data limit / month</FieldLabel><Input name="clickLimit" type="number" min="0" defaultValue="1000" /></label>
+                <label><FieldLabel>CAPI limit / month</FieldLabel><Input name="capiEventLimit" type="number" min="0" defaultValue="1000" /></label>
+                <label><FieldLabel>EAPI limit / month</FieldLabel><Input name="eapiEventLimit" type="number" min="0" defaultValue="1000" /></label>
+                <label className="checkbox"><input name="isDefault" type="checkbox" /> Default for new users</label>
+                <label className="checkbox"><input name="isActive" type="checkbox" defaultChecked /> Active</label>
+                <Button type="submit"><Plus size={16} /> Create subscription</Button>
+              </form>
+            </CardContent>
+          </Card>
+          <Card className="table-card">
+            <CardHeader>
+              <CardTitle><CreditCard size={18} /> Subscriptions</CardTitle>
+              <CardDescription>{ctx.subscriptions.length} subscriptions configured.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Plan</th><th>Price</th><th>Limits/month</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {ctx.subscriptions.map((subscription) => <tr key={subscription.id}><td><strong>{subscription.name}</strong><br /><small>{subscription.slug}</small></td><td>{formatMoney(subscription.monthlyPriceCents, subscription.currency)}</td><td>{subscription.clickLimit} clicks · {subscription.capiEventLimit} CAPI · {subscription.eapiEventLimit} EAPI</td><td><Badge variant={subscription.isActive ? 'active' : 'muted'}>{subscription.isDefault ? 'Default' : subscription.isActive ? 'Active' : 'Inactive'}</Badge></td></tr>)}
+                    {!ctx.subscriptions.length && <tr><td colSpan={4}>Chưa có subscription.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+        <Card className="table-card">
+          <CardHeader className="section-heading">
+            <div><CardTitle><WalletCards size={18} /> Wallet top-up requests</CardTitle><CardDescription>{ctx.superAdminWalletTopUps.filter((topUp) => topUp.status === 'PENDING').length} yêu cầu đang chờ xác nhận chuyển khoản.</CardDescription></div>
+            <Button variant="outline" size="sm" type="button" onClick={() => void ctx.refreshEntity('wallet-top-ups')} disabled={ctx.isLoading}><RefreshCw size={16} /> Refresh</Button>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleCreateSubscription}>
-              <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Free / Pro / Agency" required /></label>
-              <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="free" /></label>
-              <label><FieldLabel>Description</FieldLabel><Input name="description" placeholder="Plan description" /></label>
-              <label><FieldLabel>Monthly price cents</FieldLabel><Input name="monthlyPriceCents" type="number" min="0" defaultValue="0" /></label>
-              <label><FieldLabel>Currency</FieldLabel><Input name="currency" defaultValue="USD" /></label>
-              <label><FieldLabel>Click data limit / month</FieldLabel><Input name="clickLimit" type="number" min="0" defaultValue="1000" /></label>
-              <label><FieldLabel>CAPI limit / month</FieldLabel><Input name="capiEventLimit" type="number" min="0" defaultValue="1000" /></label>
-              <label><FieldLabel>EAPI limit / month</FieldLabel><Input name="eapiEventLimit" type="number" min="0" defaultValue="1000" /></label>
-              <label className="checkbox"><input name="isDefault" type="checkbox" /> Default for new users</label>
-              <label className="checkbox"><input name="isActive" type="checkbox" defaultChecked /> Active</label>
-              <Button type="submit"><Plus size={16} /> Create subscription</Button>
-            </form>
+            <div className="table-wrap"><table><thead><tr><th>Workspace</th><th>Mã yêu cầu</th><th>Số tiền</th><th>Mã chuyển khoản</th><th>Thời gian</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+              {ctx.superAdminWalletTopUps.map((topUp) => <tr key={topUp.id}><td><strong>{topUp.tenant.name}</strong><br /><small>{topUp.tenant.ownerUser.email ?? topUp.tenant.slug}</small></td><td>{topUp.reference}</td><td>{formatMoney(topUp.amountCents, topUp.currency)}</td><td>{topUp.paymentReference || '—'}</td><td>{formatDate(topUp.createdAt)}</td><td><Badge variant={topUp.status === 'APPROVED' ? 'success' : topUp.status === 'PENDING' ? 'pending' : topUp.status === 'REJECTED' ? 'error' : 'muted'}>{topUp.status}</Badge></td><td>{topUp.status === 'PENDING' && <div className="button-row"><Button type="button" size="sm" onClick={() => void handleApproveTopUp(topUp)} disabled={ctx.isLoading}><Check size={14} /> Duyệt</Button><Button variant="outline" type="button" size="sm" onClick={() => void handleRejectTopUp(topUp)} disabled={ctx.isLoading}><X size={14} /> Từ chối</Button></div>}</td></tr>)}
+              {!ctx.superAdminWalletTopUps.length && <tr><td colSpan={7}>Chưa có yêu cầu nạp tiền.</td></tr>}
+            </tbody></table></div>
           </CardContent>
         </Card>
+      </section>}
+      {activeTab === 'users' && <section id="superadmin-users-panel" role="tabpanel" aria-labelledby="superadmin-users-tab" className="superadmin-tab-panel">
         <Card className="table-card">
-          <CardHeader>
-            <CardTitle><CreditCard size={18} /> Subscriptions</CardTitle>
-            <CardDescription>{ctx.subscriptions.length} subscriptions configured.</CardDescription>
+          <CardHeader className="section-heading">
+            <div><CardTitle><Crown size={18} /> Registered accounts</CardTitle><CardDescription>{ctx.superAdminUsers.length} tài khoản đã đăng ký trong hệ thống.</CardDescription></div>
+            <div className="button-row">
+              <Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteAllUsers()} disabled={ctx.isLoading || ctx.superAdminUsers.length === 0}><Trash2 size={16} /> Delete all</Button>
+              <Button variant="outline" size="sm" type="button" onClick={() => void ctx.refreshEntity('superadmin-users')} disabled={ctx.isLoading}>{ctx.isLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}Refresh</Button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Plan</th><th>Price</th><th>Limits/month</th><th>Status</th></tr></thead>
+                <thead><tr><th>User</th><th>Account ID</th><th>Workspace</th><th>Subscription</th><th>Menus</th><th>Usage</th><th>Actions</th></tr></thead>
                 <tbody>
-                  {ctx.subscriptions.map((subscription) => <tr key={subscription.id}><td><strong>{subscription.name}</strong><br /><small>{subscription.slug}</small></td><td>{formatMoney(subscription.monthlyPriceCents, subscription.currency)}</td><td>{subscription.clickLimit} clicks · {subscription.capiEventLimit} CAPI · {subscription.eapiEventLimit} EAPI</td><td><Badge variant={subscription.isActive ? 'active' : 'muted'}>{subscription.isDefault ? 'Default' : subscription.isActive ? 'Active' : 'Inactive'}</Badge></td></tr>)}
-                  {!ctx.subscriptions.length && <tr><td colSpan={4}>Chưa có subscription.</td></tr>}
+                  {ctx.superAdminUsers.map((account) => {
+                    const fullName = getAccountLabel(account)
+                    const tenant = account.tenant
+                    const enabledMenus = tenant?.menuGrants?.filter((grant) => grant.isEnabled).length ?? 0
+                    const isCurrentUser = account.id === ctx.data.currentUser?.id
+                    return <tr key={account.id}><td><strong>{fullName}</strong><br /><small>{account.email ?? 'No email'}</small></td><td>{account.id}</td><td>{tenant ? <><strong>{tenant.name}</strong><br /><small>{tenant.slug} · {tenant.id}</small></> : '—'}</td><td>{tenant?.subscription?.name ?? '—'}</td><td>{tenant ? <Badge variant="outline">{enabledMenus} enabled</Badge> : '—'}</td><td>{tenant ? `${tenant._count.campaigns} campaigns · ${tenant._count.trackingLinks} links · ${tenant._count.clickEvents} clicks` : '—'}</td><td><div className="button-row"><Button asChild variant="outline" size="sm"><NavLink to={`/superadmin/users/${account.id}/manage`}><Settings size={14} /> Manage</NavLink></Button><Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteUser(account)} disabled={ctx.isLoading || isCurrentUser}><Trash2 size={14} /> Delete</Button></div></td></tr>
+                  })}
+                  {!ctx.superAdminUsers.length && <tr><td colSpan={7}>Chưa có tài khoản đăng ký.</td></tr>}
                 </tbody>
               </table>
             </div>
           </CardContent>
         </Card>
-      </section>
-      <Card className="table-card">
-        <CardHeader className="section-heading">
-          <div><CardTitle><WalletCards size={18} /> Wallet top-up requests</CardTitle><CardDescription>{ctx.superAdminWalletTopUps.filter((topUp) => topUp.status === 'PENDING').length} yêu cầu đang chờ xác nhận chuyển khoản.</CardDescription></div>
-          <Button variant="outline" size="sm" type="button" onClick={() => void ctx.refreshEntity('wallet-top-ups')} disabled={ctx.isLoading}><RefreshCw size={16} /> Refresh</Button>
-        </CardHeader>
-        <CardContent>
-          <div className="table-wrap"><table><thead><tr><th>Workspace</th><th>Mã yêu cầu</th><th>Số tiền</th><th>Mã chuyển khoản</th><th>Thời gian</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
-            {ctx.superAdminWalletTopUps.map((topUp) => <tr key={topUp.id}><td><strong>{topUp.tenant.name}</strong><br /><small>{topUp.tenant.ownerUser.email ?? topUp.tenant.slug}</small></td><td>{topUp.reference}</td><td>{formatMoney(topUp.amountCents, topUp.currency)}</td><td>{topUp.paymentReference || '—'}</td><td>{formatDate(topUp.createdAt)}</td><td><Badge variant={topUp.status === 'APPROVED' ? 'success' : topUp.status === 'PENDING' ? 'pending' : topUp.status === 'REJECTED' ? 'error' : 'muted'}>{topUp.status}</Badge></td><td>{topUp.status === 'PENDING' && <div className="button-row"><Button type="button" size="sm" onClick={() => void handleApproveTopUp(topUp)} disabled={ctx.isLoading}><Check size={14} /> Duyệt</Button><Button variant="outline" type="button" size="sm" onClick={() => void handleRejectTopUp(topUp)} disabled={ctx.isLoading}><X size={14} /> Từ chối</Button></div>}</td></tr>)}
-            {!ctx.superAdminWalletTopUps.length && <tr><td colSpan={7}>Chưa có yêu cầu nạp tiền.</td></tr>}
-          </tbody></table></div>
-        </CardContent>
-      </Card>
-      <Card className="table-card">
-        <CardHeader className="section-heading">
-          <div><CardTitle><Crown size={18} /> Registered accounts</CardTitle><CardDescription>{ctx.superAdminUsers.length} tài khoản đã đăng ký trong hệ thống.</CardDescription></div>
-          <div className="button-row">
-            <Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteAllUsers()} disabled={ctx.isLoading || ctx.superAdminUsers.length === 0}><Trash2 size={16} /> Delete all</Button>
-            <Button variant="outline" size="sm" type="button" onClick={() => void ctx.refreshEntity('superadmin-users')} disabled={ctx.isLoading}>{ctx.isLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}Refresh</Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>User</th><th>Account ID</th><th>Workspace</th><th>Subscription</th><th>Menus</th><th>Usage</th><th>Actions</th></tr></thead>
-              <tbody>
-                {ctx.superAdminUsers.map((account) => {
-                  const fullName = getAccountLabel(account)
-                  const tenant = account.tenant
-                  const enabledMenus = tenant?.menuGrants?.filter((grant) => grant.isEnabled).length ?? 0
-                  const isCurrentUser = account.id === ctx.data.currentUser?.id
-                  return <tr key={account.id}><td><strong>{fullName}</strong><br /><small>{account.email ?? 'No email'}</small></td><td>{account.id}</td><td>{tenant ? <><strong>{tenant.name}</strong><br /><small>{tenant.slug} · {tenant.id}</small></> : '—'}</td><td>{tenant?.subscription?.name ?? '—'}</td><td>{tenant ? <Badge variant="outline">{enabledMenus} enabled</Badge> : '—'}</td><td>{tenant ? `${tenant._count.campaigns} campaigns · ${tenant._count.trackingLinks} links · ${tenant._count.clickEvents} clicks` : '—'}</td><td><div className="button-row"><Button asChild variant="outline" size="sm"><NavLink to={`/superadmin/users/${account.id}/manage`}><Settings size={14} /> Manage</NavLink></Button><Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteUser(account)} disabled={ctx.isLoading || isCurrentUser}><Trash2 size={14} /> Delete</Button></div></td></tr>
-                })}
-                {!ctx.superAdminUsers.length && <tr><td colSpan={7}>Chưa có tài khoản đăng ký.</td></tr>}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+      </section>}
     </>
   )
 }
