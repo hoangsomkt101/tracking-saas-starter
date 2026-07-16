@@ -38,20 +38,20 @@ type RedirectQuery = {
   ttp?: string
 }
 
-async function getTenantPlanOrDefault(tenantId: string) {
-  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { billingPlan: true } })
-  if (tenant?.billingPlan) return tenant.billingPlan
-  return prisma.billingPlan.findFirst({ where: { isDefault: true, isActive: true }, orderBy: { createdAt: 'asc' } })
+async function getTenantSubscriptionOrDefault(tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { subscription: true } })
+  if (tenant?.subscription) return tenant.subscription
+  return prisma.subscription.findFirst({ where: { isDefault: true, isActive: true }, orderBy: { createdAt: 'asc' } })
 }
 
 async function assertClickLimit(tenantId: string) {
-  const plan = await getTenantPlanOrDefault(tenantId)
-  if (!plan) throw new Error(`Billing plan not found for tenant ${tenantId}`)
+  const subscription = await getTenantSubscriptionOrDefault(tenantId)
+  if (!subscription) throw new Error(`Subscription not found for tenant ${tenantId}`)
   const periodStart = new Date()
   periodStart.setUTCDate(1)
   periodStart.setUTCHours(0, 0, 0, 0)
   const clicks = await prisma.clickEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } })
-  if (clicks >= plan.clickLimit) throw new Error(`Click billing limit exceeded: ${clicks}/${plan.clickLimit} for plan ${plan.name}`)
+  if (clicks >= subscription.clickLimit) throw new Error(`Click subscription limit exceeded: ${clicks}/${subscription.clickLimit} for subscription ${subscription.name}`)
 }
 
 type AnyRecord = Record<string, any>

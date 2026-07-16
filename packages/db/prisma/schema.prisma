@@ -22,17 +22,17 @@ enum ActivityLogLevel {
 }
 
 model Tenant {
-  id                String         @id @default(uuid())
-  ownerUserId       String         @unique
-  billingPlanId     String?
-  slug              String         @unique
-  publicKey         String         @unique @default(dbgenerated("substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)"))
-  name              String
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  id                 String        @id @default(uuid())
+  ownerUserId        String        @unique
+  subscriptionId     String?
+  slug               String        @unique
+  publicKey          String        @unique @default(dbgenerated("substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)"))
+  name               String
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
-  ownerUser     User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
-  billingPlan   BillingPlan?   @relation(fields: [billingPlanId], references: [id], onDelete: SetNull)
+  ownerUser          User          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  subscription       Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   campaigns      Campaign[]
   brands         Brand[]
   affiliatePlatforms AffiliatePlatform[]
@@ -49,28 +49,28 @@ model Tenant {
   websiteDomains     WebsiteDomain[]
 
   @@index([ownerUserId])
-  @@index([billingPlanId])
+  @@index([subscriptionId])
   @@index([publicKey])
   @@index([createdAt])
 }
 
-model BillingPlan {
-  id                String   @id @default(uuid())
-  slug              String   @unique
-  name              String
-  description       String?
-  monthlyPriceCents Int      @default(0)
-  currency          String   @default("USD")
-  clickLimit        Int      @default(1000)
-  capiEventLimit    Int      @default(1000)
-  eapiEventLimit    Int      @default(1000)
-  campaignDatasetLimit Int   @default(2)
-  isDefault         Boolean  @default(false)
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+model Subscription {
+  id                   String   @id @default(uuid())
+  slug                 String   @unique
+  name                 String
+  description          String?
+  monthlyPriceCents    Int      @default(0)
+  currency             String   @default("USD")
+  clickLimit           Int      @default(1000)
+  capiEventLimit       Int      @default(1000)
+  eapiEventLimit       Int      @default(1000)
+  campaignDatasetLimit Int      @default(2)
+  isDefault            Boolean  @default(false)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-  tenants           Tenant[]
+  tenants              Tenant[]
 
   @@index([isDefault])
   @@index([isActive])

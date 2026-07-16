@@ -1,6 +1,6 @@
 # Project Architecture Rules (Non-Obvious Only)
 
-- Authenticated API requests call `requireUser`, which upserts Clerk User/Tenant, attaches default BillingPlan, and seeds core menu grants as request side effects.
+- Authenticated API requests call `requireUser`, which upserts Clerk User/Tenant, attaches the default Subscription, and seeds core menu grants as request side effects.
 - Public ingest is split: redirect handles `/r/:tenantKey/:slug`, API handles click/affiliate webhooks; both create events and enqueue BullMQ jobs.
 - CAPI event identity is `[clickEventId,datasetId,eventName,source,sourceId]`; browser pixel/server CAPI dedupe uses event/job ids `${eventName}_${clickUuid}`.
 - Affiliate conversions store attribution snapshots and CAPI enrichment at ingestion; analytics still falls back to clickUuid joins when snapshots are missing.

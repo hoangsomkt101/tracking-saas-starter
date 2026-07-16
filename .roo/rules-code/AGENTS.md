@@ -4,7 +4,7 @@
 - API routes live in one large `apps/api/src/server.ts`; new protected routes should use `requireAuthenticated` plus `assertTenantAccess` and the existing serializers.
 - Use the local `createActivityLog` helpers for logs; they raw-insert enum JSON and convert BigInt/Date safely.
 - Public webhook routes must require token via `getWebhookToken`/`requireWebhookToken`; missing tokens must fail, not match null database values.
-- `requireUser` has side effects: Clerk User/Tenant upsert, default BillingPlan assignment, and core MenuFeature grants.
+- `requireUser` has side effects: Clerk User/Tenant upsert, default Subscription assignment, and core MenuFeature grants.
 - Add new menu features in API `getDefaultMenuFeatures`, web `navGroups`/`pageMeta`, and `DashboardRoutes`/`FeatureGate`; `api-keys` is frontend-core without a DB seed.
 - Web mutations should use `runEntityAction(ctx, ..., successMessage)` to keep status and refetch behavior consistent.
 - Supported platform `eventMapping` rules are currently ignored at resolution time except Impact Amount/Payout heuristic; change server resolver before promising custom mapping.

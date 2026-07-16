@@ -14,15 +14,15 @@ type CapiDeliveryResult = {
   error?: string
 }
 
-async function getTenantPlanOrDefault(tenantId: string) {
+async function getTenantSubscriptionOrDefault(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    include: { billingPlan: true }
+    include: { subscription: true }
   })
 
-  if (tenant?.billingPlan) return tenant.billingPlan
+  if (tenant?.subscription) return tenant.subscription
 
-  return prisma.billingPlan.findFirst({
+  return prisma.subscription.findFirst({
     where: {
       isDefault: true,
       isActive: true
@@ -34,9 +34,9 @@ async function getTenantPlanOrDefault(tenantId: string) {
 }
 
 async function assertCapiLimit(tenantId: string) {
-  const plan = await getTenantPlanOrDefault(tenantId)
+  const subscription = await getTenantSubscriptionOrDefault(tenantId)
 
-  if (!plan) throw new Error(`Billing plan not found for tenant ${tenantId}`)
+  if (!subscription) throw new Error(`Subscription not found for tenant ${tenantId}`)
 
   const periodStart = new Date()
   periodStart.setUTCDate(1)
@@ -51,8 +51,8 @@ async function assertCapiLimit(tenantId: string) {
     }
   })
 
-  if (capiEvents >= plan.capiEventLimit) {
-    throw new Error(`CAPI billing limit exceeded: ${capiEvents}/${plan.capiEventLimit} for plan ${plan.name}`)
+  if (capiEvents >= subscription.capiEventLimit) {
+    throw new Error(`CAPI subscription limit exceeded: ${capiEvents}/${subscription.capiEventLimit} for subscription ${subscription.name}`)
   }
 }
 

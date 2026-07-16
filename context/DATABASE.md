@@ -9,7 +9,7 @@ Mục tiêu đọc nhanh:
 - Hiểu `AffiliatePlatform` chỉ là cấu hình network, còn affiliate URL nằm trực tiếp ở `Brand`.
 - Hiểu `Dataset` là cấu hình pixel/access token dùng chung cho campaign và worker CAPI.
 - Hiểu `Prelander` là bridge page/template thật, có thể gắn vào `TrackingLink`.
-- Hiểu billing plan, quota tháng và menu/function grant theo tenant.
+- Hiểu subscription, quota tháng và menu/function grant theo tenant.
 
 ## Stack database
 
@@ -25,7 +25,7 @@ Mục tiêu đọc nhanh:
 ```mermaid
 erDiagram
   User ||--|| Tenant : owns
-  BillingPlan ||--o{ Tenant : assigned_to
+  Subscription ||--o{ Tenant : assigned_to
 
   Tenant ||--o{ Campaign : has
   Tenant ||--o{ Brand : has
@@ -67,14 +67,14 @@ erDiagram
   Tenant {
     string id PK
     string ownerUserId UK
-    string billingPlanId FK_nullable
+    string subscriptionId FK_nullable
     string slug UK
     string name
     datetime createdAt
     datetime updatedAt
   }
 
-  BillingPlan {
+  Subscription {
     string id PK
     string slug UK
     string name
@@ -242,7 +242,7 @@ flowchart TD
   A[Clerk User đăng nhập] --> B[API verify Clerk token]
   B --> C[Upsert User]
   C --> D[Tạo hoặc lấy Tenant mặc định]
-  D --> E[Gán BillingPlan default nếu thiếu]
+  D --> E[Gán Subscription mặc định nếu thiếu]
   D --> F[Cấp core MenuFeature cho tenant]
 
   D --> G[Tạo AffiliatePlatform]
@@ -263,8 +263,8 @@ flowchart TD
   G --> R[Affiliate webhook nhận conversion]
   R --> S[Lưu AffiliateConversionEvent]
 
-  T[Superadmin] --> U[Quản lý BillingPlan]
-  T --> V[Assign plan cho Tenant]
+  T[Superadmin] --> U[Quản lý Subscription]
+  T --> V[Assign subscription cho Tenant]
   T --> W[Cấp/tắt MenuFeature cho Tenant]
 ```
 
@@ -279,13 +279,13 @@ flowchart TD
 - Menu/function của user thường được điều khiển bằng `MenuFeature` + `TenantMenuGrant`.
 - Superadmin thấy toàn bộ menu ở frontend, không phụ thuộc `TenantMenuGrant`.
 
-## Billing và quota tháng
+## Subscription và quota tháng
 
-Billing hiện là internal plan/level, chưa phải subscription payment provider đầy đủ.
+Subscription hiện là cấu hình gói nội bộ, chưa phải subscription payment provider đầy đủ.
 
-- Mỗi tenant có thể gắn một `BillingPlan` qua `Tenant.billingPlanId`.
-- Nếu tenant chưa có plan, API sẽ lấy hoặc tạo default free plan.
-- Default free plan hiện có slug `free`, giới hạn mặc định:
+- Mỗi tenant có thể gắn một `Subscription` qua `Tenant.subscriptionId`.
+- Nếu tenant chưa có subscription, API sẽ lấy hoặc tạo subscription mặc định `free`.
+- Subscription mặc định có slug `free`, giới hạn mặc định:
   - `clickLimit`: 1000 click/tháng.
   - `capiEventLimit`: 1000 CAPI event/tháng.
   - `eapiEventLimit`: 1000 EAPI/affiliate webhook event/tháng.
@@ -354,7 +354,7 @@ Workspace chứa toàn bộ dữ liệu tracking của một user.
 | --- | --- |
 | `id` | UUID workspace. |
 | `ownerUserId` | User sở hữu tenant, unique. |
-| `billingPlanId` | Billing plan hiện tại của tenant, nullable. |
+| `subscriptionId` | Subscription hiện tại của tenant, nullable. |
 | `slug` | Slug workspace, unique toàn hệ thống. |
 | `name` | Tên workspace. |
 | `createdAt`, `updatedAt` | Audit timestamps. |
@@ -362,22 +362,22 @@ Workspace chứa toàn bộ dữ liệu tracking của một user.
 Quan hệ chính:
 
 - Thuộc một `User` qua `ownerUserId`.
-- Có thể thuộc một `BillingPlan` qua `billingPlanId`.
+- Có thể thuộc một `Subscription` qua `subscriptionId`.
 - Có nhiều `Campaign`, `Brand`, `AffiliatePlatform`, `Dataset`, `Prelander`, `TrackingLink`, `ClickEvent`, `AffiliateConversionEvent`, `CapiEvent`, `TenantMenuGrant`.
 
 Index:
 
 - `@@index([ownerUserId])`
-- `@@index([billingPlanId])`
+- `@@index([subscriptionId])`
 - `@@index([createdAt])`
 
-## Bảng BillingPlan
+## Bảng Subscription
 
-Định nghĩa level/gói tài khoản nội bộ và quota tháng.
+Định nghĩa subscription tài khoản nội bộ và quota tháng.
 
 | Field | Ý nghĩa |
 | --- | --- |
-| `id` | UUID billing plan. |
+| `id` | UUID subscription. |
 | `slug` | Slug unique, ví dụ `free`, `pro`, `scale`. |
 | `name` | Tên gói hiển thị. |
 | `description` | Mô tả gói, nullable. |
@@ -392,7 +392,7 @@ Index:
 
 Quan hệ:
 
-- Một `BillingPlan` có nhiều `Tenant`.
+- Một `Subscription` có nhiều `Tenant`.
 
 Index:
 
@@ -666,7 +666,7 @@ Vai trò:
 - Là nguồn dữ liệu cho analytics.
 - Là nguồn để worker tạo/gửi CAPI event.
 - Là điểm nối attribution với conversion thông qua `clickUuid`.
-- Là metric dùng để tính quota `BillingPlan.clickLimit`.
+- Là metric dùng để tính quota `Subscription.clickLimit`.
 
 ## Bảng AffiliateConversionEvent
 
@@ -697,7 +697,7 @@ Attribution hiện tại:
 
 - Conversion lưu `clickUuid`.
 - Analytics/attribution sau này sẽ join về `ClickEvent.clickUuid`.
-- Là metric dùng để tính quota `BillingPlan.eapiEventLimit`.
+- Là metric dùng để tính quota `Subscription.eapiEventLimit`.
 
 ## Bảng CapiEvent
 
@@ -728,7 +728,7 @@ Vai trò:
 - Worker tạo/upsert record theo click, platform và event name.
 - Payload sau khi xử lý lưu cả request/response/dryRun để debug delivery.
 - Tránh tạo trùng event nhờ unique `[clickEventId, platform, eventName]`.
-- Là metric dùng để tính quota `BillingPlan.capiEventLimit`.
+- Là metric dùng để tính quota `Subscription.capiEventLimit`.
 
 ## EventDeliveryStatus enum
 
@@ -745,7 +745,7 @@ Theo relation Prisma hiện tại:
 
 - Xóa `User` sẽ cascade `Tenant` do `Tenant.ownerUserId` onDelete Cascade.
 - Xóa `Tenant` sẽ cascade hầu hết dữ liệu con: `Campaign`, `Brand`, `AffiliatePlatform`, `Dataset`, `Prelander`, `TrackingLink`, `ClickEvent`, `AffiliateConversionEvent`, `CapiEvent`, `TenantMenuGrant`.
-- Xóa `BillingPlan` sẽ set `Tenant.billingPlanId = null`.
+- Xóa `Subscription` sẽ set `Tenant.subscriptionId = null`.
 - Xóa `MenuFeature` sẽ cascade `TenantMenuGrant` liên quan.
 - Xóa `Campaign` sẽ cascade `Brand`, `TrackingLink`, `ClickEvent` liên quan.
 - Xóa `Brand` sẽ cascade `TrackingLink` liên quan.
@@ -764,7 +764,7 @@ Vì cascade khá mạnh, UI đã dùng confirm trước khi xóa các entity ch�
 | `User` | `clerkUserId` unique | Một Clerk user chỉ map một user nội bộ. |
 | `Tenant` | `ownerUserId` unique | Hiện tại một user chỉ có một tenant. |
 | `Tenant` | `slug` unique | Slug workspace unique toàn hệ thống. |
-| `BillingPlan` | `slug` unique | Không trùng slug gói. |
+| `Subscription` | `slug` unique | Không trùng slug subscription. |
 | `MenuFeature` | `key` unique | Không trùng feature key. |
 | `MenuFeature` | `path` unique | Không trùng route path. |
 | `TenantMenuGrant` | `[tenantId, menuFeatureId]` unique | Một feature chỉ có một grant record trên mỗi tenant. |
@@ -784,10 +784,11 @@ Vì cascade khá mạnh, UI đã dùng confirm trước khi xóa các entity ch�
 Các migration quan trọng gần đây:
 
 - `20260521030700_billing_plans`
-  - Tạo bảng `BillingPlan`.
-  - Thêm `Tenant.billingPlanId`.
-  - Seed default free plan.
-  - Gán existing tenants vào free plan.
+  - Migration lịch sử tạo catalog gói ban đầu.
+- `20260716143300_subscriptions`
+  - Đổi tên catalog thành `Subscription`.
+  - Đổi `Tenant.billingPlanId` thành `Tenant.subscriptionId`.
+  - Giữ nguyên subscription đã gán cho tenant hiện hữu.
 - `20260521032600_tenant_menu_features`
   - Tạo bảng `MenuFeature`.
   - Tạo bảng `TenantMenuGrant`.

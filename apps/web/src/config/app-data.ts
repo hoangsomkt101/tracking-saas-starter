@@ -26,7 +26,7 @@ export const emptyData: LoadedAppData = {
   analyticsSummary: defaultAnalyticsSummary,
   analyticsBreakdown: defaultAnalyticsBreakdown,
   superAdminUsers: [],
-  billingPlans: [],
+  subscriptions: [],
   menuFeatures: [],
   reportSchedules: [],
   clickEventsPageData: emptyPaginated<ClickEvent>(),

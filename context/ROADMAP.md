@@ -25,7 +25,7 @@ Core tracking foundation is implemented.
 | Redirect tracking | Public `/r/:tenantId/:slug`, click UUID generation, IP/UA/referrer/cookies/click IDs capture, CAPI queue enqueue | Done | Redirect service stays lightweight; no bot filtering/fraud scoring yet. |
 | CAPI pipeline | Redis/BullMQ queue, worker, dry-run by default, Meta/TikTok payload build, delivery status and attempts | Done | Event payload is basic; no advanced Meta/TikTok value/content/user-data mapping yet. |
 | Rate limiting / hardening | Fastify rate limits on API/redirect/public webhooks, Helmet, CORS allow-list | Done | No per-tenant adaptive throttling yet. |
-| Quota foundation | Click/CAPI/EAPI monthly quota checks against billing plan | Done | User-side billing usage page belongs Phase 3. |
+| Quota foundation | Click/CAPI/EAPI monthly quota checks against subscription | Done | User-side subscription usage page belongs Phase 3. |
 
 ### Phase 1 remaining enhancements
 
@@ -86,9 +86,9 @@ Core ingestion, event matching, attribution resolver, filtered event exploration
 
 ### Done
 
-- [x] Billing plan model.
-- [x] Superadmin billing plan management.
-- [x] Assign billing plan to tenant.
+- [x] Subscription model.
+- [x] Superadmin subscription management.
+- [x] Assign subscription to tenant.
 - [x] Monthly quota checks for clicks, CAPI events, and EAPI/conversion events.
 - [x] Superadmin menu/function grants per tenant.
 

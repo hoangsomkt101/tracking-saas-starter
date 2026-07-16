@@ -22,7 +22,7 @@ export type TenantMenuGrant = {
   menuFeature: MenuFeature
 }
 
-export type BillingPlan = {
+export type Subscription = {
   id: string
   slug: string
   name: string
@@ -44,8 +44,8 @@ export type Tenant = {
   name: string
   slug: string
   publicKey: string
-  billingPlanId?: string | null
-  billingPlan?: BillingPlan | null
+  subscriptionId?: string | null
+  subscription?: Subscription | null
   menuGrants?: TenantMenuGrant[]
   createdAt: string
 }
@@ -444,7 +444,7 @@ export type AppData = {
   analyticsBreakdown: AnalyticsBreakdown
   currentUser?: CurrentUser
   superAdminUsers: SuperAdminUser[]
-  billingPlans: BillingPlan[]
+  subscriptions: Subscription[]
   menuFeatures: MenuFeature[]
   reportSchedules: ReportSchedule[]
 }
@@ -471,7 +471,7 @@ export type DataRefreshKey =
   | 'activity-logs'
   | 'analytics'
   | 'superadmin-users'
-  | 'billing-plans'
+  | 'subscriptions'
   | 'menu-features'
 
 export type CreateStatus = {
@@ -509,7 +509,7 @@ export type DashboardContext = {
   tenantActivityLogs: ActivityLog[]
   isSuperAdmin: boolean
   superAdminUsers: SuperAdminUser[]
-  billingPlans: BillingPlan[]
+  subscriptions: Subscription[]
   menuFeatures: MenuFeature[]
   grantedMenuFeatureIds: Set<string>
   isLoading: boolean

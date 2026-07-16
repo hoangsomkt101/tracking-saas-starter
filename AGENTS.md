@@ -14,7 +14,7 @@
 - Treat `packages/shared/src/index.ts` plus `impact.ts`/`partnerstack.ts` as canonical for queue names, Redis connection, supported affiliate platform aliases, event mapping, URL/FBC helpers, and HTML escaping.
 
 ## Architecture gotchas
-- Tenancy is one `Tenant` per Clerk user (`Tenant.ownerUserId` unique); `requireUser` has side effects: Clerk user/tenant upsert, default billing plan assignment, and core menu grants.
+- Tenancy is one `Tenant` per Clerk user (`Tenant.ownerUserId` unique); `requireUser` has side effects: Clerk user/tenant upsert, default subscription assignment, and core menu grants.
 - Most API routes live in one large `apps/api/src/server.ts`; new protected routes should rely on the preHandler auth, then call `requireAuthenticated` and `assertTenantAccess`.
 - Public shortlinks are `/:slug/:tenantKey` on the redirect service, with `tenantKey` = `Tenant.publicKey` or `Tenant.id`; README/context examples with `/r/:slug` or `/r/:tenantKey/:slug` are stale.
 - Redirect uses `TrackingLink.affiliateUrl` and appends `clickUuid` with the linked `AffiliatePlatform.trackingParamKey`; `Brand` is optional metadata, not the redirect URL source.

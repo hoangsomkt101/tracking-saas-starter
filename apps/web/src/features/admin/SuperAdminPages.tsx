@@ -6,13 +6,13 @@ import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
 import { Input } from '../../components/ui/input'
 import { Select } from '../../components/ui/select'
-import { DetailGrid, DetailItem, EntityDetailCard, NotFoundEntity } from '../../components/common/EntityScaffold'
+import { EntityDetailCard, NotFoundEntity } from '../../components/common/EntityScaffold'
 import { FieldLabel } from '../../components/common/FieldLabel'
 import { StatusBanner } from '../../components/common/StatusBanner'
 import { formatMoney } from '../../lib/format'
 import { getFormString } from '../../lib/forms'
 import { runEntityAction } from '../../lib/entity-actions'
-import type { BillingPlan, DashboardContext, SuperAdminUser, Tenant } from '../../types/domain'
+import type { DashboardContext, Subscription, SuperAdminUser, Tenant } from '../../types/domain'
 
 function getAccountLabel(account: SuperAdminUser) {
   return [account.firstName, account.lastName].filter(Boolean).join(' ').trim() || account.email || account.id
@@ -28,14 +28,28 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
     )
   }
 
-  async function handleCreatePlan(event: FormEvent<HTMLFormElement>) {
+  async function handleCreateSubscription(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const formElement = event.currentTarget
     const form = new FormData(formElement)
     await runEntityAction(ctx, async () => {
-      await ctx.fetchJson<BillingPlan>('/superadmin/billing-plans', { method: 'POST', body: JSON.stringify({ name: getFormString(form, 'name'), slug: getFormString(form, 'slug'), description: getFormString(form, 'description'), monthlyPriceCents: Number(form.get('monthlyPriceCents') ?? 0), currency: getFormString(form, 'currency') || 'USD', clickLimit: Number(form.get('clickLimit') ?? 0), capiEventLimit: Number(form.get('capiEventLimit') ?? 0), eapiEventLimit: Number(form.get('eapiEventLimit') ?? 0), isDefault: form.get('isDefault') === 'on', isActive: form.get('isActive') === 'on' }) })
+      await ctx.fetchJson<Subscription>('/superadmin/subscriptions', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: getFormString(form, 'name'),
+          slug: getFormString(form, 'slug'),
+          description: getFormString(form, 'description'),
+          monthlyPriceCents: Number(form.get('monthlyPriceCents') ?? 0),
+          currency: getFormString(form, 'currency') || 'USD',
+          clickLimit: Number(form.get('clickLimit') ?? 0),
+          capiEventLimit: Number(form.get('capiEventLimit') ?? 0),
+          eapiEventLimit: Number(form.get('eapiEventLimit') ?? 0),
+          isDefault: form.get('isDefault') === 'on',
+          isActive: form.get('isActive') === 'on'
+        })
+      })
       formElement.reset()
-      await ctx.refreshEntity('billing-plans')
+      await ctx.refreshEntity('subscriptions')
     }, 'Đã tạo gói subscription')
   }
 
@@ -64,10 +78,71 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
     <>
       <StatusBanner status={ctx.status} />
       <section className="single-page-grid">
-        <Card className="form-card"><CardHeader><CardTitle><WalletCards size={18} /> Create subscription plan</CardTitle><CardDescription>Tạo gói subscription với quota tháng cho click data, CAPI và EAPI/affiliate webhook.</CardDescription></CardHeader><CardContent><form onSubmit={handleCreatePlan}><label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Free / Pro / Agency" required /></label><label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="free" /></label><label><FieldLabel>Description</FieldLabel><Input name="description" placeholder="Plan description" /></label><label><FieldLabel>Monthly price cents</FieldLabel><Input name="monthlyPriceCents" type="number" min="0" defaultValue="0" /></label><label><FieldLabel>Currency</FieldLabel><Input name="currency" defaultValue="USD" /></label><label><FieldLabel>Click data limit / month</FieldLabel><Input name="clickLimit" type="number" min="0" defaultValue="1000" /></label><label><FieldLabel>CAPI limit / month</FieldLabel><Input name="capiEventLimit" type="number" min="0" defaultValue="1000" /></label><label><FieldLabel>EAPI limit / month</FieldLabel><Input name="eapiEventLimit" type="number" min="0" defaultValue="1000" /></label><label className="checkbox"><input name="isDefault" type="checkbox" /> Default for new users</label><label className="checkbox"><input name="isActive" type="checkbox" defaultChecked /> Active</label><Button type="submit"><Plus size={16} /> Create plan</Button></form></CardContent></Card>
-        <Card className="table-card"><CardHeader><CardTitle><CreditCard size={18} /> Subscription plans</CardTitle><CardDescription>{ctx.billingPlans.length} subscription levels configured.</CardDescription></CardHeader><CardContent><div className="table-wrap"><table><thead><tr><th>Plan</th><th>Price</th><th>Limits/month</th><th>Status</th></tr></thead><tbody>{ctx.billingPlans.map((plan) => <tr key={plan.id}><td><strong>{plan.name}</strong><br /><small>{plan.slug}</small></td><td>{formatMoney(plan.monthlyPriceCents, plan.currency)}</td><td>{plan.clickLimit} clicks · {plan.capiEventLimit} CAPI · {plan.eapiEventLimit} EAPI</td><td><Badge variant={plan.isActive ? 'active' : 'muted'}>{plan.isDefault ? 'Default' : plan.isActive ? 'Active' : 'Inactive'}</Badge></td></tr>)}{!ctx.billingPlans.length && <tr><td colSpan={4}>Chưa có gói.</td></tr>}</tbody></table></div></CardContent></Card>
+        <Card className="form-card">
+          <CardHeader>
+            <CardTitle><WalletCards size={18} /> Create subscription</CardTitle>
+            <CardDescription>Tạo gói subscription với quota tháng cho click data, CAPI và EAPI/affiliate webhook.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreateSubscription}>
+              <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Free / Pro / Agency" required /></label>
+              <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="free" /></label>
+              <label><FieldLabel>Description</FieldLabel><Input name="description" placeholder="Plan description" /></label>
+              <label><FieldLabel>Monthly price cents</FieldLabel><Input name="monthlyPriceCents" type="number" min="0" defaultValue="0" /></label>
+              <label><FieldLabel>Currency</FieldLabel><Input name="currency" defaultValue="USD" /></label>
+              <label><FieldLabel>Click data limit / month</FieldLabel><Input name="clickLimit" type="number" min="0" defaultValue="1000" /></label>
+              <label><FieldLabel>CAPI limit / month</FieldLabel><Input name="capiEventLimit" type="number" min="0" defaultValue="1000" /></label>
+              <label><FieldLabel>EAPI limit / month</FieldLabel><Input name="eapiEventLimit" type="number" min="0" defaultValue="1000" /></label>
+              <label className="checkbox"><input name="isDefault" type="checkbox" /> Default for new users</label>
+              <label className="checkbox"><input name="isActive" type="checkbox" defaultChecked /> Active</label>
+              <Button type="submit"><Plus size={16} /> Create subscription</Button>
+            </form>
+          </CardContent>
+        </Card>
+        <Card className="table-card">
+          <CardHeader>
+            <CardTitle><CreditCard size={18} /> Subscriptions</CardTitle>
+            <CardDescription>{ctx.subscriptions.length} subscriptions configured.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Plan</th><th>Price</th><th>Limits/month</th><th>Status</th></tr></thead>
+                <tbody>
+                  {ctx.subscriptions.map((subscription) => <tr key={subscription.id}><td><strong>{subscription.name}</strong><br /><small>{subscription.slug}</small></td><td>{formatMoney(subscription.monthlyPriceCents, subscription.currency)}</td><td>{subscription.clickLimit} clicks · {subscription.capiEventLimit} CAPI · {subscription.eapiEventLimit} EAPI</td><td><Badge variant={subscription.isActive ? 'active' : 'muted'}>{subscription.isDefault ? 'Default' : subscription.isActive ? 'Active' : 'Inactive'}</Badge></td></tr>)}
+                  {!ctx.subscriptions.length && <tr><td colSpan={4}>Chưa có subscription.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </section>
-      <Card className="table-card"><CardHeader className="section-heading"><div><CardTitle><Crown size={18} /> Registered accounts</CardTitle><CardDescription>{ctx.superAdminUsers.length} tài khoản đã đăng ký trong hệ thống.</CardDescription></div><div className="button-row"><Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteAllUsers()} disabled={ctx.isLoading || ctx.superAdminUsers.length === 0}><Trash2 size={16} /> Delete all</Button><Button variant="outline" size="sm" type="button" onClick={() => void ctx.refreshEntity('superadmin-users')} disabled={ctx.isLoading}>{ctx.isLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}Refresh</Button></div></CardHeader><CardContent><div className="table-wrap"><table><thead><tr><th>User</th><th>Account ID</th><th>Workspace</th><th>Plan</th><th>Menus</th><th>Usage</th><th>Actions</th></tr></thead><tbody>{ctx.superAdminUsers.map((account) => { const fullName = getAccountLabel(account); const tenant = account.tenant; const enabledMenus = tenant?.menuGrants?.filter((grant) => grant.isEnabled).length ?? 0; const isCurrentUser = account.id === ctx.data.currentUser?.id; return <tr key={account.id}><td><strong>{fullName}</strong><br /><small>{account.email ?? 'No email'}</small></td><td>{account.id}</td><td>{tenant ? <><strong>{tenant.name}</strong><br /><small>{tenant.slug} · {tenant.id}</small></> : '—'}</td><td>{tenant?.billingPlan?.name ?? '—'}</td><td>{tenant ? <Badge variant="outline">{enabledMenus} enabled</Badge> : '—'}</td><td>{tenant ? `${tenant._count.campaigns} campaigns · ${tenant._count.trackingLinks} links · ${tenant._count.clickEvents} clicks` : '—'}</td><td><div className="button-row"><Button asChild variant="outline" size="sm"><NavLink to={`/superadmin/users/${account.id}/manage`}><Settings size={14} /> Manage</NavLink></Button><Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteUser(account)} disabled={ctx.isLoading || isCurrentUser} title={isCurrentUser ? 'Không thể xoá tài khoản đang đăng nhập' : `Xoá ${fullName}`}><Trash2 size={14} /> Delete</Button></div></td></tr> })}{!ctx.superAdminUsers.length && <tr><td colSpan={7}>Chưa có tài khoản hoặc bạn chưa có quyền quản trị.</td></tr>}</tbody></table></div></CardContent></Card>
+      <Card className="table-card">
+        <CardHeader className="section-heading">
+          <div><CardTitle><Crown size={18} /> Registered accounts</CardTitle><CardDescription>{ctx.superAdminUsers.length} tài khoản đã đăng ký trong hệ thống.</CardDescription></div>
+          <div className="button-row">
+            <Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteAllUsers()} disabled={ctx.isLoading || ctx.superAdminUsers.length === 0}><Trash2 size={16} /> Delete all</Button>
+            <Button variant="outline" size="sm" type="button" onClick={() => void ctx.refreshEntity('superadmin-users')} disabled={ctx.isLoading}>{ctx.isLoading ? <Loader2 className="spin" size={16} /> : <RefreshCw size={16} />}Refresh</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>User</th><th>Account ID</th><th>Workspace</th><th>Subscription</th><th>Menus</th><th>Usage</th><th>Actions</th></tr></thead>
+              <tbody>
+                {ctx.superAdminUsers.map((account) => {
+                  const fullName = getAccountLabel(account)
+                  const tenant = account.tenant
+                  const enabledMenus = tenant?.menuGrants?.filter((grant) => grant.isEnabled).length ?? 0
+                  const isCurrentUser = account.id === ctx.data.currentUser?.id
+                  return <tr key={account.id}><td><strong>{fullName}</strong><br /><small>{account.email ?? 'No email'}</small></td><td>{account.id}</td><td>{tenant ? <><strong>{tenant.name}</strong><br /><small>{tenant.slug} · {tenant.id}</small></> : '—'}</td><td>{tenant?.subscription?.name ?? '—'}</td><td>{tenant ? <Badge variant="outline">{enabledMenus} enabled</Badge> : '—'}</td><td>{tenant ? `${tenant._count.campaigns} campaigns · ${tenant._count.trackingLinks} links · ${tenant._count.clickEvents} clicks` : '—'}</td><td><div className="button-row"><Button asChild variant="outline" size="sm"><NavLink to={`/superadmin/users/${account.id}/manage`}><Settings size={14} /> Manage</NavLink></Button><Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteUser(account)} disabled={ctx.isLoading || isCurrentUser}><Trash2 size={14} /> Delete</Button></div></td></tr>
+                })}
+                {!ctx.superAdminUsers.length && <tr><td colSpan={7}>Chưa có tài khoản đăng ký.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </>
   )
 }
@@ -78,7 +153,23 @@ export function SuperAdminUserManagePage({ ctx }: { ctx: DashboardContext }) {
   if (!ctx.isSuperAdmin) return <NotFoundEntity name="Super Admin" backPath="/superadmin" />
   if (!account?.tenant) return <NotFoundEntity name="Registered account" backPath="/superadmin" />
   const tenant = account.tenant
-  async function handleAssignPlan(billingPlanId: string) { await runEntityAction(ctx, async () => { await ctx.fetchJson<Tenant>(`/superadmin/tenants/${tenant.id}/billing-plan`, { method: 'PUT', body: JSON.stringify({ billingPlanId }) }); await ctx.refreshEntity('superadmin-users') }, 'Đã cập nhật gói cho workspace') }
-  async function handleToggleMenuFeature(menuFeatureId: string, isEnabled: boolean) { const currentFeatureIds = new Set(tenant.menuGrants?.filter((grant) => grant.isEnabled).map((grant) => grant.menuFeatureId) ?? []); if (isEnabled) currentFeatureIds.add(menuFeatureId); else currentFeatureIds.delete(menuFeatureId); await runEntityAction(ctx, async () => { await ctx.fetchJson<Tenant>(`/superadmin/tenants/${tenant.id}/menu-features`, { method: 'PUT', body: JSON.stringify({ menuFeatureIds: Array.from(currentFeatureIds) }) }); await ctx.refreshEntity('superadmin-users') }, 'Đã cập nhật menu/chức năng cho workspace') }
-  return <EntityDetailCard title={<><Crown size={18} /> Manage account</>} description="Quản lý subscription và menu/chức năng ở trang riêng, không hiển thị list dọc trong bảng." backPath="/superadmin"><div className="manage-grid"><div className="workspace-chip"><strong>{tenant.name}</strong><span>{account.email ?? account.id}</span></div><label><FieldLabel>Subscription plan</FieldLabel><Select value={tenant.billingPlanId ?? ''} onChange={(event) => void handleAssignPlan(event.currentTarget.value)}>{ctx.billingPlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.name}</option>)}</Select></label><div className="feature-card-grid">{ctx.menuFeatures.filter((feature) => feature.key !== 'superadmin').map((feature) => { const enabled = tenant.menuGrants?.some((grant) => grant.menuFeatureId === feature.id && grant.isEnabled) ?? false; return <label key={feature.id} className="feature-card-toggle"><input type="checkbox" checked={enabled} disabled={feature.isCore} onChange={(event) => void handleToggleMenuFeature(feature.id, event.currentTarget.checked)} /><span><strong>{feature.label}</strong><small>{feature.description ?? feature.path}</small></span><Badge variant={enabled ? 'active' : 'muted'}>{feature.isCore ? 'Core' : enabled ? 'Enabled' : 'Off'}</Badge></label> })}</div></div></EntityDetailCard>
+
+  async function handleAssignSubscription(subscriptionId: string) {
+    await runEntityAction(ctx, async () => {
+      await ctx.fetchJson<Tenant>(`/superadmin/tenants/${tenant.id}/subscription`, { method: 'PUT', body: JSON.stringify({ subscriptionId }) })
+      await ctx.refreshEntity('superadmin-users')
+    }, 'Đã cập nhật subscription cho workspace')
+  }
+
+  async function handleToggleMenuFeature(menuFeatureId: string, isEnabled: boolean) {
+    const currentFeatureIds = new Set(tenant.menuGrants?.filter((grant) => grant.isEnabled).map((grant) => grant.menuFeatureId) ?? [])
+    if (isEnabled) currentFeatureIds.add(menuFeatureId)
+    else currentFeatureIds.delete(menuFeatureId)
+    await runEntityAction(ctx, async () => {
+      await ctx.fetchJson<Tenant>(`/superadmin/tenants/${tenant.id}/menu-features`, { method: 'PUT', body: JSON.stringify({ menuFeatureIds: Array.from(currentFeatureIds) }) })
+      await ctx.refreshEntity('superadmin-users')
+    }, 'Đã cập nhật menu/chức năng cho workspace')
+  }
+
+  return <EntityDetailCard title={<><Crown size={18} /> Manage account</>} description="Quản lý subscription và menu/chức năng ở trang riêng, không hiển thị list dọc trong bảng." backPath="/superadmin"><div className="manage-grid"><div className="workspace-chip"><strong>{tenant.name}</strong><span>{account.email ?? account.id}</span></div><label><FieldLabel>Subscription</FieldLabel><Select value={tenant.subscriptionId ?? ''} onChange={(event) => void handleAssignSubscription(event.currentTarget.value)}>{ctx.subscriptions.map((subscription) => <option key={subscription.id} value={subscription.id}>{subscription.name}</option>)}</Select></label><div className="feature-card-grid">{ctx.menuFeatures.filter((feature) => feature.key !== 'superadmin').map((feature) => { const enabled = tenant.menuGrants?.some((grant) => grant.menuFeatureId === feature.id && grant.isEnabled) ?? false; return <label key={feature.id} className="feature-card-toggle"><input type="checkbox" checked={enabled} disabled={feature.isCore} onChange={(event) => void handleToggleMenuFeature(feature.id, event.currentTarget.checked)} /><span><strong>{feature.label}</strong><small>{feature.description ?? feature.path}</small></span><Badge variant={enabled ? 'active' : 'muted'}>{feature.isCore ? 'Core' : enabled ? 'Enabled' : 'Off'}</Badge></label> })}</div></div></EntityDetailCard>
 }

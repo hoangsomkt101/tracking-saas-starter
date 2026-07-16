@@ -13,7 +13,7 @@ import { navGroups, pageMeta } from '../config/navigation'
 import { buildQueryString, parseApiResponse } from '../lib/api'
 import { activityLogFilterParams, eventFilterParams } from '../lib/event-filters'
 import { formatLastUpdated } from '../lib/format'
-import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, BillingPlan, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, DataRefreshKey, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, ReportSchedule, SuperAdminUser, Tenant, ThemeMode, TrackingLink, WebsiteDomain } from '../types/domain'
+import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, DataRefreshKey, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, ReportSchedule, Subscription, SuperAdminUser, Tenant, ThemeMode, TrackingLink, WebsiteDomain } from '../types/domain'
 
 const refreshQueryKeys: Record<DataRefreshKey, readonly unknown[]> = {
   tenants: ['tenants'],
@@ -30,7 +30,7 @@ const refreshQueryKeys: Record<DataRefreshKey, readonly unknown[]> = {
   'activity-logs': ['activity-logs'],
   analytics: ['analytics'],
   'superadmin-users': ['superadmin-users'],
-  'billing-plans': ['billing-plans'],
+  subscriptions: ['subscriptions'],
   'menu-features': ['menu-features']
 }
 
@@ -241,9 +241,9 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     placeholderData: (previousData) => previousData ?? []
   })
 
-  const billingPlansQuery = useQuery({
-    queryKey: ['billing-plans'],
-    queryFn: () => fetchJson<BillingPlan[]>('/superadmin/billing-plans'),
+  const subscriptionsQuery = useQuery({
+    queryKey: ['subscriptions'],
+    queryFn: () => fetchJson<Subscription[]>('/superadmin/subscriptions'),
     enabled: shouldLoadSuperAdmin,
     staleTime: 30_000,
     placeholderData: (previousData) => previousData ?? []
@@ -275,7 +275,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     analyticsSummary: analyticsQuery.data?.summary ?? defaultAnalyticsBreakdown.summary,
     analyticsBreakdown: analyticsQuery.data ?? defaultAnalyticsBreakdown,
     superAdminUsers: superAdminUsersQuery.data ?? [],
-    billingPlans: billingPlansQuery.data ?? [],
+    subscriptions: subscriptionsQuery.data ?? [],
     menuFeatures: menuFeaturesQuery.data ?? [],
     clickEventsPageData: clickEventsQuery.data ?? emptyPaginated<ClickEvent>(clickEventsPage),
     capiEventsPageData: capiEventsQuery.data ?? emptyPaginated<CapiEvent>(capiEventsPage),
@@ -304,7 +304,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     { query: activityLogsQuery, enabled: shouldLoadActivityLogs },
     { query: analyticsQuery, enabled: shouldLoadAnalytics },
     { query: superAdminUsersQuery, enabled: shouldLoadSuperAdmin },
-    { query: billingPlansQuery, enabled: shouldLoadSuperAdmin },
+    { query: subscriptionsQuery, enabled: shouldLoadSuperAdmin },
     { query: menuFeaturesQuery, enabled: shouldLoadSuperAdmin }
   ]
   const isLoading = queryStates.some(({ query, enabled }) => enabled && (query.isLoading || query.isFetching))
@@ -482,7 +482,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     tenantActivityLogs,
     isSuperAdmin,
     superAdminUsers: data.superAdminUsers,
-    billingPlans: data.billingPlans,
+    subscriptions: data.subscriptions,
     menuFeatures: data.menuFeatures,
     grantedMenuFeatureIds,
     isLoading,

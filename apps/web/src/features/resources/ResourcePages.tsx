@@ -151,7 +151,7 @@ export function CampaignDetailPage({ ctx }: { ctx: DashboardContext }) {
   const assignedTrackingLinks = getCampaignTrackingLinks(ctx, currentCampaign)
   const assignedTrackingLinkCount = currentCampaign.trackingLinks?.length ?? currentCampaign._count?.trackingLinks ?? assignedTrackingLinks.length
   const selectedDatasetIds = new Set(getCampaignDatasets(currentCampaign).map((entry) => entry.datasetId))
-  const datasetLimit = ctx.selectedTenant?.billingPlan?.campaignDatasetLimit ?? 2
+  const datasetLimit = ctx.selectedTenant?.subscription?.campaignDatasetLimit ?? 2
 
   async function handleDatasetSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

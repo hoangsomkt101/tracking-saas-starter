@@ -18,7 +18,7 @@ Mục tiêu sản phẩm: giúp user tạo affiliate tracking workspace, quản 
 - Click public đi qua redirect service `/r/:tenantKey/:slug`.
 - Conversion từ affiliate network đi vào API webhook `/affiliate-webhooks/:tenantId/:platformSlug?token=...`.
 - Worker xử lý `click.created`, tạo/gửi CAPI PageView tới Meta/TikTok hoặc dry-run theo `CAPI_DRY_RUN`.
-- Superadmin quản lý billing plans và cấp/tắt menu/function theo tenant.
+- Superadmin quản lý subscriptions và cấp/tắt menu/function theo tenant.
 
 ## Sơ đồ feature tổng quan
 
@@ -665,8 +665,8 @@ Có:
 
 - Xem registered accounts đã có record trong DB.
 - Xem workspace/tenant của account.
-- Tạo/sửa billing plans.
-- Assign billing plan cho tenant.
+- Tạo/sửa subscriptions.
+- Assign subscription cho tenant.
 - Cấp/tắt menu/function cho tenant.
 - Superadmin được xác định bằng env `SUPERADMIN_EMAILS` / `SUPERADMIN_CLERK_USER_IDS`.
 
@@ -706,12 +706,12 @@ Có:
 | Method | Endpoint | Mục đích |
 | --- | --- | --- |
 | `GET` | `/superadmin/users` | List registered users và tenant stats. |
-| `GET` | `/superadmin/billing-plans` | List billing plans. |
-| `POST` | `/superadmin/billing-plans` | Tạo billing plan. |
-| `PUT` | `/superadmin/billing-plans/:id` | Sửa billing plan. |
+| `GET` | `/superadmin/subscriptions` | List subscriptions. |
+| `POST` | `/superadmin/subscriptions` | Tạo subscription. |
+| `PUT` | `/superadmin/subscriptions/:id` | Sửa subscription. |
 | `GET` | `/superadmin/menu-features` | List active menu features. |
 | `PUT` | `/superadmin/tenants/:id/menu-features` | Cấp/tắt menu features cho tenant. |
-| `PUT` | `/superadmin/tenants/:id/billing-plan` | Assign billing plan cho tenant. |
+| `PUT` | `/superadmin/tenants/:id/subscription` | Assign subscription cho tenant. |
 
 ## 14. Thứ tự setup khuyến nghị cho user
 
