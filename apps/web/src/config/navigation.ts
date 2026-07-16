@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, Crown, Globe2, HelpCircle, Home, Link2, Megaphone, ScrollText, Settings, ShieldCheck } from 'lucide-react'
+import { BarChart3, BookOpen, CreditCard, Crown, Globe2, HelpCircle, Home, Link2, Megaphone, ReceiptText, ScrollText, Settings, ShieldCheck, WalletCards } from 'lucide-react'
 import type { NavGroup } from '../types/domain'
 
 export const navGroups: NavGroup[] = [
@@ -34,6 +34,9 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Account',
     items: [
+      { path: '/wallet', label: 'Wallet', icon: WalletCards, featureKey: 'wallet' },
+      { path: '/subscriptions', label: 'Subscriptions', icon: CreditCard, featureKey: 'subscriptions' },
+      { path: '/billing', label: 'Billing', icon: ReceiptText, featureKey: 'billing' },
       { path: '/docs', label: 'Docs', icon: BookOpen },
       { path: '/support', label: 'Support', icon: HelpCircle, featureKey: 'support' }
     ]
@@ -58,7 +61,9 @@ export const pageMeta: Record<string, PageMeta> = {
   '/click-events': { title: 'Analytics', description: 'Data click, CAPI delivery và postback.' },
   '/logs': { title: 'Activity Logs', description: 'Theo dõi click, prelanding, webhook affiliate, CAPI và thay đổi cấu hình.' },
   '/analytics': { title: 'Analytics', description: 'Data click, CAPI delivery và postback.' },
-  '/billing': { title: 'Billing', description: 'Plan, usage quota and invoices.' },
+  '/wallet': { title: 'Wallet', description: 'Số dư khả dụng, giao dịch ví và lịch sử nạp tiền.' },
+  '/subscriptions': { title: 'Subscriptions', description: 'Quản lý gói dịch vụ, chu kỳ và quota tài khoản.' },
+  '/billing': { title: 'Billing', description: 'Thanh toán, yêu cầu nạp tiền và lịch sử giao dịch.' },
   '/websites': { title: 'Websites', description: 'Quét Affiliate URL và Shortlink trên website đã gắn mã tracking.' },
   '/docs': { title: 'Docs', description: 'Hướng dẫn tạo campaign, dataset, data source và tracking link.' },
   '/support': { title: 'Support', description: 'Thông tin hỗ trợ, hotline và pháp lý doanh nghiệp.' },

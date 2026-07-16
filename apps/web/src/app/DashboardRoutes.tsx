@@ -1,6 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router'
-import { WalletCards } from 'lucide-react'
-import { FeatureGate, PlaceholderPage } from '../components/common/FeatureGate'
+import { FeatureGate } from '../components/common/FeatureGate'
 import { OverviewPage } from '../features/dashboard/OverviewPage'
 import { SettingsPage } from '../features/account/SettingsPage'
 import { AnalyticsPage } from '../features/analytics/AnalyticsPage'
@@ -8,6 +7,7 @@ import { SuperAdminPage, SuperAdminUserManagePage } from '../features/admin/Supe
 import { ActivityLogsPage } from '../features/logs/ActivityLogsPage'
 import { SupportPage } from '../features/support/SupportPage'
 import { DocsPage } from '../features/docs/DocsPage'
+import { BillingPage, SubscriptionsPage, WalletPage } from '../features/billing/BillingPages'
 import { CampaignCreatePage, CampaignDeletePage, CampaignDetailPage, CampaignEditPage, CampaignsPage, DatasetCreatePage, DatasetDeletePage, DatasetDetailPage, DatasetEditPage, DatasetsPage, PlatformCreatePage, PlatformDeletePage, PlatformDetailPage, PlatformEditPage, PlatformsPage, TrackingLinkCreatePage, TrackingLinkDeletePage, TrackingLinkDetailPage, TrackingLinkEditPage, TrackingLinksPage } from '../features/resources/ResourcePages'
 import type { DashboardContext } from '../types/domain'
 
@@ -39,7 +39,9 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/click-events" element={<Navigate to="/analytics" replace />} />
       <Route path="/logs" element={<FeatureGate ctx={ctx} featureKey="activity-logs"><ActivityLogsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/analytics" element={<FeatureGate ctx={ctx} featureKey="analytics"><AnalyticsPage ctx={ctx} /></FeatureGate>} />
-      <Route path="/billing" element={<FeatureGate ctx={ctx} featureKey="billing"><PlaceholderPage icon={WalletCards} title="Billing" description="Plan, usage quota và invoices." /></FeatureGate>} />
+      <Route path="/wallet" element={<FeatureGate ctx={ctx} featureKey="wallet"><WalletPage ctx={ctx} /></FeatureGate>} />
+      <Route path="/subscriptions" element={<FeatureGate ctx={ctx} featureKey="subscriptions"><SubscriptionsPage ctx={ctx} /></FeatureGate>} />
+      <Route path="/billing" element={<FeatureGate ctx={ctx} featureKey="billing"><BillingPage ctx={ctx} /></FeatureGate>} />
       <Route path="/websites" element={<FeatureGate ctx={ctx} featureKey="settings"><SettingsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/settings" element={<Navigate to="/websites" replace />} />
       <Route path="/docs" element={<DocsPage />} />
