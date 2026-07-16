@@ -13,7 +13,7 @@ import { navGroups, pageMeta } from '../config/navigation'
 import { buildQueryString, parseApiResponse } from '../lib/api'
 import { activityLogFilterParams, eventFilterParams } from '../lib/event-filters'
 import { formatLastUpdated } from '../lib/format'
-import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, DataRefreshKey, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, ReportSchedule, Subscription, SuperAdminUser, SuperAdminWalletTopUp, Tenant, ThemeMode, TrackingLink, WalletOverview, WebsiteDomain } from '../types/domain'
+import type { ActivityLog, ActivityLogFilters, AffiliatePlatform, AnalyticsBreakdown, Brand, Campaign, CapiEvent, ClickEvent, ConversionEvent, CreateStatus, CurrentUser, DashboardContext, DataRefreshKey, Dataset, EventFilters, LoadedAppData, MenuFeature, PaginatedResponse, PaymentSettings, ReportSchedule, Subscription, SuperAdminUser, SuperAdminWalletTopUp, Tenant, ThemeMode, TrackingLink, WalletOverview, WebsiteDomain } from '../types/domain'
 
 const refreshQueryKeys: Record<DataRefreshKey, readonly unknown[]> = {
   tenants: ['tenants'],
@@ -33,7 +33,8 @@ const refreshQueryKeys: Record<DataRefreshKey, readonly unknown[]> = {
   subscriptions: ['subscriptions'],
   'menu-features': ['menu-features'],
   wallet: ['wallet'],
-  'wallet-top-ups': ['wallet-top-ups']
+  'wallet-top-ups': ['wallet-top-ups'],
+  'payment-settings': ['payment-settings']
 }
 
 function isPath(pathname: string, route: string) {
@@ -272,6 +273,14 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     placeholderData: (previousData) => previousData ?? []
   })
 
+  const paymentSettingsQuery = useQuery({
+    queryKey: ['payment-settings'],
+    queryFn: () => fetchJson<PaymentSettings>('/superadmin/payment-settings'),
+    enabled: shouldLoadSuperAdmin,
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData
+  })
+
   const menuFeaturesQuery = useQuery({
     queryKey: ['menu-features'],
     queryFn: () => fetchJson<MenuFeature[]>('/superadmin/menu-features'),
@@ -302,6 +311,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     menuFeatures: menuFeaturesQuery.data ?? [],
     walletOverview: walletQuery.data,
     superAdminWalletTopUps: superAdminWalletTopUpsQuery.data ?? [],
+    paymentSettings: paymentSettingsQuery.data,
     clickEventsPageData: clickEventsQuery.data ?? emptyPaginated<ClickEvent>(clickEventsPage),
     capiEventsPageData: capiEventsQuery.data ?? emptyPaginated<CapiEvent>(capiEventsPage),
     conversionEventsPageData: conversionEventsQuery.data ?? emptyPaginated<ConversionEvent>(conversionEventsPage),
@@ -332,6 +342,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     { query: subscriptionsQuery, enabled: shouldLoadSubscriptions },
     { query: walletQuery, enabled: shouldLoadWallet },
     { query: superAdminWalletTopUpsQuery, enabled: shouldLoadWalletTopUps },
+    { query: paymentSettingsQuery, enabled: shouldLoadSuperAdmin },
     { query: menuFeaturesQuery, enabled: shouldLoadSuperAdmin }
   ]
   const isLoading = queryStates.some(({ query, enabled }) => enabled && (query.isLoading || query.isFetching))
@@ -512,6 +523,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
     subscriptions: data.subscriptions,
     walletOverview: data.walletOverview,
     superAdminWalletTopUps: data.superAdminWalletTopUps,
+    paymentSettings: data.paymentSettings,
     menuFeatures: data.menuFeatures,
     grantedMenuFeatureIds,
     isLoading,

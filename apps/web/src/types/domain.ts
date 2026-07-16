@@ -86,7 +86,11 @@ export type WalletTopUp = {
   amountCents: number
   currency: string
   paymentMethod: string
+  paymentProvider?: string | null
   paymentReference?: string | null
+  providerTransactionId?: string | null
+  providerReferenceCode?: string | null
+  paymentReceivedAt?: string | null
   note?: string | null
   reference: string
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
@@ -109,6 +113,21 @@ export type WalletOverview = {
   subscriptionNextBillingAt?: string | null
   transactions: WalletTransaction[]
   topUps: WalletTopUp[]
+  paymentSettings?: {
+    sepayAccountNumber: string
+    sepayAccountName: string
+  } | null
+}
+
+export type PaymentSettings = {
+  id: string
+  sepayAccountNumber?: string | null
+  sepayAccountName?: string | null
+  sepayWebhookApiKey?: string | null
+  hasSepayWebhookApiKey: boolean
+  webhookUrl?: string | null
+  createdAt: string
+  updatedAt: string
 }
 
 export type SuperAdminWalletTopUp = WalletTopUp & {
@@ -521,6 +540,7 @@ export type AppData = {
   reportSchedules: ReportSchedule[]
   walletOverview?: WalletOverview
   superAdminWalletTopUps: SuperAdminWalletTopUp[]
+  paymentSettings?: PaymentSettings
 }
 
 export type LoadedAppData = AppData & {
@@ -549,6 +569,7 @@ export type DataRefreshKey =
   | 'menu-features'
   | 'wallet'
   | 'wallet-top-ups'
+  | 'payment-settings'
 
 export type CreateStatus = {
   type: 'idle' | 'success' | 'error'
@@ -588,6 +609,7 @@ export type DashboardContext = {
   subscriptions: Subscription[]
   walletOverview?: WalletOverview
   superAdminWalletTopUps: SuperAdminWalletTopUp[]
+  paymentSettings?: PaymentSettings
   menuFeatures: MenuFeature[]
   grantedMenuFeatureIds: Set<string>
   isLoading: boolean

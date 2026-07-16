@@ -24,6 +24,7 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
   const wallet = overview?.wallet
   const subscription = overview?.subscription
   const currency = wallet?.currency ?? subscription?.currency ?? 'USD'
+  const paymentSettings = overview?.paymentSettings
   const pendingTopUps = overview?.topUps.filter((topUp) => topUp.status === 'PENDING') ?? []
   const dueAmountCents = subscription?.monthlyPriceCents ?? 0
   const canCoverNextCharge = wallet ? wallet.balanceCents >= dueAmountCents : false
@@ -35,9 +36,10 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
     const form = new FormData(formElement)
     const amount = Number(form.get('amount') ?? 0)
     const amountCents = Math.round(amount * 100)
+    let topUpReference = ''
 
     await runEntityAction(ctx, async () => {
-      await ctx.fetchJson<WalletTopUp>('/wallet/top-ups', {
+      const topUp = await ctx.fetchJson<WalletTopUp>('/wallet/top-ups', {
         method: 'POST',
         body: JSON.stringify({
           tenantId: ctx.selectedTenant?.id,
@@ -48,9 +50,10 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
           note: String(form.get('note') ?? '')
         })
       })
+      topUpReference = topUp.reference
       formElement.reset()
       await ctx.refreshEntity('wallet')
-    }, 'Đã gửi yêu cầu nạp tiền. Số dư được cộng sau khi được xác nhận.')
+    }, paymentSettings ? `Đã tạo yêu cầu ${topUpReference}. Chuyển đúng số tiền và dùng mã này làm nội dung để SePay tự động cộng ví.` : 'Đã gửi yêu cầu nạp tiền. Số dư được cộng sau khi được xác nhận.')
   }
 
   async function handleCancelTopUp(topUp: WalletTopUp) {
@@ -111,12 +114,12 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
           <Card className="wallet-top-up-card">
             <CardHeader>
               <CardTitle><Landmark size={18} /> Yêu cầu nạp tiền</CardTitle>
-              <CardDescription>Gửi yêu cầu kèm mã giao dịch ngân hàng. Credit sẽ được cộng sau khi đội ngũ xác nhận.</CardDescription>
+              <CardDescription>{paymentSettings ? `Chuyển khoản đến ${paymentSettings.sepayAccountName} · ${paymentSettings.sepayAccountNumber}. SePay tự động đối soát theo mã TOPUP.` : 'Gửi yêu cầu kèm mã giao dịch ngân hàng. Credit sẽ được cộng sau khi đội ngũ xác nhận.'}</CardDescription>
             </CardHeader>
             <CardContent>
               <form className="wallet-top-up-form" onSubmit={(event) => void handleTopUp(event)}>
                 <label><FieldLabel>Số tiền ({currency})</FieldLabel><Input name="amount" type="number" min="0.01" step="0.01" placeholder="100.00" required disabled={!wallet} /></label>
-                <label><FieldLabel>Mã giao dịch ngân hàng</FieldLabel><Input name="paymentReference" placeholder="VD: FT260716123456" disabled={!wallet} /></label>
+                {paymentSettings ? <p className="form-hint">Sau khi gửi yêu cầu, dùng đúng <strong>Mã yêu cầu TOPUP</strong> ở thông báo hoặc bảng bên dưới làm nội dung chuyển khoản.</p> : <label><FieldLabel>Mã giao dịch ngân hàng</FieldLabel><Input name="paymentReference" placeholder="VD: FT260716123456" disabled={!wallet} /></label>}
                 <label><FieldLabel>Ghi chú</FieldLabel><Input name="note" placeholder="Nội dung chuyển khoản (không bắt buộc)" disabled={!wallet} /></label>
                 <Button type="submit" disabled={!wallet || ctx.isLoading}><Landmark size={16} /> Gửi yêu cầu nạp tiền</Button>
               </form>

@@ -31,6 +31,7 @@ export const emptyData: LoadedAppData = {
   reportSchedules: [],
   walletOverview: undefined,
   superAdminWalletTopUps: [],
+  paymentSettings: undefined,
   clickEventsPageData: emptyPaginated<ClickEvent>(),
   capiEventsPageData: emptyPaginated<CapiEvent>(),
   conversionEventsPageData: emptyPaginated<ConversionEvent>(),

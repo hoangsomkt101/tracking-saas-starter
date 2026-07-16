@@ -152,7 +152,11 @@ model WalletTopUp {
   amountCents         Int
   currency            String
   paymentMethod       String            @default("bank_transfer")
+  paymentProvider     String?
   paymentReference    String?
+  providerTransactionId String?         @unique
+  providerReferenceCode String?
+  paymentReceivedAt   DateTime?
   note                String?
   reference           String            @unique
   status              WalletTopUpStatus @default(PENDING)
@@ -169,6 +173,15 @@ model WalletTopUp {
 
   @@index([tenantId, createdAt])
   @@index([status, createdAt])
+}
+
+model PaymentSettings {
+  id                   String   @id @default("default")
+  sepayAccountNumber   String?
+  sepayAccountName     String?
+  sepayWebhookApiKey   String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 model MenuFeature {

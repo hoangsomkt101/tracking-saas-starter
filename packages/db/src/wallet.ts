@@ -106,8 +106,21 @@ export async function createWalletTopUp(input: {
   })
 }
 
-export async function approveWalletTopUp(topUpId: string, approvedByUserId: string) {
+export async function approveWalletTopUp(topUpId: string, approvedByUserId: string | null, options: {
+  paymentProvider?: string
+  providerTransactionId?: string
+  providerReferenceCode?: string
+  paymentReceivedAt?: Date
+} = {}) {
   const result = await runSerializable(async (tx) => {
+    if (options.providerTransactionId) {
+      const existingPayment = await tx.walletTopUp.findUnique({ where: { providerTransactionId: options.providerTransactionId } })
+      if (existingPayment) {
+        if (existingPayment.id === topUpId) return { topUp: existingPayment, transaction: null, alreadyProcessed: true }
+        throw new Error('Payment transaction has already been used')
+      }
+    }
+
     const topUp = await tx.walletTopUp.findUnique({ where: { id: topUpId } })
     if (!topUp) throw new Error('Wallet top-up not found')
     if (topUp.status !== 'PENDING') return { topUp, transaction: null, alreadyProcessed: true }
@@ -129,7 +142,17 @@ export async function approveWalletTopUp(topUpId: string, approvedByUserId: stri
     })
     const approvedTopUp = await tx.walletTopUp.update({
       where: { id: topUp.id },
-      data: { status: 'APPROVED', approvedAt: new Date(), approvedByUserId, walletTransactionId: transaction.id }
+      data: {
+        status: 'APPROVED',
+        approvedAt: new Date(),
+        approvedByUserId,
+        walletTransactionId: transaction.id,
+        paymentProvider: options.paymentProvider ?? topUp.paymentProvider,
+        paymentReference: options.providerReferenceCode ?? topUp.paymentReference,
+        providerTransactionId: options.providerTransactionId ?? topUp.providerTransactionId,
+        providerReferenceCode: options.providerReferenceCode ?? topUp.providerReferenceCode,
+        paymentReceivedAt: options.paymentReceivedAt ?? topUp.paymentReceivedAt
+      }
     })
     await tx.activityLog.create({
       data: {
@@ -139,7 +162,7 @@ export async function approveWalletTopUp(topUpId: string, approvedByUserId: stri
         message: `Wallet top-up ${topUp.reference} was approved`,
         entityType: 'walletTopUp',
         entityId: topUp.id,
-        metadata: { topUpId: topUp.id, transactionId: transaction.id, amountCents: topUp.amountCents, currency: topUp.currency, approvedByUserId }
+        metadata: { topUpId: topUp.id, transactionId: transaction.id, amountCents: topUp.amountCents, currency: topUp.currency, approvedByUserId, paymentProvider: options.paymentProvider, providerTransactionId: options.providerTransactionId, providerReferenceCode: options.providerReferenceCode }
       }
     })
 

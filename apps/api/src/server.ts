@@ -4,7 +4,7 @@ import { TokenVerificationError } from '@clerk/backend/errors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomUUID, timingSafeEqual } from 'node:crypto'
 import { Prisma, activateTenantSubscription, approveWalletTopUp, billTenantSubscription, createWalletTopUp, getWalletOverview, prisma, rejectWalletTopUp, type User } from '@repo/db'
 import { createClickEventsQueue, createFbc, createRedisConnection, getImpactActionTrackerEventName, getImpactCapiValue, getImpactEventMatch, getImpactPayoutNumber, getImpactRefClickId, getPartnerStackCapiEnrichment, getPartnerStackClickUuid, getPartnerStackConversionMoney, getPartnerStackCustomerEmail, getPartnerStackCustomerId, getPartnerStackEventDate, getPartnerStackEventMatch, getPartnerStackIdempotencyKey, getPayloadString as getSharedPayloadString, getPayloadValue as getSharedPayloadValue, getSupportedAffiliatePlatform, isFilledPayloadValue as isSharedFilledPayloadValue, isImpactPostbackPayload, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, normalizePayloadLookupKey as normalizeSharedPayloadLookupKey, parseEnvList, parseMoneyNumber, requireSupportedAffiliatePlatform, resolveAffiliateEventName, resolveImpactEventNames, validateHttpUrl, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
 
@@ -59,7 +59,7 @@ function getAffiliatePlatformBaseData(definition: SupportedAffiliatePlatformDefi
 function resolveTrackingParamKey(platform?: { slug?: string | null; name?: string | null; trackingParamKey?: string | null }, options: { preferStored?: boolean } = {}) { const stored = optionalString(platform?.trackingParamKey); if (options.preferStored && stored) return stored; const supported = getSupportedAffiliatePlatform(platform?.slug ?? '') ?? getSupportedAffiliatePlatform(stored ?? '') ?? getSupportedAffiliatePlatform(platform?.name ?? ''); return supported?.trackingParamKey ?? stored ?? 'subId1' }
 function getBearerToken(req: FastifyRequest) { const h = req.headers.authorization; return h?.startsWith('Bearer ') ? h.slice('Bearer '.length).trim() : null }
 function isClerkConfigured() { return Boolean(process.env.CLERK_SECRET_KEY && !process.env.CLERK_SECRET_KEY.includes('your_clerk_secret_key') && !process.env.CLERK_SECRET_KEY.includes('replace_me')) }
-function isPublicRoute(req: FastifyRequest) { const path = req.url.split('?')[0]; return path === '/health' || path === '/health/live' || path === '/health/ready' || path === '/metrics' || path === '/atp.js' || path === '/atp/events' || req.method === 'OPTIONS' || path.startsWith('/affiliate-webhooks/') }
+function isPublicRoute(req: FastifyRequest) { const path = req.url.split('?')[0]; return path === '/health' || path === '/health/live' || path === '/health/ready' || path === '/metrics' || path === '/atp.js' || path === '/atp/events' || path === '/payment-webhooks/sepay' || req.method === 'OPTIONS' || path.startsWith('/affiliate-webhooks/') }
 
 const DEFAULT_PAGE = 1
 const DEFAULT_PAGE_LIMIT = 25
@@ -127,6 +127,13 @@ function getPublicRequestOrigin(req: FastifyRequest) {
   const proto = (getHeaderString(req, 'x-forwarded-proto') ?? 'http').split(',')[0]?.trim().toLowerCase() === 'https' ? 'https' : 'http'
   const host = (getHeaderString(req, 'x-forwarded-host') ?? getHeaderString(req, 'host') ?? '').split(',')[0]?.trim()
   return host ? `${proto}://${host}` : undefined
+}
+function getApiPublicOrigin(req: FastifyRequest) {
+  const configuredOrigin = optionalString(process.env.API_PUBLIC_ORIGIN)
+  if (configuredOrigin) {
+    try { return new URL(configuredOrigin).origin } catch { app.log.warn('API_PUBLIC_ORIGIN is not a valid URL') }
+  }
+  return getPublicRequestOrigin(req)
 }
 function optionalLimitedString(value: unknown, maxLength = 1024) { const text = optionalString(value); return text ? text.slice(0, maxLength) : undefined }
 function getUrlSearchParam(value: string | undefined, key: string) { if (!value) return undefined; const url = parseHttpUrl(value); return optionalLimitedString(url?.searchParams.get(key), 512) }
@@ -243,6 +250,31 @@ function normalizeActivityLogLevel(value: unknown) { const level = typeof value 
 function serializeActivityLog(e: AnyRecord) { return { ...e, id: e.id.toString() } }
 async function createActivityLog(input: { tenantId: string; level?: ActivityLogLevelInput; source: string; eventType: string; message: string; entityType?: string; entityId?: string | number | bigint | null; metadata?: unknown }) { try { await prisma.$executeRawUnsafe('INSERT INTO "ActivityLog" ("tenantId", "level", "source", "eventType", "message", "entityType", "entityId", "metadata") VALUES ($1, $2::"ActivityLogLevel", $3, $4, $5, $6, $7, $8::jsonb)', input.tenantId, input.level ?? 'INFO', input.source, input.eventType, input.message, input.entityType ?? null, input.entityId === null || input.entityId === undefined ? null : String(input.entityId), input.metadata === undefined ? null : JSON.stringify(toJsonSafe(input.metadata))) } catch (error) { app.log.warn({ error, tenantId: input.tenantId, eventType: input.eventType }, 'Failed to write activity log') } }
 function getHeaderString(req: FastifyRequest, name: string) { const value = req.headers[name.toLowerCase()]; return Array.isArray(value) ? value[0] : typeof value === 'string' && value.trim() ? value.trim() : undefined }
+function hasMatchingApiKey(value: string | undefined, apiKey: string) {
+  const expected = `Apikey ${apiKey}`
+  if (!value || value.length !== expected.length) return false
+  return timingSafeEqual(Buffer.from(value), Buffer.from(expected))
+}
+function normalizeSePayAccountNumber(value: unknown) { return typeof value === 'string' || typeof value === 'number' ? String(value).replace(/\s/g, '') : '' }
+function getSePayPaymentDate(value: unknown) {
+  if (typeof value !== 'string' || !value.trim()) return new Date()
+  const text = value.trim()
+  const parsed = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? new Date(`${text.replace(' ', 'T')}+07:00`) : new Date(text)
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed
+}
+function serializePaymentSettings(settings: { id: string; sepayAccountNumber: string | null; sepayAccountName: string | null; sepayWebhookApiKey: string | null; createdAt: Date; updatedAt: Date }, req: FastifyRequest) {
+  const origin = getApiPublicOrigin(req)
+  return {
+    id: settings.id,
+    sepayAccountNumber: settings.sepayAccountNumber,
+    sepayAccountName: settings.sepayAccountName,
+    sepayWebhookApiKey: maskSecret(settings.sepayWebhookApiKey),
+    hasSepayWebhookApiKey: Boolean(settings.sepayWebhookApiKey),
+    webhookUrl: origin ? `${origin}/payment-webhooks/sepay` : null,
+    createdAt: settings.createdAt,
+    updatedAt: settings.updatedAt
+  }
+}
 const isFilledPayloadValue = isSharedFilledPayloadValue
 const normalizePayloadLookupKey = normalizeSharedPayloadLookupKey
 function getPayloadValue(payload: AnyRecord, keys: string[]) { return getSharedPayloadValue(payload, keys) }
@@ -1299,7 +1331,10 @@ app.get('/wallet', async (req) => {
   const tenantId = requireString((req.query as AnyRecord).tenantId, 'tenantId')
   await assertTenantAccess(user.id, tenantId)
   await billTenantSubscription(tenantId)
-  const { wallet, tenant } = await getWalletOverview(tenantId)
+  const [{ wallet, tenant }, paymentSettings] = await Promise.all([
+    getWalletOverview(tenantId),
+    prisma.paymentSettings.findUnique({ where: { id: 'default' }, select: { sepayAccountNumber: true, sepayAccountName: true } })
+  ])
   return {
     wallet,
     subscription: tenant.subscription,
@@ -1309,7 +1344,8 @@ app.get('/wallet', async (req) => {
     subscriptionPeriodEndAt: tenant.subscriptionPeriodEndAt,
     subscriptionNextBillingAt: tenant.subscriptionNextBillingAt,
     transactions: tenant.walletTransactions,
-    topUps: tenant.walletTopUps
+    topUps: tenant.walletTopUps,
+    paymentSettings: paymentSettings?.sepayAccountNumber && paymentSettings.sepayAccountName ? { sepayAccountNumber: paymentSettings.sepayAccountNumber, sepayAccountName: paymentSettings.sepayAccountName } : null
   }
 })
 app.post('/wallet/top-ups', async (req, reply) => {
@@ -1339,12 +1375,63 @@ app.delete('/wallet/top-ups/:id', async (req, reply) => {
   return cancelled
 })
 
+app.post('/payment-webhooks/sepay', { config: { rateLimit: { max: Number(process.env.PUBLIC_WEBHOOK_RATE_LIMIT_MAX ?? 120), timeWindow: process.env.PUBLIC_WEBHOOK_RATE_LIMIT_WINDOW ?? '1 minute' } } }, async (req, reply) => {
+  const settings = await prisma.paymentSettings.findUnique({ where: { id: 'default' } })
+  if (!settings?.sepayAccountNumber || !settings.sepayAccountName || !settings.sepayWebhookApiKey) return reply.code(503).send({ success: false, message: 'SePay payment settings are not configured' })
+  if (!hasMatchingApiKey(getHeaderString(req, 'authorization'), settings.sepayWebhookApiKey)) return reply.code(401).send({ success: false, message: 'Invalid SePay API key' })
+
+  const body = getPlainRecord(req.body) ?? {}
+  const providerTransactionId = optionalString(body.id === undefined || body.id === null ? undefined : String(body.id))
+  const transferType = optionalString(body.transferType)?.toLowerCase()
+  const accountNumber = normalizeSePayAccountNumber(body.accountNumber)
+  const transferAmount = Number(body.transferAmount)
+  const referenceSource = [getPayloadString(body, ['content']), getPayloadString(body, ['description']), getPayloadString(body, ['code'])].filter(Boolean).join(' ')
+  const referenceMatch = referenceSource.match(/\bTOPUP-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\b/i)
+
+  if (!providerTransactionId) return reply.code(400).send({ success: false, message: 'SePay transaction id is required' })
+  if (transferType !== 'in') return reply.code(200).send({ success: true, ignored: 'outgoing_transfer' })
+  if (accountNumber !== normalizeSePayAccountNumber(settings.sepayAccountNumber)) return reply.code(400).send({ success: false, message: 'SePay account number does not match' })
+  if (!Number.isFinite(transferAmount) || transferAmount <= 0) return reply.code(400).send({ success: false, message: 'SePay transfer amount must be positive' })
+
+  const existingPayment = await prisma.walletTopUp.findUnique({ where: { providerTransactionId } })
+  if (existingPayment) return { success: true, duplicate: true }
+  if (!referenceMatch) return reply.code(400).send({ success: false, message: 'Wallet top-up reference was not found in payment content' })
+
+  const topUp = await prisma.walletTopUp.findUnique({ where: { reference: `TOPUP-${referenceMatch[1].toLowerCase()}` } })
+  if (!topUp) return reply.code(404).send({ success: false, message: 'Wallet top-up not found' })
+  if (topUp.status !== 'PENDING') return { success: true, duplicate: true }
+  if (topUp.currency !== 'VND') return reply.code(400).send({ success: false, message: 'SePay only supports VND wallet top-ups' })
+  if (topUp.amountCents !== Math.round(transferAmount * 100)) return reply.code(400).send({ success: false, message: 'SePay transfer amount does not match wallet top-up' })
+
+  const result = await approveWalletTopUp(topUp.id, null, {
+    paymentProvider: 'sepay',
+    providerTransactionId,
+    providerReferenceCode: optionalString(body.referenceCode),
+    paymentReceivedAt: getSePayPaymentDate(body.transactionDate)
+  })
+  return { success: true, duplicate: result.alreadyProcessed }
+})
+
 app.get('/superadmin/users', async (req) => { requireSuperAdmin(req); const users = await prisma.user.findMany({ include: { tenant: { include: { subscription: true, menuGrants: { include: { menuFeature: true }, orderBy: { menuFeature: { sortOrder: 'asc' } } }, _count: { select: { campaigns: true, brands: true, affiliatePlatforms: true, datasets: true, trackingLinks: true, clickEvents: true, conversionEvents: true, capiEvents: true } } } } }, orderBy: { createdAt: 'desc' } }); return users.map((u) => ({ ...u, tenant: u.tenant ? serializeTenant(u.tenant) : u.tenant })) })
 app.delete('/superadmin/users', async (req) => { const admin = requireSuperAdmin(req); const users = await prisma.user.findMany({ include: { tenant: { select: { id: true } } }, orderBy: { createdAt: 'desc' } }); const targets = users.filter((user) => user.id !== admin.id && !isSuperAdmin(user)); let clerkDeletedCount = 0; for (const user of targets) { const result = await deleteRegisteredUserAccount(user); if (result.clerkDeleted) clerkDeletedCount += 1 } return { ok: true, deletedCount: targets.length, skippedCount: users.length - targets.length, clerkDeletedCount } })
 app.delete('/superadmin/users/:id', async (req, reply) => { const admin = requireSuperAdmin(req); const { id } = req.params as { id: string }; const user = await prisma.user.findUnique({ where: { id }, include: { tenant: { select: { id: true } } } }); if (!user) return reply.code(404).send({ error: 'User not found' }); if (user.id === admin.id) return reply.code(400).send({ error: 'Không thể xoá tài khoản Super Admin đang đăng nhập' }); if (isSuperAdmin(user)) return reply.code(400).send({ error: 'Không thể xoá tài khoản Super Admin' }); const result = await deleteRegisteredUserAccount(user); return { ok: true, id, clerkDeleted: result.clerkDeleted } })
 app.get('/superadmin/subscriptions', async (req) => { requireSuperAdmin(req); return prisma.subscription.findMany({ orderBy: [{ isDefault: 'desc' }, { monthlyPriceCents: 'asc' }, { createdAt: 'desc' }] }) })
 app.post('/superadmin/subscriptions', async (req, reply) => { requireSuperAdmin(req); const b = req.body as AnyRecord; const name = requireString(b.name, 'name'); const isDefault = optionalBoolean(b.isDefault, false); if (isDefault) await prisma.subscription.updateMany({ data: { isDefault: false } }); const subscription = await prisma.subscription.create({ data: { slug: toSlug(optionalString(b.slug) ?? name), name, description: optionalString(b.description), monthlyPriceCents: optionalInteger(b.monthlyPriceCents, 0), currency: optionalString(b.currency) ?? 'USD', clickLimit: optionalInteger(b.clickLimit, 1000), capiEventLimit: optionalInteger(b.capiEventLimit, 1000), eapiEventLimit: optionalInteger(b.eapiEventLimit, 1000), campaignDatasetLimit: optionalInteger(b.campaignDatasetLimit, 2), isDefault, isActive: optionalBoolean(b.isActive, true) } }); return reply.code(201).send(subscription) })
 app.put('/superadmin/subscriptions/:id', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const b = req.body as AnyRecord; const subscription = await prisma.subscription.findUnique({ where: { id } }); if (!subscription) return reply.code(404).send({ error: 'Subscription not found' }); const isDefault = optionalBoolean(b.isDefault, subscription.isDefault); if (isDefault) await prisma.subscription.updateMany({ where: { id: { not: id } }, data: { isDefault: false } }); const currentDatasetLimit = 'campaignDatasetLimit' in subscription ? Number(subscription.campaignDatasetLimit) : 2; return prisma.subscription.update({ where: { id }, data: { slug: b.slug ? toSlug(b.slug) : subscription.slug, name: optionalString(b.name) ?? subscription.name, description: typeof b.description === 'string' ? b.description : subscription.description, monthlyPriceCents: optionalInteger(b.monthlyPriceCents, subscription.monthlyPriceCents), currency: optionalString(b.currency) ?? subscription.currency, clickLimit: optionalInteger(b.clickLimit, subscription.clickLimit), capiEventLimit: optionalInteger(b.capiEventLimit, subscription.capiEventLimit), eapiEventLimit: optionalInteger(b.eapiEventLimit, subscription.eapiEventLimit), campaignDatasetLimit: optionalInteger(b.campaignDatasetLimit, currentDatasetLimit), isDefault, isActive: optionalBoolean(b.isActive, subscription.isActive) } }) })
+app.get('/superadmin/payment-settings', async (req) => { requireSuperAdmin(req); const settings = await prisma.paymentSettings.upsert({ where: { id: 'default' }, update: {}, create: { id: 'default' } }); return serializePaymentSettings(settings, req) })
+app.put('/superadmin/payment-settings', async (req) => {
+  requireSuperAdmin(req)
+  const body = req.body as AnyRecord
+  const current = await prisma.paymentSettings.findUnique({ where: { id: 'default' } })
+  const sepayAccountNumber = optionalString(body.sepayAccountNumber) ?? current?.sepayAccountNumber ?? undefined
+  const sepayAccountName = optionalString(body.sepayAccountName) ?? current?.sepayAccountName ?? undefined
+  const sepayWebhookApiKey = optionalString(body.sepayWebhookApiKey) ?? current?.sepayWebhookApiKey ?? undefined
+  if (!sepayAccountNumber) throw new Error('SePay account number is required')
+  if (!sepayAccountName) throw new Error('SePay account name is required')
+  if (!sepayWebhookApiKey) throw new Error('SePay webhook API key is required')
+  const settings = await prisma.paymentSettings.upsert({ where: { id: 'default' }, update: { sepayAccountNumber, sepayAccountName, sepayWebhookApiKey }, create: { id: 'default', sepayAccountNumber, sepayAccountName, sepayWebhookApiKey } })
+  return serializePaymentSettings(settings, req)
+})
 app.get('/subscriptions', async (req) => { requireAuthenticated(req); return prisma.subscription.findMany({ orderBy: [{ isActive: 'desc' }, { isDefault: 'desc' }, { monthlyPriceCents: 'asc' }, { createdAt: 'desc' }] }) })
 app.get('/superadmin/wallet-top-ups', async (req) => { requireSuperAdmin(req); const status = optionalQueryString((req.query as AnyRecord).status); return prisma.walletTopUp.findMany({ where: status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' } : undefined, include: { tenant: { select: { id: true, name: true, slug: true, ownerUser: { select: { email: true } } } } }, orderBy: { createdAt: 'desc' }, take: 100 }) })
 app.post('/superadmin/wallet-top-ups/:id/approve', async (req, reply) => { const admin = requireSuperAdmin(req); const { id } = req.params as { id: string }; const result = await approveWalletTopUp(id, admin.id); if (result.alreadyProcessed) return reply.code(400).send({ error: 'Wallet top-up is no longer pending' }); return result })

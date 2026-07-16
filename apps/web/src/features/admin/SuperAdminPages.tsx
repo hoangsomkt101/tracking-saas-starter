@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
 import { NavLink, useParams, useSearchParams } from 'react-router'
-import { Check, CreditCard, Crown, Loader2, Plus, RefreshCw, Settings, Trash2, Users, WalletCards, X } from 'lucide-react'
+import { Check, Copy, CreditCard, Crown, Landmark, Loader2, Plus, RefreshCw, Settings, Trash2, Users, WalletCards, X } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -20,7 +20,8 @@ function getAccountLabel(account: SuperAdminUser) {
 
 export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const activeTab = searchParams.get('tab') === 'users' ? 'users' : 'subscriptions'
+  const requestedTab = searchParams.get('tab')
+  const activeTab = requestedTab === 'users' || requestedTab === 'payment' ? requestedTab : 'subscriptions'
 
   if (!ctx.isSuperAdmin) {
     return (
@@ -93,7 +94,34 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
     }, `Đã từ chối yêu cầu nạp tiền ${topUp.reference}`)
   }
 
-  function handleTabChange(tab: 'subscriptions' | 'users') {
+  async function handleSavePaymentSettings(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const form = new FormData(event.currentTarget)
+    await runEntityAction(ctx, async () => {
+      await ctx.fetchJson('/superadmin/payment-settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          sepayAccountNumber: getFormString(form, 'sepayAccountNumber'),
+          sepayAccountName: getFormString(form, 'sepayAccountName'),
+          sepayWebhookApiKey: getFormString(form, 'sepayWebhookApiKey')
+        })
+      })
+      await ctx.refreshEntity('payment-settings')
+    }, 'Đã lưu cấu hình thanh toán SePay')
+  }
+
+  async function handleCopyWebhookUrl() {
+    const webhookUrl = ctx.paymentSettings?.webhookUrl
+    if (!webhookUrl) return
+    try {
+      await navigator.clipboard.writeText(webhookUrl)
+      ctx.setStatus({ type: 'success', message: 'Đã sao chép webhook URL' })
+    } catch {
+      ctx.setStatus({ type: 'error', message: 'Không thể sao chép webhook URL' })
+    }
+  }
+
+  function handleTabChange(tab: 'subscriptions' | 'users' | 'payment') {
     if (tab === 'subscriptions') setSearchParams({})
     else setSearchParams({ tab })
   }
@@ -104,6 +132,7 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
       <div className="superadmin-tabs" role="tablist" aria-label="Super Admin management">
         <button className="superadmin-tab" type="button" role="tab" id="superadmin-subscriptions-tab" aria-selected={activeTab === 'subscriptions'} aria-controls="superadmin-subscriptions-panel" onClick={() => handleTabChange('subscriptions')}><CreditCard size={16} /> Subscription <span>{ctx.subscriptions.length}</span></button>
         <button className="superadmin-tab" type="button" role="tab" id="superadmin-users-tab" aria-selected={activeTab === 'users'} aria-controls="superadmin-users-panel" onClick={() => handleTabChange('users')}><Users size={16} /> User <span>{ctx.superAdminUsers.length}</span></button>
+        <button className="superadmin-tab" type="button" role="tab" id="superadmin-payment-tab" aria-selected={activeTab === 'payment'} aria-controls="superadmin-payment-panel" onClick={() => handleTabChange('payment')}><Landmark size={16} /> Payment</button>
       </div>
       {activeTab === 'subscriptions' && <section id="superadmin-subscriptions-panel" role="tabpanel" aria-labelledby="superadmin-subscriptions-tab" className="superadmin-tab-panel">
         <section className="single-page-grid">
@@ -183,6 +212,40 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
                   {!ctx.superAdminUsers.length && <tr><td colSpan={7}>Chưa có tài khoản đăng ký.</td></tr>}
                 </tbody>
               </table>
+            </div>
+          </CardContent>
+        </Card>
+      </section>}
+      {activeTab === 'payment' && <section id="superadmin-payment-panel" role="tabpanel" aria-labelledby="superadmin-payment-tab" className="superadmin-tab-panel">
+        <Card className="form-card">
+          <CardHeader>
+            <CardTitle><Landmark size={18} /> SePay payment settings</CardTitle>
+            <CardDescription>Cấu hình tài khoản nhận tiền và webhook để SePay tự động đối soát yêu cầu nạp wallet bằng số tiền cùng mã TOPUP trong nội dung chuyển khoản.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form key={ctx.paymentSettings?.updatedAt ?? 'new'} className="payment-settings-form" onSubmit={(event) => void handleSavePaymentSettings(event)}>
+              <label><FieldLabel>Số tài khoản SePay</FieldLabel><Input name="sepayAccountNumber" defaultValue={ctx.paymentSettings?.sepayAccountNumber ?? ''} placeholder="VD: 0123456789" required /></label>
+              <label><FieldLabel>Tên tài khoản</FieldLabel><Input name="sepayAccountName" defaultValue={ctx.paymentSettings?.sepayAccountName ?? ''} placeholder="VD: NGUYEN VAN A" required /></label>
+              <label><FieldLabel>SePay webhook API key</FieldLabel><Input name="sepayWebhookApiKey" type="password" placeholder={ctx.paymentSettings?.hasSepayWebhookApiKey ? 'Đã cấu hình, để trống để giữ nguyên' : 'API key dùng để xác thực webhook'} required={!ctx.paymentSettings?.hasSepayWebhookApiKey} /></label>
+              <p className="form-hint">Tại SePay, chọn xác thực API Key và dùng đúng giá trị ở trên. API key được lưu riêng và không hiển thị lại sau khi lưu.</p>
+              <Button type="submit" disabled={ctx.isLoading}>Lưu cấu hình SePay</Button>
+            </form>
+          </CardContent>
+        </Card>
+        <Card className="table-card payment-webhook-card">
+          <CardHeader>
+            <CardTitle>Webhook URL</CardTitle>
+            <CardDescription>Dán URL này vào webhook SePay, chọn sự kiện <strong>Có tiền vào</strong>, và chọn đúng tài khoản ngân hàng đã cấu hình.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="payment-webhook-url">
+              <code>{ctx.paymentSettings?.webhookUrl ?? 'Không thể xác định URL. Hãy cấu hình API_PUBLIC_ORIGIN trên server.'}</code>
+              <Button variant="outline" size="sm" type="button" onClick={() => void handleCopyWebhookUrl()} disabled={!ctx.paymentSettings?.webhookUrl}><Copy size={15} /> Copy</Button>
+            </div>
+            <div className="detail-grid payment-settings-summary">
+              <span>Tài khoản nhận</span><strong>{ctx.paymentSettings?.sepayAccountNumber ?? 'Chưa cấu hình'}</strong>
+              <span>Chủ tài khoản</span><strong>{ctx.paymentSettings?.sepayAccountName ?? 'Chưa cấu hình'}</strong>
+              <span>Xác thực webhook</span><strong>{ctx.paymentSettings?.hasSepayWebhookApiKey ? 'API key đã cấu hình' : 'Chưa cấu hình API key'}</strong>
             </div>
           </CardContent>
         </Card>
