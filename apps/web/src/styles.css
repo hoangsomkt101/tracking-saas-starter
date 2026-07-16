@@ -4473,6 +4473,21 @@ th,
 
 @media (max-width: 640px) {
 
+  .wallet-balance-meta,
+  .wallet-overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wallet-balance-meta div + div {
+    border-top: 1px solid hsl(var(--border));
+    padding-top: 0.75rem;
+  }
+
+  .wallet-top-up-form button {
+    justify-self: stretch;
+    width: 100%;
+  }
+
   .settings-page .settings-card>.p-6,
   .settings-page .settings-card>.p-6.pt-0,
   .websites-card-header {
@@ -4550,6 +4565,150 @@ th,
 .subscription-plan-limits span {
   color: hsl(var(--compose-text-tertiary));
   font-size: 0.8rem;
+}
+
+.wallet-page {
+  gap: 1rem;
+}
+
+.wallet-balance-card {
+  background:
+    radial-gradient(circle at 88% 10%, hsl(var(--foreground) / 0.11), transparent 18rem),
+    hsl(var(--card));
+  overflow: hidden;
+}
+
+.wallet-balance-card .p-6 {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.wallet-balance-value {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.wallet-balance-icon {
+  align-items: center;
+  background: hsl(var(--foreground));
+  border-radius: 0.85rem;
+  color: hsl(var(--background));
+  display: inline-flex;
+  height: 3rem;
+  justify-content: center;
+  margin-bottom: 0.45rem;
+  width: 3rem;
+}
+
+.wallet-balance-value strong {
+  font-size: clamp(2.4rem, 5vw, 4.2rem);
+  letter-spacing: -0.075em;
+  line-height: 0.9;
+}
+
+.wallet-balance-value span,
+.wallet-balance-meta span,
+.wallet-cycle-list span {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.8rem;
+}
+
+.wallet-balance-meta {
+  border-top: 1px solid hsl(var(--border));
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-top: 1rem;
+}
+
+.wallet-balance-meta div,
+.wallet-cycle-list div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.wallet-balance-meta strong,
+.wallet-cycle-list strong {
+  font-size: 0.94rem;
+  overflow-wrap: anywhere;
+}
+
+.wallet-overview-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+}
+
+.wallet-cycle-card .p-6,
+.wallet-top-up-card .p-6 {
+  padding-top: 0;
+}
+
+.wallet-cycle-list {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.wallet-cycle-list div + div {
+  border-top: 1px solid hsl(var(--border));
+  padding-top: 0.9rem;
+}
+
+.wallet-top-up-form {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.wallet-top-up-form button {
+  justify-self: start;
+  margin-top: 0.15rem;
+}
+
+.wallet-overdue-card {
+  background: hsl(var(--destructive) / 0.07);
+  border-color: hsl(var(--destructive) / 0.28);
+}
+
+.wallet-overdue-card .p-6,
+.wallet-overdue-card .p-6 > div {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.wallet-overdue-card svg {
+  color: hsl(var(--destructive));
+  flex: 0 0 auto;
+}
+
+.wallet-overdue-card span {
+  color: hsl(var(--muted-foreground));
+  line-height: 1.5;
+}
+
+.wallet-overdue-card strong {
+  color: hsl(var(--foreground));
+}
+
+.wallet-positive {
+  color: #15803d;
+}
+
+.wallet-negative {
+  color: #b91c1c;
+}
+
+:root[data-theme="dark"] .wallet-positive {
+  color: #86efac;
+}
+
+:root[data-theme="dark"] .wallet-negative {
+  color: #fca5a5;
+}
+
+.wallet-table td:nth-last-child(-n + 2),
+.wallet-table th:nth-last-child(-n + 2) {
+  text-align: right;
 }
 
 .subscription-plan-badges {

@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { Queue, Worker } from 'bullmq'
 import { createHash } from 'node:crypto'
-import { Prisma, prisma } from '@repo/db'
+import { Prisma, billDueTenantSubscriptions, prisma } from '@repo/db'
 import { CLICK_EVENTS_QUEUE, type ClickEventJob, createRedisConnection, getImpactActionTrackerAmountValue } from '@repo/shared'
 
 const connection = createRedisConnection()
@@ -500,8 +500,22 @@ const metricsInterval = setInterval(() => {
   void logWorkerMetrics().catch((error) => console.error('Failed to collect worker metrics', error))
 }, Number(process.env.WORKER_METRICS_INTERVAL_MS ?? 60000))
 
+async function runSubscriptionBilling() {
+  const results = await billDueTenantSubscriptions()
+  const charged = results.filter((result) => result.state === 'charged').length
+  const overdue = results.filter((result) => result.state === 'insufficient_funds').length
+  if (charged || overdue) console.log('Subscription billing', { processed: results.length, charged, overdue })
+}
+
+const subscriptionBillingInterval = setInterval(() => {
+  void runSubscriptionBilling().catch((error) => console.error('Failed to run subscription billing', error))
+}, Number(process.env.SUBSCRIPTION_BILLING_INTERVAL_MS ?? 60 * 60 * 1000))
+
+void runSubscriptionBilling().catch((error) => console.error('Failed to run initial subscription billing', error))
+
 async function shutdown() {
   clearInterval(metricsInterval)
+  clearInterval(subscriptionBillingInterval)
   await worker.close()
   await metricsQueue.close()
   await connection.quit()

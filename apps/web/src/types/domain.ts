@@ -46,8 +46,80 @@ export type Tenant = {
   publicKey: string
   subscriptionId?: string | null
   subscription?: Subscription | null
+  subscriptionStatus?: 'ACTIVE' | 'PAST_DUE'
+  subscriptionStartedAt?: string | null
+  subscriptionPeriodStartAt?: string | null
+  subscriptionPeriodEndAt?: string | null
+  subscriptionNextBillingAt?: string | null
   menuGrants?: TenantMenuGrant[]
   createdAt: string
+}
+
+export type Wallet = {
+  id: string
+  tenantId: string
+  currency: string
+  balanceCents: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type WalletTransaction = {
+  id: string
+  walletId: string
+  tenantId: string
+  subscriptionId?: string | null
+  type: 'TOP_UP' | 'SUBSCRIPTION_CHARGE' | 'REFUND' | 'ADJUSTMENT'
+  amountCents: number
+  balanceAfterCents: number
+  currency: string
+  description: string
+  reference?: string | null
+  billingPeriodStart?: string | null
+  billingPeriodEnd?: string | null
+  createdAt: string
+}
+
+export type WalletTopUp = {
+  id: string
+  tenantId: string
+  amountCents: number
+  currency: string
+  paymentMethod: string
+  paymentReference?: string | null
+  note?: string | null
+  reference: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED'
+  walletTransactionId?: string | null
+  approvedAt?: string | null
+  approvedByUserId?: string | null
+  rejectedAt?: string | null
+  rejectionReason?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type WalletOverview = {
+  wallet: Wallet
+  subscription?: Subscription | null
+  subscriptionStatus: 'ACTIVE' | 'PAST_DUE'
+  subscriptionStartedAt?: string | null
+  subscriptionPeriodStartAt?: string | null
+  subscriptionPeriodEndAt?: string | null
+  subscriptionNextBillingAt?: string | null
+  transactions: WalletTransaction[]
+  topUps: WalletTopUp[]
+}
+
+export type SuperAdminWalletTopUp = WalletTopUp & {
+  tenant: {
+    id: string
+    name: string
+    slug: string
+    ownerUser: {
+      email?: string | null
+    }
+  }
 }
 
 export type WebsiteDomain = {
@@ -447,6 +519,8 @@ export type AppData = {
   subscriptions: Subscription[]
   menuFeatures: MenuFeature[]
   reportSchedules: ReportSchedule[]
+  walletOverview?: WalletOverview
+  superAdminWalletTopUps: SuperAdminWalletTopUp[]
 }
 
 export type LoadedAppData = AppData & {
@@ -473,6 +547,8 @@ export type DataRefreshKey =
   | 'superadmin-users'
   | 'subscriptions'
   | 'menu-features'
+  | 'wallet'
+  | 'wallet-top-ups'
 
 export type CreateStatus = {
   type: 'idle' | 'success' | 'error'
@@ -510,6 +586,8 @@ export type DashboardContext = {
   isSuperAdmin: boolean
   superAdminUsers: SuperAdminUser[]
   subscriptions: Subscription[]
+  walletOverview?: WalletOverview
+  superAdminWalletTopUps: SuperAdminWalletTopUp[]
   menuFeatures: MenuFeature[]
   grantedMenuFeatureIds: Set<string>
   isLoading: boolean

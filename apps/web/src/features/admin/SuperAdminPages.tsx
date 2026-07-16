@@ -1,6 +1,6 @@
 import type { FormEvent } from 'react'
 import { NavLink, useParams } from 'react-router'
-import { CreditCard, Crown, Loader2, Plus, RefreshCw, Settings, Trash2, WalletCards } from 'lucide-react'
+import { Check, CreditCard, Crown, Loader2, Plus, RefreshCw, Settings, Trash2, WalletCards, X } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -9,10 +9,10 @@ import { Select } from '../../components/ui/select'
 import { EntityDetailCard, NotFoundEntity } from '../../components/common/EntityScaffold'
 import { FieldLabel } from '../../components/common/FieldLabel'
 import { StatusBanner } from '../../components/common/StatusBanner'
-import { formatMoney } from '../../lib/format'
+import { formatDate, formatMoney } from '../../lib/format'
 import { getFormString } from '../../lib/forms'
 import { runEntityAction } from '../../lib/entity-actions'
-import type { DashboardContext, Subscription, SuperAdminUser, Tenant } from '../../types/domain'
+import type { DashboardContext, Subscription, SuperAdminUser, SuperAdminWalletTopUp, Tenant } from '../../types/domain'
 
 function getAccountLabel(account: SuperAdminUser) {
   return [account.firstName, account.lastName].filter(Boolean).join(' ').trim() || account.email || account.id
@@ -74,6 +74,22 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
     }, 'Đã xoá hết Registered accounts không phải Super Admin')
   }
 
+  async function handleApproveTopUp(topUp: SuperAdminWalletTopUp) {
+    await runEntityAction(ctx, async () => {
+      await ctx.fetchJson(`/superadmin/wallet-top-ups/${topUp.id}/approve`, { method: 'POST' })
+      await ctx.refreshEntity('wallet-top-ups')
+    }, `Đã duyệt nạp ${formatMoney(topUp.amountCents, topUp.currency)} cho ${topUp.tenant.name}`)
+  }
+
+  async function handleRejectTopUp(topUp: SuperAdminWalletTopUp) {
+    const rejectionReason = window.prompt('Lý do từ chối (không bắt buộc):')
+    if (rejectionReason === null) return
+    await runEntityAction(ctx, async () => {
+      await ctx.fetchJson(`/superadmin/wallet-top-ups/${topUp.id}/reject`, { method: 'POST', body: JSON.stringify({ rejectionReason }) })
+      await ctx.refreshEntity('wallet-top-ups')
+    }, `Đã từ chối yêu cầu nạp tiền ${topUp.reference}`)
+  }
+
   return (
     <>
       <StatusBanner status={ctx.status} />
@@ -117,6 +133,18 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
           </CardContent>
         </Card>
       </section>
+      <Card className="table-card">
+        <CardHeader className="section-heading">
+          <div><CardTitle><WalletCards size={18} /> Wallet top-up requests</CardTitle><CardDescription>{ctx.superAdminWalletTopUps.filter((topUp) => topUp.status === 'PENDING').length} yêu cầu đang chờ xác nhận chuyển khoản.</CardDescription></div>
+          <Button variant="outline" size="sm" type="button" onClick={() => void ctx.refreshEntity('wallet-top-ups')} disabled={ctx.isLoading}><RefreshCw size={16} /> Refresh</Button>
+        </CardHeader>
+        <CardContent>
+          <div className="table-wrap"><table><thead><tr><th>Workspace</th><th>Mã yêu cầu</th><th>Số tiền</th><th>Mã chuyển khoản</th><th>Thời gian</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+            {ctx.superAdminWalletTopUps.map((topUp) => <tr key={topUp.id}><td><strong>{topUp.tenant.name}</strong><br /><small>{topUp.tenant.ownerUser.email ?? topUp.tenant.slug}</small></td><td>{topUp.reference}</td><td>{formatMoney(topUp.amountCents, topUp.currency)}</td><td>{topUp.paymentReference || '—'}</td><td>{formatDate(topUp.createdAt)}</td><td><Badge variant={topUp.status === 'APPROVED' ? 'success' : topUp.status === 'PENDING' ? 'pending' : topUp.status === 'REJECTED' ? 'error' : 'muted'}>{topUp.status}</Badge></td><td>{topUp.status === 'PENDING' && <div className="button-row"><Button type="button" size="sm" onClick={() => void handleApproveTopUp(topUp)} disabled={ctx.isLoading}><Check size={14} /> Duyệt</Button><Button variant="outline" type="button" size="sm" onClick={() => void handleRejectTopUp(topUp)} disabled={ctx.isLoading}><X size={14} /> Từ chối</Button></div>}</td></tr>)}
+            {!ctx.superAdminWalletTopUps.length && <tr><td colSpan={7}>Chưa có yêu cầu nạp tiền.</td></tr>}
+          </tbody></table></div>
+        </CardContent>
+      </Card>
       <Card className="table-card">
         <CardHeader className="section-heading">
           <div><CardTitle><Crown size={18} /> Registered accounts</CardTitle><CardDescription>{ctx.superAdminUsers.length} tài khoản đã đăng ký trong hệ thống.</CardDescription></div>

@@ -21,18 +21,45 @@ enum ActivityLogLevel {
   ERROR
 }
 
+enum TenantSubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+}
+
+enum WalletTransactionType {
+  TOP_UP
+  SUBSCRIPTION_CHARGE
+  REFUND
+  ADJUSTMENT
+}
+
+enum WalletTopUpStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 model Tenant {
-  id                 String        @id @default(uuid())
-  ownerUserId        String        @unique
-  subscriptionId     String?
-  slug               String        @unique
-  publicKey          String        @unique @default(dbgenerated("substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)"))
-  name               String
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  id                       String                   @id @default(uuid())
+  ownerUserId              String                   @unique
+  subscriptionId           String?
+  subscriptionStatus       TenantSubscriptionStatus @default(ACTIVE)
+  subscriptionStartedAt    DateTime?
+  subscriptionPeriodStartAt DateTime?
+  subscriptionPeriodEndAt  DateTime?
+  subscriptionNextBillingAt DateTime?
+  slug                     String                   @unique
+  publicKey                String                   @unique @default(dbgenerated("substr(replace(gen_random_uuid()::text, '-', ''), 1, 8)"))
+  name                     String
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
 
   ownerUser          User          @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   subscription       Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  wallet             Wallet?
+  walletTransactions WalletTransaction[]
+  walletTopUps       WalletTopUp[]
   campaigns      Campaign[]
   brands         Brand[]
   affiliatePlatforms AffiliatePlatform[]
@@ -50,6 +77,8 @@ model Tenant {
 
   @@index([ownerUserId])
   @@index([subscriptionId])
+  @@index([subscriptionNextBillingAt])
+  @@index([subscriptionStatus])
   @@index([publicKey])
   @@index([createdAt])
 }
@@ -71,9 +100,75 @@ model Subscription {
   updatedAt            DateTime @updatedAt
 
   tenants              Tenant[]
+  walletTransactions   WalletTransaction[]
 
   @@index([isDefault])
   @@index([isActive])
+}
+
+model Wallet {
+  id           String   @id @default(uuid())
+  tenantId     String   @unique
+  currency     String   @default("USD")
+  balanceCents Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@index([currency])
+}
+
+model WalletTransaction {
+  id                String                @id @default(uuid())
+  walletId          String
+  tenantId          String
+  subscriptionId    String?
+  type              WalletTransactionType
+  amountCents       Int
+  balanceAfterCents Int
+  currency          String
+  description       String
+  reference         String?               @unique
+  billingPeriodStart DateTime?
+  billingPeriodEnd  DateTime?
+  createdAt         DateTime              @default(now())
+
+  wallet            Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  tenant            Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription      Subscription?         @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  topUp             WalletTopUp?
+
+  @@index([walletId, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, type, createdAt])
+  @@index([subscriptionId, billingPeriodStart])
+}
+
+model WalletTopUp {
+  id                  String            @id @default(uuid())
+  tenantId            String
+  amountCents         Int
+  currency            String
+  paymentMethod       String            @default("bank_transfer")
+  paymentReference    String?
+  note                String?
+  reference           String            @unique
+  status              WalletTopUpStatus @default(PENDING)
+  walletTransactionId String?           @unique
+  approvedAt          DateTime?
+  approvedByUserId    String?
+  rejectedAt          DateTime?
+  rejectionReason     String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  walletTransaction   WalletTransaction? @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
 }
 
 model MenuFeature {

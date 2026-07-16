@@ -5,7 +5,7 @@ import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify'
 import { createHash, randomUUID } from 'node:crypto'
-import { Prisma, prisma, type User } from '@repo/db'
+import { Prisma, activateTenantSubscription, approveWalletTopUp, billTenantSubscription, createWalletTopUp, getWalletOverview, prisma, rejectWalletTopUp, type User } from '@repo/db'
 import { createClickEventsQueue, createFbc, createRedisConnection, getImpactActionTrackerEventName, getImpactCapiValue, getImpactEventMatch, getImpactPayoutNumber, getImpactRefClickId, getPartnerStackCapiEnrichment, getPartnerStackClickUuid, getPartnerStackConversionMoney, getPartnerStackCustomerEmail, getPartnerStackCustomerId, getPartnerStackEventDate, getPartnerStackEventMatch, getPartnerStackIdempotencyKey, getPayloadString as getSharedPayloadString, getPayloadValue as getSharedPayloadValue, getSupportedAffiliatePlatform, isFilledPayloadValue as isSharedFilledPayloadValue, isImpactPostbackPayload, maskSecret, normalizeAffiliateEventMapping, normalizeEventName, normalizePayloadLookupKey as normalizeSharedPayloadLookupKey, parseEnvList, parseMoneyNumber, requireSupportedAffiliatePlatform, resolveAffiliateEventName, resolveImpactEventNames, validateHttpUrl, type SupportedAffiliatePlatformDefinition } from '@repo/shared'
 
 const app = Fastify({ logger: true })
@@ -48,6 +48,7 @@ function optionalString(value: unknown) { return typeof value === 'string' && va
 function nullableString(value: unknown, fallback: string | null = null) { return typeof value === 'string' ? optionalString(value) ?? null : fallback }
 function optionalBoolean(value: unknown, fallback: boolean) { return typeof value === 'boolean' ? value : fallback }
 function optionalInteger(value: unknown, fallback: number) { const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN; return Number.isInteger(n) && n >= 0 ? n : fallback }
+function requirePositiveInteger(value: unknown, field: string) { const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : Number.NaN; if (!Number.isInteger(n) || n <= 0) throw new Error(`${field} must be a positive integer`); return n }
 function normalizePrelanderTheme(value: unknown) { const v = typeof value === 'string' ? value.trim().toLowerCase() : 'clean'; return ['clean', 'dark', 'warm'].includes(v) ? v : 'clean' }
 function normalizeDatasetPlatform(value: unknown) { const p = requireString(value, 'platform').toLowerCase(); if (!['meta', 'tiktok'].includes(p)) throw new Error('platform must be meta or tiktok'); return p }
 function toSlug(value: string) { return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) }
@@ -174,9 +175,10 @@ function getDefaultTenantName(clerkUser: ClerkUserSnapshot) { const fullName = [
 function getDefaultTenantSlug(clerkUser: ClerkUserSnapshot) { return toSlug(getDefaultTenantName(clerkUser)) || toSlug(clerkUser.id) || 'tenant' }
 function getUserDisplayName(user: Pick<User, 'firstName' | 'lastName' | 'email'> | null | undefined, fallback = 'Unknown user') { const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim(); return fullName || user?.email || fallback }
 async function getDefaultSubscriptionId() { const existing = await prisma.subscription.findFirst({ where: { isDefault: true, isActive: true }, orderBy: { createdAt: 'asc' } }); if (existing) return existing.id; const subscription = await prisma.subscription.upsert({ where: { slug: 'free' }, update: { isDefault: true, isActive: true }, create: { slug: 'free', name: 'Free', description: 'Default free subscription for newly registered accounts', monthlyPriceCents: 0, currency: 'USD', clickLimit: 1000, capiEventLimit: 1000, eapiEventLimit: 1000, campaignDatasetLimit: 2, isDefault: true, isActive: true } }); return subscription.id }
+async function initializeTenantSubscriptionSchedule(tenantId: string) { const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { subscription: true } }); if (tenant?.subscription && tenant.subscription.monthlyPriceCents > 0 && !tenant.subscriptionNextBillingAt) await prisma.tenant.update({ where: { id: tenantId }, data: { subscriptionNextBillingAt: new Date() } }) }
 async function getTenantSubscriptionOrDefault(tenantId: string) { const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { subscription: true } }); if (!tenant) return null; if (tenant.subscription) return tenant.subscription; const subscriptionId = await getDefaultSubscriptionId(); return (await prisma.tenant.update({ where: { id: tenantId }, data: { subscriptionId }, include: { subscription: true } })).subscription }
 async function getCurrentSubscriptionUsage(tenantId: string) { const periodStart = new Date(); periodStart.setUTCDate(1); periodStart.setUTCHours(0, 0, 0, 0); const [clicks, capiEvents, eapiEvents] = await Promise.all([prisma.clickEvent.count({ where: excludeTrackingScriptViewContentClicks({ tenantId, createdAt: { gte: periodStart } }) }), prisma.capiEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } }), prisma.affiliateConversionEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } })]); return { periodStart, clicks, capiEvents, eapiEvents } }
-async function assertSubscriptionLimit(tenantId: string, metric: 'clicks' | 'capiEvents' | 'eapiEvents') { const subscription = await getTenantSubscriptionOrDefault(tenantId); if (!subscription) throw new Error('Subscription not found'); const usage = await getCurrentSubscriptionUsage(tenantId); const limit = metric === 'clicks' ? subscription.clickLimit : metric === 'capiEvents' ? subscription.capiEventLimit : subscription.eapiEventLimit; if (usage[metric] >= limit) throw new Error(`Subscription limit exceeded: ${metric} ${usage[metric]}/${limit} for subscription ${subscription.name}`); return { subscription, usage } }
+async function assertSubscriptionLimit(tenantId: string, metric: 'clicks' | 'capiEvents' | 'eapiEvents') { const billing = await billTenantSubscription(tenantId); if (billing.state === 'insufficient_funds') throw new Error(`Subscription payment overdue: top up ${billing.amountCents ?? 0} cents to continue`); const [subscription, tenant] = await Promise.all([getTenantSubscriptionOrDefault(tenantId), prisma.tenant.findUnique({ where: { id: tenantId }, select: { subscriptionStatus: true } })]); if (!subscription || !tenant) throw new Error('Subscription not found'); if (tenant.subscriptionStatus === 'PAST_DUE') throw new Error('Subscription payment overdue: top up wallet to continue'); const usage = await getCurrentSubscriptionUsage(tenantId); const limit = metric === 'clicks' ? subscription.clickLimit : metric === 'capiEvents' ? subscription.capiEventLimit : subscription.eapiEventLimit; if (usage[metric] >= limit) throw new Error(`Subscription limit exceeded: ${metric} ${usage[metric]}/${limit} for subscription ${subscription.name}`); return { subscription, usage } }
 
 async function requireUser(req: FastifyRequest) {
   if (!isClerkConfigured()) throw new Error('CLERK_SECRET_KEY is not configured')
@@ -190,7 +192,7 @@ async function requireUser(req: FastifyRequest) {
   const primaryEmail = clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
   const tenantSlug = getDefaultTenantSlug(clerkUser)
   const user = await prisma.user.upsert({ where: { clerkUserId }, update: { email: primaryEmail?.emailAddress, firstName: clerkUser.firstName, lastName: clerkUser.lastName, imageUrl: clerkUser.imageUrl }, create: { clerkUserId, email: primaryEmail?.emailAddress, firstName: clerkUser.firstName, lastName: clerkUser.lastName, imageUrl: clerkUser.imageUrl, tenant: { create: { slug: tenantSlug, name: getDefaultTenantName(clerkUser), subscriptionId: await getDefaultSubscriptionId() } } }, include: { tenant: true } })
-  if (!user.tenant) { const tenant = await prisma.tenant.create({ data: { ownerUserId: user.id, slug: tenantSlug, name: getDefaultTenantName(clerkUser), subscriptionId: await getDefaultSubscriptionId() } }); await ensureTenantCoreMenuGrants(tenant.id) } else await ensureTenantCoreMenuGrants(user.tenant.id)
+  if (!user.tenant) { const tenant = await prisma.tenant.create({ data: { ownerUserId: user.id, slug: tenantSlug, name: getDefaultTenantName(clerkUser), subscriptionId: await getDefaultSubscriptionId() } }); await ensureTenantCoreMenuGrants(tenant.id); await initializeTenantSubscriptionSchedule(tenant.id) } else { await ensureTenantCoreMenuGrants(user.tenant.id); await initializeTenantSubscriptionSchedule(user.tenant.id) }
   userSessionCache.set(clerkUserId, { user, expiresAt: Date.now() + userAuthCacheTtlMs })
   return user
 }
@@ -1282,7 +1284,7 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
     } catch (error) {
       req.log.error({ error, tenantId: tenant.id, trackingLinkId: trackingLink.id }, 'Failed to process atp affiliate click')
       const message = error instanceof Error ? error.message : 'Internal server error'
-      const statusCode = message.toLowerCase().includes('subscription limit exceeded') ? 429 : 500
+      const statusCode = message.toLowerCase().includes('subscription limit exceeded') || message.toLowerCase().includes('subscription payment overdue') ? 429 : 500
       return send(statusCode, { error: statusCode === 500 ? 'Internal server error' : message })
     }
   }
@@ -1292,6 +1294,51 @@ app.post('/atp/events', { config: { rateLimit: { max: Number(process.env.PUBLIC_
 
 app.get('/me', async (req) => ({ ...requireAuthenticated(req), isSuperAdmin: isSuperAdmin(requireAuthenticated(req)) }))
 
+app.get('/wallet', async (req) => {
+  const user = requireAuthenticated(req)
+  const tenantId = requireString((req.query as AnyRecord).tenantId, 'tenantId')
+  await assertTenantAccess(user.id, tenantId)
+  await billTenantSubscription(tenantId)
+  const { wallet, tenant } = await getWalletOverview(tenantId)
+  return {
+    wallet,
+    subscription: tenant.subscription,
+    subscriptionStatus: tenant.subscriptionStatus,
+    subscriptionStartedAt: tenant.subscriptionStartedAt,
+    subscriptionPeriodStartAt: tenant.subscriptionPeriodStartAt,
+    subscriptionPeriodEndAt: tenant.subscriptionPeriodEndAt,
+    subscriptionNextBillingAt: tenant.subscriptionNextBillingAt,
+    transactions: tenant.walletTransactions,
+    topUps: tenant.walletTopUps
+  }
+})
+app.post('/wallet/top-ups', async (req, reply) => {
+  const user = requireAuthenticated(req)
+  const body = req.body as AnyRecord
+  const tenantId = requireString(body.tenantId, 'tenantId')
+  await assertTenantAccess(user.id, tenantId)
+  const topUp = await createWalletTopUp({
+    tenantId,
+    amountCents: requirePositiveInteger(body.amountCents, 'amountCents'),
+    currency: optionalString(body.currency),
+    paymentMethod: optionalString(body.paymentMethod),
+    paymentReference: optionalString(body.paymentReference),
+    note: optionalString(body.note)
+  })
+  await createActivityLog({ tenantId, source: 'api', eventType: 'wallet.top_up_requested', message: `Wallet top-up ${topUp.reference} was requested`, entityType: 'walletTopUp', entityId: topUp.id, metadata: { actorUserId: user.id, topUpId: topUp.id, amountCents: topUp.amountCents, currency: topUp.currency, paymentMethod: topUp.paymentMethod } })
+  return reply.code(201).send(topUp)
+})
+app.delete('/wallet/top-ups/:id', async (req, reply) => {
+  const user = requireAuthenticated(req)
+  const { id } = req.params as { id: string }
+  const topUp = await prisma.walletTopUp.findFirst({ where: { id, tenant: { ownerUserId: user.id } } })
+  if (!topUp) return reply.code(404).send({ error: 'Wallet top-up not found' })
+  if (topUp.status !== 'PENDING') return reply.code(400).send({ error: 'Only pending wallet top-ups can be cancelled' })
+  const cancelled = await prisma.walletTopUp.update({ where: { id }, data: { status: 'CANCELLED' } })
+  await createActivityLog({ tenantId: topUp.tenantId, source: 'api', eventType: 'wallet.top_up_cancelled', message: `Wallet top-up ${topUp.reference} was cancelled`, entityType: 'walletTopUp', entityId: topUp.id, metadata: { actorUserId: user.id, topUpId: topUp.id } })
+  return cancelled
+})
+
 app.get('/superadmin/users', async (req) => { requireSuperAdmin(req); const users = await prisma.user.findMany({ include: { tenant: { include: { subscription: true, menuGrants: { include: { menuFeature: true }, orderBy: { menuFeature: { sortOrder: 'asc' } } }, _count: { select: { campaigns: true, brands: true, affiliatePlatforms: true, datasets: true, trackingLinks: true, clickEvents: true, conversionEvents: true, capiEvents: true } } } } }, orderBy: { createdAt: 'desc' } }); return users.map((u) => ({ ...u, tenant: u.tenant ? serializeTenant(u.tenant) : u.tenant })) })
 app.delete('/superadmin/users', async (req) => { const admin = requireSuperAdmin(req); const users = await prisma.user.findMany({ include: { tenant: { select: { id: true } } }, orderBy: { createdAt: 'desc' } }); const targets = users.filter((user) => user.id !== admin.id && !isSuperAdmin(user)); let clerkDeletedCount = 0; for (const user of targets) { const result = await deleteRegisteredUserAccount(user); if (result.clerkDeleted) clerkDeletedCount += 1 } return { ok: true, deletedCount: targets.length, skippedCount: users.length - targets.length, clerkDeletedCount } })
 app.delete('/superadmin/users/:id', async (req, reply) => { const admin = requireSuperAdmin(req); const { id } = req.params as { id: string }; const user = await prisma.user.findUnique({ where: { id }, include: { tenant: { select: { id: true } } } }); if (!user) return reply.code(404).send({ error: 'User not found' }); if (user.id === admin.id) return reply.code(400).send({ error: 'Không thể xoá tài khoản Super Admin đang đăng nhập' }); if (isSuperAdmin(user)) return reply.code(400).send({ error: 'Không thể xoá tài khoản Super Admin' }); const result = await deleteRegisteredUserAccount(user); return { ok: true, id, clerkDeleted: result.clerkDeleted } })
@@ -1299,9 +1346,12 @@ app.get('/superadmin/subscriptions', async (req) => { requireSuperAdmin(req); re
 app.post('/superadmin/subscriptions', async (req, reply) => { requireSuperAdmin(req); const b = req.body as AnyRecord; const name = requireString(b.name, 'name'); const isDefault = optionalBoolean(b.isDefault, false); if (isDefault) await prisma.subscription.updateMany({ data: { isDefault: false } }); const subscription = await prisma.subscription.create({ data: { slug: toSlug(optionalString(b.slug) ?? name), name, description: optionalString(b.description), monthlyPriceCents: optionalInteger(b.monthlyPriceCents, 0), currency: optionalString(b.currency) ?? 'USD', clickLimit: optionalInteger(b.clickLimit, 1000), capiEventLimit: optionalInteger(b.capiEventLimit, 1000), eapiEventLimit: optionalInteger(b.eapiEventLimit, 1000), campaignDatasetLimit: optionalInteger(b.campaignDatasetLimit, 2), isDefault, isActive: optionalBoolean(b.isActive, true) } }); return reply.code(201).send(subscription) })
 app.put('/superadmin/subscriptions/:id', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const b = req.body as AnyRecord; const subscription = await prisma.subscription.findUnique({ where: { id } }); if (!subscription) return reply.code(404).send({ error: 'Subscription not found' }); const isDefault = optionalBoolean(b.isDefault, subscription.isDefault); if (isDefault) await prisma.subscription.updateMany({ where: { id: { not: id } }, data: { isDefault: false } }); const currentDatasetLimit = 'campaignDatasetLimit' in subscription ? Number(subscription.campaignDatasetLimit) : 2; return prisma.subscription.update({ where: { id }, data: { slug: b.slug ? toSlug(b.slug) : subscription.slug, name: optionalString(b.name) ?? subscription.name, description: typeof b.description === 'string' ? b.description : subscription.description, monthlyPriceCents: optionalInteger(b.monthlyPriceCents, subscription.monthlyPriceCents), currency: optionalString(b.currency) ?? subscription.currency, clickLimit: optionalInteger(b.clickLimit, subscription.clickLimit), capiEventLimit: optionalInteger(b.capiEventLimit, subscription.capiEventLimit), eapiEventLimit: optionalInteger(b.eapiEventLimit, subscription.eapiEventLimit), campaignDatasetLimit: optionalInteger(b.campaignDatasetLimit, currentDatasetLimit), isDefault, isActive: optionalBoolean(b.isActive, subscription.isActive) } }) })
 app.get('/subscriptions', async (req) => { requireAuthenticated(req); return prisma.subscription.findMany({ orderBy: [{ isActive: 'desc' }, { isDefault: 'desc' }, { monthlyPriceCents: 'asc' }, { createdAt: 'desc' }] }) })
+app.get('/superadmin/wallet-top-ups', async (req) => { requireSuperAdmin(req); const status = optionalQueryString((req.query as AnyRecord).status); return prisma.walletTopUp.findMany({ where: status ? { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' } : undefined, include: { tenant: { select: { id: true, name: true, slug: true, ownerUser: { select: { email: true } } } } }, orderBy: { createdAt: 'desc' }, take: 100 }) })
+app.post('/superadmin/wallet-top-ups/:id/approve', async (req, reply) => { const admin = requireSuperAdmin(req); const { id } = req.params as { id: string }; const result = await approveWalletTopUp(id, admin.id); if (result.alreadyProcessed) return reply.code(400).send({ error: 'Wallet top-up is no longer pending' }); return result })
+app.post('/superadmin/wallet-top-ups/:id/reject', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const result = await rejectWalletTopUp(id, optionalString((req.body as AnyRecord).rejectionReason)); if (result.alreadyProcessed) return reply.code(400).send({ error: 'Wallet top-up is no longer pending' }); const topUp = result.topUp; await createActivityLog({ tenantId: topUp.tenantId, source: 'api', eventType: 'wallet.top_up_rejected', message: `Wallet top-up ${topUp.reference} was rejected`, entityType: 'walletTopUp', entityId: topUp.id, metadata: { topUpId: topUp.id, rejectionReason: topUp.rejectionReason } }); return topUp })
 app.get('/superadmin/menu-features', async (req) => { requireSuperAdmin(req); await ensureMenuFeaturesSeeded(); return prisma.menuFeature.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: 'asc' }, { label: 'asc' }] }) })
 app.put('/superadmin/tenants/:id/menu-features', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const b = req.body as { menuFeatureIds?: string[] }; const tenant = await prisma.tenant.findUnique({ where: { id } }); if (!tenant) return reply.code(404).send({ error: 'Tenant not found' }); await ensureMenuFeaturesSeeded(); const active = await prisma.menuFeature.findMany({ where: { isActive: true } }); const activeIds = new Set(active.map((f) => f.id)); const coreIds = active.filter((f) => f.isCore).map((f) => f.id); const desired = new Set([...coreIds, ...(Array.isArray(b.menuFeatureIds) ? b.menuFeatureIds.filter((x) => activeIds.has(x)) : [])]); await Promise.all(active.map((f) => prisma.tenantMenuGrant.upsert({ where: { tenantId_menuFeatureId: { tenantId: id, menuFeatureId: f.id } }, update: { isEnabled: desired.has(f.id) }, create: { tenantId: id, menuFeatureId: f.id, isEnabled: desired.has(f.id) } }))); return prisma.tenant.findUnique({ where: { id }, include: { menuGrants: { include: { menuFeature: true }, orderBy: { menuFeature: { sortOrder: 'asc' } } } } }) })
-app.put('/superadmin/tenants/:id/subscription', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const subscriptionId = requireString((req.body as AnyRecord).subscriptionId, 'subscriptionId'); const [tenant, subscription] = await Promise.all([prisma.tenant.findUnique({ where: { id } }), prisma.subscription.findUnique({ where: { id: subscriptionId } })]); if (!tenant) return reply.code(404).send({ error: 'Tenant not found' }); if (!subscription) return reply.code(404).send({ error: 'Subscription not found' }); return prisma.tenant.update({ where: { id }, data: { subscriptionId }, include: { subscription: true } }) })
+app.put('/superadmin/tenants/:id/subscription', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const subscriptionId = requireString((req.body as AnyRecord).subscriptionId, 'subscriptionId'); const [tenant, subscription] = await Promise.all([prisma.tenant.findUnique({ where: { id } }), prisma.subscription.findUnique({ where: { id: subscriptionId } })]); if (!tenant) return reply.code(404).send({ error: 'Tenant not found' }); if (!subscription) return reply.code(404).send({ error: 'Subscription not found' }); const billing = await activateTenantSubscription(id, subscriptionId); await createActivityLog({ tenantId: id, source: 'api', eventType: 'subscription.changed', message: `Subscription changed to ${subscription.name}`, entityType: 'subscription', entityId: subscription.id, metadata: { subscriptionId: subscription.id, billing } }); return prisma.tenant.findUnique({ where: { id }, include: { subscription: true } }) })
 
 app.get('/tenants', async (req) => { const u = requireAuthenticated(req); const tenants = await prisma.tenant.findMany({ where: { ownerUserId: u.id }, include: { subscription: true, menuGrants: { where: { isEnabled: true, menuFeature: { isActive: true } }, include: { menuFeature: true }, orderBy: { menuFeature: { sortOrder: 'asc' } } } }, orderBy: { createdAt: 'desc' } }); return tenants.map(serializeTenant) })
 
@@ -1638,7 +1688,7 @@ app.setErrorHandler((error, _req, reply) => {
   }
   const message = error instanceof Error ? error.message : 'Unknown error'
   const unauthorized = ['Unauthorized', 'Missing Clerk bearer token', 'Invalid Clerk token']
-  const hints = ['required', 'must', 'not found', 'access denied', 'exceeded', 'tồn tại']
+  const hints = ['required', 'must', 'not found', 'access denied', 'exceeded', 'overdue', 'tồn tại']
   const statusCode = unauthorized.includes(message) ? 401 : hints.some((h) => message.toLowerCase().includes(h.toLowerCase())) ? 400 : 500
   return reply.code(statusCode).send({ error: statusCode === 500 ? 'Internal server error' : message })
 })
