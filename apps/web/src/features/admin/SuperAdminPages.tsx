@@ -220,7 +220,7 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
         <Card className="form-card">
           <CardHeader>
             <CardTitle><Landmark size={18} /> SePay payment settings</CardTitle>
-            <CardDescription>Cấu hình tài khoản nhận tiền và webhook để SePay tự động đối soát yêu cầu nạp wallet bằng số tiền cùng mã TOPUP trong nội dung chuyển khoản.</CardDescription>
+            <CardDescription>Cấu hình tài khoản nhận tiền và webhook để SePay tự động đối soát yêu cầu nạp wallet bằng mã ATP + public key của workspace trong nội dung chuyển khoản.</CardDescription>
           </CardHeader>
           <CardContent>
             <form key={ctx.paymentSettings?.updatedAt ?? 'new'} className="payment-settings-form" onSubmit={(event) => void handleSavePaymentSettings(event)}>

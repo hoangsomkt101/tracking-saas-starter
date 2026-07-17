@@ -1386,7 +1386,7 @@ app.post('/payment-webhooks/sepay', { config: { rateLimit: { max: Number(process
   const accountNumber = normalizeSePayAccountNumber(body.accountNumber)
   const transferAmount = Number(body.transferAmount)
   const referenceSource = [getPayloadString(body, ['content']), getPayloadString(body, ['description']), getPayloadString(body, ['code'])].filter(Boolean).join(' ')
-  const referenceMatch = referenceSource.match(/\bTOPUP-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})\b/i)
+  const referenceMatch = referenceSource.match(/\b(?:ATP([a-z0-9_-]{1,128})|(TOPUP-[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}))\b/i)
 
   if (!providerTransactionId) return reply.code(400).send({ success: false, message: 'SePay transaction id is required' })
   if (transferType !== 'in') return reply.code(200).send({ success: true, ignored: 'outgoing_transfer' })
@@ -1395,10 +1395,13 @@ app.post('/payment-webhooks/sepay', { config: { rateLimit: { max: Number(process
 
   const existingPayment = await prisma.walletTopUp.findUnique({ where: { providerTransactionId } })
   if (existingPayment) return { success: true, duplicate: true }
-  if (!referenceMatch) return reply.code(400).send({ success: false, message: 'Wallet top-up reference was not found in payment content' })
+  // SePay's "Send test" payload and unrelated inbound transfers do not carry a wallet top-up reference.
+  // Acknowledge them to prevent failed webhook tests and pointless delivery retries.
+  if (!referenceMatch) return reply.code(200).send({ success: true, ignored: 'wallet_top_up_reference_not_found' })
 
-  const topUp = await prisma.walletTopUp.findUnique({ where: { reference: `TOPUP-${referenceMatch[1].toLowerCase()}` } })
-  if (!topUp) return reply.code(404).send({ success: false, message: 'Wallet top-up not found' })
+  const walletTopUpReference = referenceMatch[1] ? `ATP${referenceMatch[1].toLowerCase()}` : referenceMatch[2].toLowerCase()
+  const topUp = await prisma.walletTopUp.findFirst({ where: { reference: walletTopUpReference, status: 'PENDING' } })
+  if (!topUp) return reply.code(200).send({ success: true, ignored: 'wallet_top_up_not_found' })
   if (topUp.status !== 'PENDING') return { success: true, duplicate: true }
   if (topUp.currency !== 'VND') return reply.code(400).send({ success: false, message: 'SePay only supports VND wallet top-ups' })
   if (topUp.amountCents !== Math.round(transferAmount * 100)) return reply.code(400).send({ success: false, message: 'SePay transfer amount does not match wallet top-up' })

@@ -158,7 +158,7 @@ model WalletTopUp {
   providerReferenceCode String?
   paymentReceivedAt   DateTime?
   note                String?
-  reference           String            @unique
+   reference           String
   status              WalletTopUpStatus @default(PENDING)
   walletTransactionId String?           @unique
   approvedAt          DateTime?
@@ -171,8 +171,9 @@ model WalletTopUp {
   tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   walletTransaction   WalletTransaction? @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
 
-  @@index([tenantId, createdAt])
-  @@index([status, createdAt])
+   @@index([tenantId, createdAt])
+   @@index([status, createdAt])
+   @@index([reference, status])
 }
 
 model PaymentSettings {

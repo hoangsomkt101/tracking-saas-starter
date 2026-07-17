@@ -1,5 +1,4 @@
 import { Prisma } from '@prisma/client'
-import { randomUUID } from 'node:crypto'
 import { prisma } from './client.js'
 
 type DbClient = Prisma.TransactionClient | typeof prisma
@@ -92,18 +91,27 @@ export async function createWalletTopUp(input: {
   const wallet = await getOrCreateTenantWallet(input.tenantId)
   const currency = normalizeCurrency(input.currency ?? wallet.currency)
   if (currency !== wallet.currency) throw new Error('Top-up currency must match wallet currency')
+  const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId }, select: { publicKey: true } })
+  if (!tenant) throw new Error('Tenant not found')
+  const pendingTopUp = await prisma.walletTopUp.findFirst({ where: { tenantId: input.tenantId, status: 'PENDING' }, select: { id: true } })
+  if (pendingTopUp) throw new Error('A pending wallet top-up already exists for this workspace')
 
-  return prisma.walletTopUp.create({
-    data: {
-      tenantId: input.tenantId,
-      amountCents: input.amountCents,
-      currency,
-      paymentMethod: input.paymentMethod?.trim() || 'bank_transfer',
-      paymentReference: input.paymentReference?.trim() || null,
-      note: input.note?.trim() || null,
-      reference: `TOPUP-${randomUUID()}`
-    }
-  })
+  try {
+    return await prisma.walletTopUp.create({
+      data: {
+        tenantId: input.tenantId,
+        amountCents: input.amountCents,
+        currency,
+        paymentMethod: input.paymentMethod?.trim() || 'bank_transfer',
+        paymentReference: input.paymentReference?.trim() || null,
+        note: input.note?.trim() || null,
+        reference: `ATP${tenant.publicKey}`
+      }
+    })
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new Error('A pending wallet top-up already exists for this workspace')
+    throw error
+  }
 }
 
 export async function approveWalletTopUp(topUpId: string, approvedByUserId: string | null, options: {
