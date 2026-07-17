@@ -181,7 +181,7 @@ async function getCachedClerkUser(clerkUserId: string): Promise<ClerkUserSnapsho
 function getDefaultTenantName(clerkUser: ClerkUserSnapshot) { const fullName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ').trim(); const email = clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId); return fullName || email?.emailAddress || `User ${clerkUser.id}` }
 function getDefaultTenantSlug(clerkUser: ClerkUserSnapshot) { return toSlug(getDefaultTenantName(clerkUser)) || toSlug(clerkUser.id) || 'tenant' }
 function getUserDisplayName(user: Pick<User, 'firstName' | 'lastName' | 'email'> | null | undefined, fallback = 'Unknown user') { const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ').trim(); return fullName || user?.email || fallback }
-async function getDefaultSubscriptionId() { const existing = await prisma.subscription.findFirst({ where: { isDefault: true, isActive: true }, orderBy: { createdAt: 'asc' } }); if (existing) return existing.id; const subscription = await prisma.subscription.upsert({ where: { slug: 'free' }, update: { isDefault: true, isActive: true }, create: { slug: 'free', name: 'Free', description: 'Default free subscription for newly registered accounts', monthlyPriceCents: 0, currency: 'USD', clickLimit: 1000, capiEventLimit: 1000, eapiEventLimit: 1000, campaignDatasetLimit: 2, isDefault: true, isActive: true } }); return subscription.id }
+async function getDefaultSubscriptionId() { const existing = await prisma.subscription.findFirst({ where: { isDefault: true, isActive: true }, orderBy: { createdAt: 'asc' } }); if (existing) return existing.id; const subscription = await prisma.subscription.upsert({ where: { slug: 'free' }, update: { isDefault: true, isActive: true }, create: { slug: 'free', name: 'Free', description: 'Default free subscription for newly registered accounts', monthlyPriceCents: 0, currency: 'VND', clickLimit: 1000, capiEventLimit: 1000, eapiEventLimit: 1000, campaignDatasetLimit: 2, isDefault: true, isActive: true } }); return subscription.id }
 async function initializeTenantSubscriptionSchedule(tenantId: string) { const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { subscription: true } }); if (tenant?.subscription && tenant.subscription.monthlyPriceCents > 0 && !tenant.subscriptionNextBillingAt) await prisma.tenant.update({ where: { id: tenantId }, data: { subscriptionNextBillingAt: new Date() } }) }
 async function getTenantSubscriptionOrDefault(tenantId: string) { const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { subscription: true } }); if (!tenant) return null; if (tenant.subscription) return tenant.subscription; const subscriptionId = await getDefaultSubscriptionId(); return (await prisma.tenant.update({ where: { id: tenantId }, data: { subscriptionId }, include: { subscription: true } })).subscription }
 async function getCurrentSubscriptionUsage(tenantId: string) { const periodStart = new Date(); periodStart.setUTCDate(1); periodStart.setUTCHours(0, 0, 0, 0); const [clicks, capiEvents, eapiEvents] = await Promise.all([prisma.clickEvent.count({ where: excludeTrackingScriptViewContentClicks({ tenantId, createdAt: { gte: periodStart } }) }), prisma.capiEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } }), prisma.affiliateConversionEvent.count({ where: { tenantId, createdAt: { gte: periodStart } } })]); return { periodStart, clicks, capiEvents, eapiEvents } }
@@ -262,12 +262,13 @@ function getSePayPaymentDate(value: unknown) {
   const parsed = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(text) ? new Date(`${text.replace(' ', 'T')}+07:00`) : new Date(text)
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed
 }
-function serializePaymentSettings(settings: { id: string; sepayAccountNumber: string | null; sepayAccountName: string | null; sepayWebhookApiKey: string | null; createdAt: Date; updatedAt: Date }, req: FastifyRequest) {
+function serializePaymentSettings(settings: { id: string; sepayAccountNumber: string | null; sepayAccountName: string | null; sepayBankCode: string | null; sepayWebhookApiKey: string | null; createdAt: Date; updatedAt: Date }, req: FastifyRequest) {
   const origin = getApiPublicOrigin(req)
   return {
     id: settings.id,
     sepayAccountNumber: settings.sepayAccountNumber,
     sepayAccountName: settings.sepayAccountName,
+    sepayBankCode: settings.sepayBankCode,
     sepayWebhookApiKey: maskSecret(settings.sepayWebhookApiKey),
     hasSepayWebhookApiKey: Boolean(settings.sepayWebhookApiKey),
     webhookUrl: origin ? `${origin}/payment-webhooks/sepay` : null,
@@ -1333,7 +1334,7 @@ app.get('/wallet', async (req) => {
   await billTenantSubscription(tenantId)
   const [{ wallet, tenant }, paymentSettings] = await Promise.all([
     getWalletOverview(tenantId),
-    prisma.paymentSettings.findUnique({ where: { id: 'default' }, select: { sepayAccountNumber: true, sepayAccountName: true } })
+    prisma.paymentSettings.findUnique({ where: { id: 'default' }, select: { sepayAccountNumber: true, sepayAccountName: true, sepayBankCode: true } })
   ])
   return {
     wallet,
@@ -1345,7 +1346,7 @@ app.get('/wallet', async (req) => {
     subscriptionNextBillingAt: tenant.subscriptionNextBillingAt,
     transactions: tenant.walletTransactions,
     topUps: tenant.walletTopUps,
-    paymentSettings: paymentSettings?.sepayAccountNumber && paymentSettings.sepayAccountName ? { sepayAccountNumber: paymentSettings.sepayAccountNumber, sepayAccountName: paymentSettings.sepayAccountName } : null
+    paymentSettings: paymentSettings?.sepayAccountNumber && paymentSettings.sepayAccountName && paymentSettings.sepayBankCode ? { sepayAccountNumber: paymentSettings.sepayAccountNumber, sepayAccountName: paymentSettings.sepayAccountName, sepayBankCode: paymentSettings.sepayBankCode } : null
   }
 })
 app.post('/wallet/top-ups', async (req, reply) => {
@@ -1353,6 +1354,9 @@ app.post('/wallet/top-ups', async (req, reply) => {
   const body = req.body as AnyRecord
   const tenantId = requireString(body.tenantId, 'tenantId')
   await assertTenantAccess(user.id, tenantId)
+  if (optionalString(body.currency)?.toUpperCase() !== 'VND') throw new Error('Wallet top-ups must use VND')
+  const paymentSettings = await prisma.paymentSettings.findUnique({ where: { id: 'default' } })
+  if (!paymentSettings?.sepayAccountNumber || !paymentSettings.sepayAccountName || !paymentSettings.sepayBankCode || !paymentSettings.sepayWebhookApiKey) return reply.code(503).send({ error: 'SePay payment settings are not configured' })
   const topUp = await createWalletTopUp({
     tenantId,
     amountCents: requirePositiveInteger(body.amountCents, 'amountCents'),
@@ -1363,6 +1367,13 @@ app.post('/wallet/top-ups', async (req, reply) => {
   })
   await createActivityLog({ tenantId, source: 'api', eventType: 'wallet.top_up_requested', message: `Wallet top-up ${topUp.reference} was requested`, entityType: 'walletTopUp', entityId: topUp.id, metadata: { actorUserId: user.id, topUpId: topUp.id, amountCents: topUp.amountCents, currency: topUp.currency, paymentMethod: topUp.paymentMethod } })
   return reply.code(201).send(topUp)
+})
+app.get('/wallet/top-ups/:id', async (req, reply) => {
+  const user = requireAuthenticated(req)
+  const { id } = req.params as { id: string }
+  const topUp = await prisma.walletTopUp.findFirst({ where: { id, tenant: { ownerUserId: user.id } } })
+  if (!topUp) return reply.code(404).send({ error: 'Wallet top-up not found' })
+  return topUp
 })
 app.delete('/wallet/top-ups/:id', async (req, reply) => {
   const user = requireAuthenticated(req)
@@ -1419,7 +1430,7 @@ app.get('/superadmin/users', async (req) => { requireSuperAdmin(req); const user
 app.delete('/superadmin/users', async (req) => { const admin = requireSuperAdmin(req); const users = await prisma.user.findMany({ include: { tenant: { select: { id: true } } }, orderBy: { createdAt: 'desc' } }); const targets = users.filter((user) => user.id !== admin.id && !isSuperAdmin(user)); let clerkDeletedCount = 0; for (const user of targets) { const result = await deleteRegisteredUserAccount(user); if (result.clerkDeleted) clerkDeletedCount += 1 } return { ok: true, deletedCount: targets.length, skippedCount: users.length - targets.length, clerkDeletedCount } })
 app.delete('/superadmin/users/:id', async (req, reply) => { const admin = requireSuperAdmin(req); const { id } = req.params as { id: string }; const user = await prisma.user.findUnique({ where: { id }, include: { tenant: { select: { id: true } } } }); if (!user) return reply.code(404).send({ error: 'User not found' }); if (user.id === admin.id) return reply.code(400).send({ error: 'Không thể xoá tài khoản Super Admin đang đăng nhập' }); if (isSuperAdmin(user)) return reply.code(400).send({ error: 'Không thể xoá tài khoản Super Admin' }); const result = await deleteRegisteredUserAccount(user); return { ok: true, id, clerkDeleted: result.clerkDeleted } })
 app.get('/superadmin/subscriptions', async (req) => { requireSuperAdmin(req); return prisma.subscription.findMany({ orderBy: [{ isDefault: 'desc' }, { monthlyPriceCents: 'asc' }, { createdAt: 'desc' }] }) })
-app.post('/superadmin/subscriptions', async (req, reply) => { requireSuperAdmin(req); const b = req.body as AnyRecord; const name = requireString(b.name, 'name'); const isDefault = optionalBoolean(b.isDefault, false); if (isDefault) await prisma.subscription.updateMany({ data: { isDefault: false } }); const subscription = await prisma.subscription.create({ data: { slug: toSlug(optionalString(b.slug) ?? name), name, description: optionalString(b.description), monthlyPriceCents: optionalInteger(b.monthlyPriceCents, 0), currency: optionalString(b.currency) ?? 'USD', clickLimit: optionalInteger(b.clickLimit, 1000), capiEventLimit: optionalInteger(b.capiEventLimit, 1000), eapiEventLimit: optionalInteger(b.eapiEventLimit, 1000), campaignDatasetLimit: optionalInteger(b.campaignDatasetLimit, 2), isDefault, isActive: optionalBoolean(b.isActive, true) } }); return reply.code(201).send(subscription) })
+app.post('/superadmin/subscriptions', async (req, reply) => { requireSuperAdmin(req); const b = req.body as AnyRecord; const name = requireString(b.name, 'name'); const isDefault = optionalBoolean(b.isDefault, false); if (isDefault) await prisma.subscription.updateMany({ data: { isDefault: false } }); const subscription = await prisma.subscription.create({ data: { slug: toSlug(optionalString(b.slug) ?? name), name, description: optionalString(b.description), monthlyPriceCents: optionalInteger(b.monthlyPriceCents, 0), currency: optionalString(b.currency) ?? 'VND', clickLimit: optionalInteger(b.clickLimit, 1000), capiEventLimit: optionalInteger(b.capiEventLimit, 1000), eapiEventLimit: optionalInteger(b.eapiEventLimit, 1000), campaignDatasetLimit: optionalInteger(b.campaignDatasetLimit, 2), isDefault, isActive: optionalBoolean(b.isActive, true) } }); return reply.code(201).send(subscription) })
 app.put('/superadmin/subscriptions/:id', async (req, reply) => { requireSuperAdmin(req); const { id } = req.params as { id: string }; const b = req.body as AnyRecord; const subscription = await prisma.subscription.findUnique({ where: { id } }); if (!subscription) return reply.code(404).send({ error: 'Subscription not found' }); const isDefault = optionalBoolean(b.isDefault, subscription.isDefault); if (isDefault) await prisma.subscription.updateMany({ where: { id: { not: id } }, data: { isDefault: false } }); const currentDatasetLimit = 'campaignDatasetLimit' in subscription ? Number(subscription.campaignDatasetLimit) : 2; return prisma.subscription.update({ where: { id }, data: { slug: b.slug ? toSlug(b.slug) : subscription.slug, name: optionalString(b.name) ?? subscription.name, description: typeof b.description === 'string' ? b.description : subscription.description, monthlyPriceCents: optionalInteger(b.monthlyPriceCents, subscription.monthlyPriceCents), currency: optionalString(b.currency) ?? subscription.currency, clickLimit: optionalInteger(b.clickLimit, subscription.clickLimit), capiEventLimit: optionalInteger(b.capiEventLimit, subscription.capiEventLimit), eapiEventLimit: optionalInteger(b.eapiEventLimit, subscription.eapiEventLimit), campaignDatasetLimit: optionalInteger(b.campaignDatasetLimit, currentDatasetLimit), isDefault, isActive: optionalBoolean(b.isActive, subscription.isActive) } }) })
 app.get('/superadmin/payment-settings', async (req) => { requireSuperAdmin(req); const settings = await prisma.paymentSettings.upsert({ where: { id: 'default' }, update: {}, create: { id: 'default' } }); return serializePaymentSettings(settings, req) })
 app.put('/superadmin/payment-settings', async (req) => {
@@ -1428,11 +1439,13 @@ app.put('/superadmin/payment-settings', async (req) => {
   const current = await prisma.paymentSettings.findUnique({ where: { id: 'default' } })
   const sepayAccountNumber = optionalString(body.sepayAccountNumber) ?? current?.sepayAccountNumber ?? undefined
   const sepayAccountName = optionalString(body.sepayAccountName) ?? current?.sepayAccountName ?? undefined
+  const sepayBankCode = optionalString(body.sepayBankCode)?.toUpperCase() ?? current?.sepayBankCode ?? undefined
   const sepayWebhookApiKey = optionalString(body.sepayWebhookApiKey) ?? current?.sepayWebhookApiKey ?? undefined
   if (!sepayAccountNumber) throw new Error('SePay account number is required')
   if (!sepayAccountName) throw new Error('SePay account name is required')
+  if (!sepayBankCode) throw new Error('SePay bank code is required')
   if (!sepayWebhookApiKey) throw new Error('SePay webhook API key is required')
-  const settings = await prisma.paymentSettings.upsert({ where: { id: 'default' }, update: { sepayAccountNumber, sepayAccountName, sepayWebhookApiKey }, create: { id: 'default', sepayAccountNumber, sepayAccountName, sepayWebhookApiKey } })
+  const settings = await prisma.paymentSettings.upsert({ where: { id: 'default' }, update: { sepayAccountNumber, sepayAccountName, sepayBankCode, sepayWebhookApiKey }, create: { id: 'default', sepayAccountNumber, sepayAccountName, sepayBankCode, sepayWebhookApiKey } })
   return serializePaymentSettings(settings, req)
 })
 app.get('/subscriptions', async (req) => { requireAuthenticated(req); return prisma.subscription.findMany({ orderBy: [{ isActive: 'desc' }, { isDefault: 'desc' }, { monthlyPriceCents: 'asc' }, { createdAt: 'desc' }] }) })

@@ -60,7 +60,7 @@ export async function getOrCreateTenantWallet(tenantId: string) {
   })
 
   if (!tenant) throw new Error('Tenant not found')
-  return createWalletIfMissing(prisma, tenantId, tenant.subscription?.currency ?? 'USD')
+  return createWalletIfMissing(prisma, tenantId, tenant.subscription?.currency ?? 'VND')
 }
 
 export async function getWalletOverview(tenantId: string) {
@@ -88,9 +88,11 @@ export async function createWalletTopUp(input: {
 }) {
   if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) throw new Error('amountCents must be a positive integer')
 
+  const requestedCurrency = normalizeCurrency(input.currency ?? 'VND')
+  if (requestedCurrency !== 'VND') throw new Error('Wallet top-ups must use VND')
   const wallet = await getOrCreateTenantWallet(input.tenantId)
-  const currency = normalizeCurrency(input.currency ?? wallet.currency)
-  if (currency !== wallet.currency) throw new Error('Top-up currency must match wallet currency')
+  if (wallet.currency !== 'VND' && wallet.balanceCents !== 0) throw new Error('Wallet must be migrated to VND before accepting SePay top-ups')
+  const currency = (await ensureWalletCurrency(prisma, wallet, requestedCurrency)).currency
   const tenant = await prisma.tenant.findUnique({ where: { id: input.tenantId }, select: { publicKey: true } })
   if (!tenant) throw new Error('Tenant not found')
   const pendingTopUp = await prisma.walletTopUp.findFirst({ where: { tenantId: input.tenantId, status: 'PENDING' }, select: { id: true } })

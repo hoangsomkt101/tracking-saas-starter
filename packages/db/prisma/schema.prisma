@@ -109,7 +109,7 @@ model Subscription {
 model Wallet {
   id           String   @id @default(uuid())
   tenantId     String   @unique
-  currency     String   @default("USD")
+  currency     String   @default("VND")
   balanceCents Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -180,6 +180,7 @@ model PaymentSettings {
   id                   String   @id @default("default")
   sepayAccountNumber   String?
   sepayAccountName     String?
+  sepayBankCode        String?
   sepayWebhookApiKey   String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt

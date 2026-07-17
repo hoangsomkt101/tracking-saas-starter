@@ -116,6 +116,7 @@ export type WalletOverview = {
   paymentSettings?: {
     sepayAccountNumber: string
     sepayAccountName: string
+    sepayBankCode: string
   } | null
 }
 
@@ -123,6 +124,7 @@ export type PaymentSettings = {
   id: string
   sepayAccountNumber?: string | null
   sepayAccountName?: string | null
+  sepayBankCode?: string | null
   sepayWebhookApiKey?: string | null
   hasSepayWebhookApiKey: boolean
   webhookUrl?: string | null

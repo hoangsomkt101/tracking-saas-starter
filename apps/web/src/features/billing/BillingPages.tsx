@@ -1,5 +1,5 @@
-import type { FormEvent } from 'react'
-import { CalendarClock, CheckCircle2, CircleDollarSign, Clock3, CreditCard, Database, History, Landmark, MousePointerClick, ReceiptText, RotateCcw, WalletCards, Webhook } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { CalendarClock, CheckCircle2, CircleDollarSign, Clock3, CreditCard, Database, History, Landmark, Loader2, MousePointerClick, ReceiptText, RotateCcw, WalletCards, Webhook, X } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -23,11 +23,42 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
   const overview = ctx.walletOverview
   const wallet = overview?.wallet
   const subscription = overview?.subscription
-  const currency = wallet?.currency ?? subscription?.currency ?? 'USD'
+  const currency = wallet?.currency ?? subscription?.currency ?? 'VND'
   const paymentSettings = overview?.paymentSettings
   const pendingTopUps = overview?.topUps.filter((topUp) => topUp.status === 'PENDING') ?? []
   const dueAmountCents = subscription?.monthlyPriceCents ?? 0
   const canCoverNextCharge = wallet ? wallet.balanceCents >= dueAmountCents : false
+  const [paymentTopUp, setPaymentTopUp] = useState<WalletTopUp | null>(null)
+
+  useEffect(() => {
+    if (!paymentTopUp || paymentTopUp.status !== 'PENDING') return
+
+    let isDisposed = false
+    const checkPaymentStatus = async () => {
+      try {
+        const updatedTopUp = await ctx.fetchJson<WalletTopUp>(`/wallet/top-ups/${paymentTopUp.id}`)
+        if (isDisposed || updatedTopUp.status === 'PENDING') return
+        setPaymentTopUp(updatedTopUp)
+        await ctx.refreshEntity('wallet')
+        if (updatedTopUp.status === 'APPROVED') ctx.setStatus({ type: 'success', message: 'Đã nhận thanh toán. Trang sẽ tự làm mới sau 5 giây.' })
+      } catch {
+        // Keep the QR visible while a transient network error is retried.
+      }
+    }
+
+    void checkPaymentStatus()
+    const interval = window.setInterval(() => void checkPaymentStatus(), 3_000)
+    return () => {
+      isDisposed = true
+      window.clearInterval(interval)
+    }
+  }, [ctx.fetchJson, ctx.refreshEntity, ctx.setStatus, paymentTopUp])
+
+  useEffect(() => {
+    if (paymentTopUp?.status !== 'APPROVED') return
+    const timeout = window.setTimeout(() => window.location.reload(), 5_000)
+    return () => window.clearTimeout(timeout)
+  }, [paymentTopUp?.status])
 
   async function handleTopUp(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -44,16 +75,17 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
         body: JSON.stringify({
           tenantId: ctx.selectedTenant?.id,
           amountCents,
-          currency: wallet.currency,
+          currency: 'VND',
           paymentMethod: 'bank_transfer',
           paymentReference: String(form.get('paymentReference') ?? ''),
           note: String(form.get('note') ?? '')
         })
       })
       topUpReference = topUp.reference
+      setPaymentTopUp(topUp)
       formElement.reset()
       await ctx.refreshEntity('wallet')
-    }, paymentSettings ? `Đã tạo yêu cầu ${topUpReference}. Chuyển đúng số tiền và dùng mã này làm nội dung để SePay tự động cộng ví.` : 'Đã gửi yêu cầu nạp tiền. Số dư được cộng sau khi được xác nhận.')
+    }, paymentSettings ? `Đã tạo yêu cầu ${topUpReference}. Quét QR để chuyển đúng số tiền.` : 'Đã gửi yêu cầu nạp tiền. Số dư được cộng sau khi được xác nhận.')
   }
 
   async function handleCancelTopUp(topUp: WalletTopUp) {
@@ -69,6 +101,10 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
     if (type === 'REFUND') return 'Hoàn tiền'
     return 'Điều chỉnh số dư'
   }
+
+  const paymentQrUrl = paymentTopUp && paymentSettings
+    ? `https://vietqr.app/img?${new URLSearchParams({ acc: paymentSettings.sepayAccountNumber, bank: paymentSettings.sepayBankCode, amount: String(Math.round(paymentTopUp.amountCents / 100)), des: paymentTopUp.reference, template: 'compact', showinfo: 'true', fullacc: 'true', holder: paymentSettings.sepayAccountName }).toString()}`
+    : null
 
   return (
     <>
@@ -114,14 +150,14 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
           <Card className="wallet-top-up-card">
             <CardHeader>
               <CardTitle><Landmark size={18} /> Yêu cầu nạp tiền</CardTitle>
-              <CardDescription>{paymentSettings ? `Chuyển khoản đến ${paymentSettings.sepayAccountName} · ${paymentSettings.sepayAccountNumber}. SePay tự động đối soát theo mã ATP của workspace.` : 'Gửi yêu cầu kèm mã giao dịch ngân hàng. Credit sẽ được cộng sau khi đội ngũ xác nhận.'}</CardDescription>
+              <CardDescription>{paymentSettings ? `Nạp tiền bằng VND đến ${paymentSettings.sepayAccountName} · ${paymentSettings.sepayAccountNumber}. QR sẽ tạo đúng số tiền và mã ATP của workspace.` : 'Cấu hình SePay chưa hoàn tất. Liên hệ quản trị viên để nạp Wallet.'}</CardDescription>
             </CardHeader>
             <CardContent>
               <form className="wallet-top-up-form" onSubmit={(event) => void handleTopUp(event)}>
-                <label><FieldLabel>Số tiền ({currency})</FieldLabel><Input name="amount" type="number" min="0.01" step="0.01" placeholder="100.00" required disabled={!wallet} /></label>
-                {paymentSettings ? <p className="form-hint">Sau khi gửi yêu cầu, dùng đúng mã <strong>ATP{ctx.selectedTenant?.publicKey}</strong> ở thông báo hoặc bảng bên dưới làm nội dung chuyển khoản.</p> : <label><FieldLabel>Mã giao dịch ngân hàng</FieldLabel><Input name="paymentReference" placeholder="VD: FT260716123456" disabled={!wallet} /></label>}
+                <label><FieldLabel>Số tiền (VND)</FieldLabel><Input name="amount" type="number" min="1000" step="1000" placeholder="100000" required disabled={!wallet || !paymentSettings || pendingTopUps.length > 0} /></label>
+                {paymentSettings ? <p className="form-hint">Sau khi gửi yêu cầu, quét QR và chuyển đúng <strong>mã ATP{ctx.selectedTenant?.publicKey}</strong>. Mỗi workspace chỉ có một yêu cầu chờ thanh toán.</p> : null}
                 <label><FieldLabel>Ghi chú</FieldLabel><Input name="note" placeholder="Nội dung chuyển khoản (không bắt buộc)" disabled={!wallet} /></label>
-                <Button type="submit" disabled={!wallet || ctx.isLoading}><Landmark size={16} /> Gửi yêu cầu nạp tiền</Button>
+                <Button type="submit" disabled={!wallet || !paymentSettings || pendingTopUps.length > 0 || ctx.isLoading}><Landmark size={16} /> {pendingTopUps.length ? 'Đang chờ thanh toán' : 'Tạo mã QR thanh toán'}</Button>
               </form>
             </CardContent>
           </Card>
@@ -154,6 +190,21 @@ export function WalletPage({ ctx }: { ctx: DashboardContext }) {
           </CardContent>
         </Card>
       </section>
+      {paymentTopUp && paymentSettings && paymentQrUrl && <div className="wallet-payment-modal-backdrop" role="presentation" onMouseDown={() => paymentTopUp.status === 'PENDING' && setPaymentTopUp(null)}>
+        <section className="wallet-payment-modal" role="dialog" aria-modal="true" aria-labelledby="wallet-payment-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="wallet-payment-close" type="button" onClick={() => setPaymentTopUp(null)} aria-label="Đóng thanh toán"><X size={18} /></button>
+          {paymentTopUp.status === 'APPROVED' ? <div className="wallet-payment-success"><CheckCircle2 size={34} /><h2 id="wallet-payment-title">Thanh toán thành công</h2><p>Ví đã được cộng tiền. Trang sẽ tự động làm mới sau 5 giây.</p></div> : paymentTopUp.status === 'REJECTED' || paymentTopUp.status === 'CANCELLED' ? <div className="wallet-payment-success wallet-payment-failed"><X size={34} /><h2 id="wallet-payment-title">Yêu cầu không còn hiệu lực</h2><p>{paymentTopUp.status === 'REJECTED' ? 'Yêu cầu nạp tiền đã bị từ chối.' : 'Yêu cầu nạp tiền đã được huỷ.'}</p></div> : <>
+            <div className="wallet-payment-heading"><div><span>Thanh toán VND</span><h2 id="wallet-payment-title">Quét QR để nạp Wallet</h2></div><span className="wallet-payment-pending"><Loader2 size={15} /> Đang chờ SePay</span></div>
+            <img className="wallet-payment-qr" src={paymentQrUrl} alt={`Mã QR thanh toán ${paymentTopUp.reference}`} />
+            <div className="wallet-payment-details">
+              <div><span>Số tiền</span><strong>{formatMoney(paymentTopUp.amountCents, 'VND')}</strong></div>
+              <div><span>Nội dung</span><strong>{paymentTopUp.reference}</strong></div>
+              <div><span>Tài khoản nhận</span><strong>{paymentSettings.sepayAccountNumber} · {paymentSettings.sepayBankCode}</strong></div>
+            </div>
+            <p className="wallet-payment-help">Hệ thống tự kiểm tra giao dịch mỗi 3 giây. Sau khi SePay gửi webhook hợp lệ, Wallet sẽ được cộng tiền và trang tự làm mới sau 5 giây.</p>
+          </>}
+        </section>
+      </div>}
     </>
   )
 }

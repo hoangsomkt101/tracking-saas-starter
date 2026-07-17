@@ -32,5 +32,6 @@ export function getDatasetLabel(dataset?: Dataset | null, fallbackId?: string | 
 }
 
 export function formatMoney(cents: number, currency: string) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100)
+  const normalizedCurrency = currency.toUpperCase()
+  return new Intl.NumberFormat(normalizedCurrency === 'VND' ? 'vi-VN' : 'en-US', { style: 'currency', currency: normalizedCurrency, maximumFractionDigits: normalizedCurrency === 'VND' ? 0 : undefined }).format(cents / 100)
 }

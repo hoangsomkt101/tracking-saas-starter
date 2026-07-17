@@ -99,11 +99,12 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
     const form = new FormData(event.currentTarget)
     await runEntityAction(ctx, async () => {
       await ctx.fetchJson('/superadmin/payment-settings', {
-        method: 'PUT',
-        body: JSON.stringify({
-          sepayAccountNumber: getFormString(form, 'sepayAccountNumber'),
-          sepayAccountName: getFormString(form, 'sepayAccountName'),
-          sepayWebhookApiKey: getFormString(form, 'sepayWebhookApiKey')
+          method: 'PUT',
+          body: JSON.stringify({
+            sepayAccountNumber: getFormString(form, 'sepayAccountNumber'),
+            sepayAccountName: getFormString(form, 'sepayAccountName'),
+            sepayBankCode: getFormString(form, 'sepayBankCode'),
+            sepayWebhookApiKey: getFormString(form, 'sepayWebhookApiKey')
         })
       })
       await ctx.refreshEntity('payment-settings')
@@ -220,12 +221,13 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
         <Card className="form-card">
           <CardHeader>
             <CardTitle><Landmark size={18} /> SePay payment settings</CardTitle>
-            <CardDescription>Cấu hình tài khoản nhận tiền và webhook để SePay tự động đối soát yêu cầu nạp wallet bằng mã ATP + public key của workspace trong nội dung chuyển khoản.</CardDescription>
+            <CardDescription>Cấu hình tài khoản nhận tiền, mã ngân hàng và webhook để SePay tự động đối soát yêu cầu nạp wallet VND bằng mã ATP + public key của workspace.</CardDescription>
           </CardHeader>
           <CardContent>
             <form key={ctx.paymentSettings?.updatedAt ?? 'new'} className="payment-settings-form" onSubmit={(event) => void handleSavePaymentSettings(event)}>
               <label><FieldLabel>Số tài khoản SePay</FieldLabel><Input name="sepayAccountNumber" defaultValue={ctx.paymentSettings?.sepayAccountNumber ?? ''} placeholder="VD: 0123456789" required /></label>
               <label><FieldLabel>Tên tài khoản</FieldLabel><Input name="sepayAccountName" defaultValue={ctx.paymentSettings?.sepayAccountName ?? ''} placeholder="VD: NGUYEN VAN A" required /></label>
+              <label><FieldLabel>Mã ngân hàng VietQR</FieldLabel><Input name="sepayBankCode" defaultValue={ctx.paymentSettings?.sepayBankCode ?? ''} placeholder="VD: MB, VCB, ACB" required /></label>
               <label><FieldLabel>SePay webhook API key</FieldLabel><Input name="sepayWebhookApiKey" type="password" placeholder={ctx.paymentSettings?.hasSepayWebhookApiKey ? 'Đã cấu hình, để trống để giữ nguyên' : 'API key dùng để xác thực webhook'} required={!ctx.paymentSettings?.hasSepayWebhookApiKey} /></label>
               <p className="form-hint">Tại SePay, chọn xác thực API Key và dùng đúng giá trị ở trên. API key được lưu riêng và không hiển thị lại sau khi lưu.</p>
               <Button type="submit" disabled={ctx.isLoading}>Lưu cấu hình SePay</Button>
@@ -245,6 +247,7 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
             <div className="detail-grid payment-settings-summary">
               <span>Tài khoản nhận</span><strong>{ctx.paymentSettings?.sepayAccountNumber ?? 'Chưa cấu hình'}</strong>
               <span>Chủ tài khoản</span><strong>{ctx.paymentSettings?.sepayAccountName ?? 'Chưa cấu hình'}</strong>
+              <span>Mã ngân hàng VietQR</span><strong>{ctx.paymentSettings?.sepayBankCode ?? 'Chưa cấu hình'}</strong>
               <span>Xác thực webhook</span><strong>{ctx.paymentSettings?.hasSepayWebhookApiKey ? 'API key đã cấu hình' : 'Chưa cấu hình API key'}</strong>
             </div>
           </CardContent>
