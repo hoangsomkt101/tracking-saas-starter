@@ -268,39 +268,3 @@ export function SubscriptionsPage({ ctx }: { ctx: DashboardContext }) {
     </section>
   )
 }
-
-export function BillingPage({ ctx }: { ctx: DashboardContext }) {
-  return (
-    <section className="single-page-grid">
-      <Card className="page-card">
-        <CardHeader className="section-heading">
-          <div>
-            <CardTitle><ReceiptText size={18} /> Billing</CardTitle>
-            <CardDescription>Billing chỉ lưu và đối soát thanh toán: yêu cầu nạp tiền, chứng từ và trạng thái giao dịch.</CardDescription>
-          </div>
-          <Badge variant="secondary">Coming soon</Badge>
-        </CardHeader>
-        <CardContent>
-          <WorkspaceContext ctx={ctx} />
-          <div className="detail-grid">
-            <span>Yêu cầu nạp tiền đang xử lý</span><strong>Chưa có dữ liệu</strong>
-            <span>Thanh toán thành công</span><strong>Chưa có dữ liệu</strong>
-            <span>Hóa đơn / chứng từ</span><strong>Chưa có dữ liệu</strong>
-          </div>
-        </CardContent>
-      </Card>
-      <Card className="table-card">
-        <CardHeader className="section-heading">
-          <div>
-            <CardTitle><History size={18} /> Lịch sử thanh toán</CardTitle>
-            <CardDescription>Mỗi giao dịch sẽ có mã tham chiếu, phương thức, số tiền, trạng thái và thời điểm đối soát.</CardDescription>
-          </div>
-          <Button type="button" variant="outline" disabled>Yêu cầu nạp tiền</Button>
-        </CardHeader>
-        <CardContent>
-          <p className="empty-state">Chưa có payment ledger. Màn hình đã được tách khỏi Subscription và Wallet để sẵn sàng cho lịch sử nạp tiền.</p>
-        </CardContent>
-      </Card>
-    </section>
-  )
-}

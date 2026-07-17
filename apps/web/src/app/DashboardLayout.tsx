@@ -490,7 +490,7 @@ export function DashboardLayout({ theme, onToggleTheme }: { theme: ThemeMode; on
   }, [firstQueryError])
 
   const grantedMenuFeatureIds = useMemo(() => {
-    const coreFeatures = ['dashboard', 'campaigns', 'platforms', 'datasets', 'tracking-links', 'activity-logs', 'wallet', 'subscriptions', 'billing', 'settings', 'support']
+    const coreFeatures = ['dashboard', 'campaigns', 'platforms', 'datasets', 'tracking-links', 'activity-logs', 'wallet', 'subscriptions', 'settings', 'support']
     if (data.currentUser?.isSuperAdmin) {
       return new Set(navGroups.flatMap((group) => group.items.map((item) => item.featureKey).filter(Boolean) as string[]))
     }

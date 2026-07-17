@@ -7,7 +7,7 @@ import { SuperAdminPage, SuperAdminUserManagePage } from '../features/admin/Supe
 import { ActivityLogsPage } from '../features/logs/ActivityLogsPage'
 import { SupportPage } from '../features/support/SupportPage'
 import { DocsPage } from '../features/docs/DocsPage'
-import { BillingPage, SubscriptionsPage, WalletPage } from '../features/billing/BillingPages'
+import { SubscriptionsPage, WalletPage } from '../features/account/AccountPages'
 import { CampaignCreatePage, CampaignDeletePage, CampaignDetailPage, CampaignEditPage, CampaignsPage, DatasetCreatePage, DatasetDeletePage, DatasetDetailPage, DatasetEditPage, DatasetsPage, PlatformCreatePage, PlatformDeletePage, PlatformDetailPage, PlatformEditPage, PlatformsPage, TrackingLinkCreatePage, TrackingLinkDeletePage, TrackingLinkDetailPage, TrackingLinkEditPage, TrackingLinksPage } from '../features/resources/ResourcePages'
 import type { DashboardContext } from '../types/domain'
 
@@ -41,7 +41,6 @@ export function DashboardRoutes({ ctx }: { ctx: DashboardContext }) {
       <Route path="/analytics" element={<FeatureGate ctx={ctx} featureKey="analytics"><AnalyticsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/wallet" element={<FeatureGate ctx={ctx} featureKey="wallet"><WalletPage ctx={ctx} /></FeatureGate>} />
       <Route path="/subscriptions" element={<FeatureGate ctx={ctx} featureKey="subscriptions"><SubscriptionsPage ctx={ctx} /></FeatureGate>} />
-      <Route path="/billing" element={<FeatureGate ctx={ctx} featureKey="billing"><BillingPage ctx={ctx} /></FeatureGate>} />
       <Route path="/websites" element={<FeatureGate ctx={ctx} featureKey="settings"><SettingsPage ctx={ctx} /></FeatureGate>} />
       <Route path="/settings" element={<Navigate to="/websites" replace />} />
       <Route path="/docs" element={<DocsPage />} />
