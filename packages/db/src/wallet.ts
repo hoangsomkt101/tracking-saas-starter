@@ -27,6 +27,21 @@ function normalizeCurrency(value: string) {
   return value.trim().toUpperCase()
 }
 
+export function requireVndCurrency(value: string, entity: 'Subscription' | 'Wallet top-up') {
+  const currency = normalizeCurrency(value)
+  if (currency !== 'VND') throw new Error(`${entity} currency must be VND`)
+  return currency
+}
+
+export function assertSubscriptionAccess(status: 'ACTIVE' | 'PAST_DUE') {
+  if (status === 'PAST_DUE') throw new Error('Subscription payment overdue: top up wallet to continue')
+}
+
+export function assertSubscriptionAssignable(subscription: { isActive: boolean; currency: string }) {
+  if (!subscription.isActive) throw new Error('Subscription must be active before assignment')
+  return requireVndCurrency(subscription.currency, 'Subscription')
+}
+
 export function getWalletTopUpReference(publicKey: string, topUpId: string) {
   const requestToken = topUpId.replaceAll('-', '').slice(-12)
   return `ATP${publicKey}${requestToken}`
@@ -98,8 +113,7 @@ export async function createWalletTopUp(input: {
 }) {
   if (!Number.isInteger(input.amountCents) || input.amountCents <= 0) throw new Error('amountCents must be a positive integer')
 
-  const requestedCurrency = normalizeCurrency(input.currency ?? 'VND')
-  if (requestedCurrency !== 'VND') throw new Error('Wallet top-ups must use VND')
+  const requestedCurrency = requireVndCurrency(input.currency ?? 'VND', 'Wallet top-up')
   const wallet = await getOrCreateTenantWallet(input.tenantId)
   if (wallet.currency !== 'VND' && wallet.balanceCents !== 0) throw new Error('Wallet must be migrated to VND before accepting SePay top-ups')
   const currency = (await ensureWalletCurrency(prisma, wallet, requestedCurrency)).currency
@@ -208,6 +222,33 @@ export async function rejectWalletTopUp(topUpId: string, rejectionReason?: strin
   })
 }
 
+export async function cancelWalletTopUp(topUpId: string, ownerUserId: string) {
+  return runSerializable(async (tx) => {
+    const topUp = await tx.walletTopUp.findFirst({ where: { id: topUpId, tenant: { ownerUserId } } })
+    if (!topUp) throw new Error('Wallet top-up not found')
+
+    const cancelled = await tx.walletTopUp.updateMany({
+      where: { id: topUp.id, status: 'PENDING' },
+      data: { status: 'CANCELLED' }
+    })
+    if (cancelled.count !== 1) return { topUp: await tx.walletTopUp.findUniqueOrThrow({ where: { id: topUp.id } }), alreadyProcessed: true }
+
+    const cancelledTopUp = await tx.walletTopUp.findUniqueOrThrow({ where: { id: topUp.id } })
+    await tx.activityLog.create({
+      data: {
+        tenantId: topUp.tenantId,
+        source: 'api',
+        eventType: 'wallet.top_up_cancelled',
+        message: `Wallet top-up ${topUp.reference} was cancelled`,
+        entityType: 'walletTopUp',
+        entityId: topUp.id,
+        metadata: { actorUserId: ownerUserId, topUpId: topUp.id }
+      }
+    })
+    return { topUp: cancelledTopUp, alreadyProcessed: false }
+  })
+}
+
 export async function activateTenantSubscription(tenantId: string, subscriptionId: string) {
   await runSerializable(async (tx) => {
     const [tenant, subscription] = await Promise.all([
@@ -216,9 +257,10 @@ export async function activateTenantSubscription(tenantId: string, subscriptionI
     ])
     if (!tenant) throw new Error('Tenant not found')
     if (!subscription) throw new Error('Subscription not found')
+    const subscriptionCurrency = assertSubscriptionAssignable(subscription)
 
-    const wallet = tenant.wallet ?? await createWalletIfMissing(tx, tenant.id, subscription.currency)
-    await ensureWalletCurrency(tx, wallet, subscription.currency)
+    const wallet = tenant.wallet ?? await createWalletIfMissing(tx, tenant.id, subscriptionCurrency)
+    await ensureWalletCurrency(tx, wallet, subscriptionCurrency)
     const now = new Date()
     const isPaid = subscription.monthlyPriceCents > 0
     await tx.tenant.update({
@@ -249,13 +291,13 @@ export async function billTenantSubscription(tenantId: string, now = new Date())
     if (!subscription || !subscription.isActive || subscription.monthlyPriceCents <= 0) {
       return { tenantId, state: 'not_billable' }
     }
+    const subscriptionCurrency = requireVndCurrency(subscription.currency, 'Subscription')
 
     const dueAt = tenant.subscriptionNextBillingAt ?? now
     if (dueAt > now) return { tenantId, state: 'not_due', subscriptionId: subscription.id, subscriptionName: subscription.name }
 
-    const wallet = tenant.wallet ?? await createWalletIfMissing(tx, tenant.id, subscription.currency)
-    const normalizedCurrency = normalizeCurrency(subscription.currency)
-    const activeWallet = await ensureWalletCurrency(tx, wallet, normalizedCurrency)
+    const wallet = tenant.wallet ?? await createWalletIfMissing(tx, tenant.id, subscriptionCurrency)
+    const activeWallet = await ensureWalletCurrency(tx, wallet, subscriptionCurrency)
     const amountCents = subscription.monthlyPriceCents
     if (activeWallet.balanceCents < amountCents) {
       const statusChanged = tenant.subscriptionStatus !== 'PAST_DUE'

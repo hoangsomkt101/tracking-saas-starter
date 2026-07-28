@@ -89,7 +89,7 @@ model Subscription {
   name                 String
   description          String?
   monthlyPriceCents    Int      @default(0)
-  currency             String   @default("USD")
+  currency             String   @default("VND")
   clickLimit           Int      @default(1000)
   capiEventLimit       Int      @default(1000)
   eapiEventLimit       Int      @default(1000)
@@ -158,7 +158,7 @@ model WalletTopUp {
   providerReferenceCode String?
   paymentReceivedAt   DateTime?
   note                String?
-   reference           String
+  reference           String
   status              WalletTopUpStatus @default(PENDING)
   walletTransactionId String?           @unique
   approvedAt          DateTime?
@@ -171,9 +171,9 @@ model WalletTopUp {
   tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   walletTransaction   WalletTransaction? @relation(fields: [walletTransactionId], references: [id], onDelete: SetNull)
 
-   @@index([tenantId, createdAt])
-   @@index([status, createdAt])
-   @@index([reference, status])
+  @@index([tenantId, createdAt])
+  @@index([status, createdAt])
+  @@index([reference, status])
 }
 
 model PaymentSettings {

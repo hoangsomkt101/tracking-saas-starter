@@ -4,7 +4,7 @@ import cookie from '@fastify/cookie'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import { randomUUID } from 'node:crypto'
-import { Prisma, prisma } from '@repo/db'
+import { Prisma, assertSubscriptionAccess, prisma } from '@repo/db'
 import { createClickEventsQueue, createFbc, createRedisConnection, escapeHtml, getSupportedAffiliatePlatform, normalizeHeaderValue, validateHttpUrl } from '@repo/shared'
 
 const app = Fastify({ logger: true })
@@ -40,13 +40,17 @@ type RedirectQuery = {
 
 async function getTenantSubscriptionOrDefault(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, include: { subscription: true } })
-  if (tenant?.subscription) return tenant.subscription
-  return prisma.subscription.findFirst({ where: { isDefault: true, isActive: true }, orderBy: { createdAt: 'asc' } })
+  if (!tenant) return null
+  if (tenant.subscription) return { tenant, subscription: tenant.subscription }
+  const subscription = await prisma.subscription.findFirst({ where: { isDefault: true, isActive: true }, orderBy: { createdAt: 'asc' } })
+  return subscription ? { tenant, subscription } : null
 }
 
 async function assertClickLimit(tenantId: string) {
-  const subscription = await getTenantSubscriptionOrDefault(tenantId)
-  if (!subscription) throw new Error(`Subscription not found for tenant ${tenantId}`)
+  const billing = await getTenantSubscriptionOrDefault(tenantId)
+  if (!billing) throw new Error(`Subscription not found for tenant ${tenantId}`)
+  assertSubscriptionAccess(billing.tenant.subscriptionStatus)
+  const { subscription } = billing
   const periodStart = new Date()
   periodStart.setUTCDate(1)
   periodStart.setUTCHours(0, 0, 0, 0)
@@ -571,7 +575,7 @@ app.addHook('onClose', async () => { await clickEventsQueue.close(); await readi
 app.setErrorHandler((error, _req, reply) => {
   app.log.error(error)
   const message = error instanceof Error ? error.message : 'Unknown error'
-  const statusCode = message.includes('limit exceeded') || message.includes('not found') ? 400 : 500
+  const statusCode = message.includes('payment overdue') ? 429 : message.includes('limit exceeded') || message.includes('not found') ? 400 : 500
   return reply.code(statusCode).send({ error: statusCode === 500 ? 'Internal server error' : message })
 })
 

@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { Queue, Worker } from 'bullmq'
 import { createHash } from 'node:crypto'
-import { Prisma, billDueTenantSubscriptions, prisma } from '@repo/db'
+import { Prisma, assertSubscriptionAccess, billDueTenantSubscriptions, prisma } from '@repo/db'
 import { CLICK_EVENTS_QUEUE, type ClickEventJob, createRedisConnection, getImpactActionTrackerAmountValue } from '@repo/shared'
 
 const connection = createRedisConnection()
@@ -20,9 +20,10 @@ async function getTenantSubscriptionOrDefault(tenantId: string) {
     include: { subscription: true }
   })
 
-  if (tenant?.subscription) return tenant.subscription
+  if (!tenant) return null
+  if (tenant.subscription) return { tenant, subscription: tenant.subscription }
 
-  return prisma.subscription.findFirst({
+  const subscription = await prisma.subscription.findFirst({
     where: {
       isDefault: true,
       isActive: true
@@ -31,12 +32,15 @@ async function getTenantSubscriptionOrDefault(tenantId: string) {
       createdAt: 'asc'
     }
   })
+  return subscription ? { tenant, subscription } : null
 }
 
 async function assertCapiLimit(tenantId: string) {
-  const subscription = await getTenantSubscriptionOrDefault(tenantId)
+  const billing = await getTenantSubscriptionOrDefault(tenantId)
 
-  if (!subscription) throw new Error(`Subscription not found for tenant ${tenantId}`)
+  if (!billing) throw new Error(`Subscription not found for tenant ${tenantId}`)
+  assertSubscriptionAccess(billing.tenant.subscriptionStatus)
+  const { subscription } = billing
 
   const periodStart = new Date()
   periodStart.setUTCDate(1)
@@ -346,6 +350,7 @@ const worker = new Worker<ClickEventJob>(
       throw new Error(`Click event ${job.data.clickEventId} not found`)
     }
 
+    await assertCapiLimit(clickEvent.tenantId)
     const datasets = clickEvent.trackingLink.campaign?.datasets.map((entry) => entry.dataset).filter((dataset) => dataset.isActive) ?? []
     const conversion = job.data.source === 'affiliate_conversion' ? await loadConversionEvent(job.data.sourceId) : null
 
@@ -363,8 +368,6 @@ const worker = new Worker<ClickEventJob>(
     const deliveredEvents = []
 
     for (const dataset of datasets) {
-      await assertCapiLimit(clickEvent.tenantId)
-
       const platform = dataset.platform === 'tiktok' ? 'tiktok' : 'meta'
       const eventName = getPlatformEventName(platform, job.data.eventName)
       const payload = platform === 'tiktok' ? buildTikTokPayload(clickEvent, eventName, conversion, dataset) : buildMetaPayload(clickEvent, eventName, conversion)

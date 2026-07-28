@@ -56,7 +56,7 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
           slug: getFormString(form, 'slug'),
           description: getFormString(form, 'description'),
           monthlyPriceCents: Number(form.get('monthlyPriceCents') ?? 0),
-          currency: getFormString(form, 'currency') || 'USD',
+          currency: 'VND',
           clickLimit: Number(form.get('clickLimit') ?? 0),
           capiEventLimit: Number(form.get('capiEventLimit') ?? 0),
           eapiEventLimit: Number(form.get('eapiEventLimit') ?? 0),
@@ -216,7 +216,7 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
             <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="free" defaultValue={editingSubscription?.slug ?? ''} /></label>
             <label className="subscription-modal-wide"><FieldLabel>Description</FieldLabel><Input name="description" placeholder="Plan description" defaultValue={editingSubscription?.description ?? ''} /></label>
             <label><FieldLabel>Monthly price cents</FieldLabel><Input name="monthlyPriceCents" type="number" min="0" defaultValue={editingSubscription?.monthlyPriceCents ?? 0} required /></label>
-            <label><FieldLabel>Currency</FieldLabel><Input name="currency" defaultValue={editingSubscription?.currency ?? 'VND'} required /></label>
+            <label><FieldLabel>Currency</FieldLabel><Input name="currency" value="VND" readOnly /></label>
             <label><FieldLabel>Click data limit / month</FieldLabel><Input name="clickLimit" type="number" min="0" defaultValue={editingSubscription?.clickLimit ?? 1000} required /></label>
             <label><FieldLabel>CAPI limit / month</FieldLabel><Input name="capiEventLimit" type="number" min="0" defaultValue={editingSubscription?.capiEventLimit ?? 1000} required /></label>
             <label><FieldLabel>EAPI limit / month</FieldLabel><Input name="eapiEventLimit" type="number" min="0" defaultValue={editingSubscription?.eapiEventLimit ?? 1000} required /></label>
