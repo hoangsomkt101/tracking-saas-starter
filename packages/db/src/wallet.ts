@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from './client.js'
 
@@ -24,6 +25,14 @@ function addCalendarMonth(value: Date) {
 
 function normalizeCurrency(value: string) {
   return value.trim().toUpperCase()
+}
+
+export function getWalletTopUpReference(publicKey: string, topUpId: string) {
+  return `ATP${publicKey}-${topUpId}`
+}
+
+export function getWalletTopUpTransactionReference(topUpId: string) {
+  return `topup:${topUpId}`
 }
 
 async function runSerializable<T>(action: (tx: Prisma.TransactionClient) => Promise<T>) {
@@ -97,17 +106,19 @@ export async function createWalletTopUp(input: {
   if (!tenant) throw new Error('Tenant not found')
   const pendingTopUp = await prisma.walletTopUp.findFirst({ where: { tenantId: input.tenantId, status: 'PENDING' }, select: { id: true } })
   if (pendingTopUp) throw new Error('A pending wallet top-up already exists for this workspace')
+  const topUpId = randomUUID()
 
   try {
     return await prisma.walletTopUp.create({
       data: {
+        id: topUpId,
         tenantId: input.tenantId,
         amountCents: input.amountCents,
         currency,
         paymentMethod: input.paymentMethod?.trim() || 'bank_transfer',
         paymentReference: input.paymentReference?.trim() || null,
         note: input.note?.trim() || null,
-        reference: `ATP${tenant.publicKey}`
+        reference: getWalletTopUpReference(tenant.publicKey, topUpId)
       }
     })
   } catch (error) {
@@ -147,7 +158,7 @@ export async function approveWalletTopUp(topUpId: string, approvedByUserId: stri
         balanceAfterCents: updatedWallet.balanceCents,
         currency: updatedWallet.currency,
         description: `Wallet top-up ${topUp.reference}`,
-        reference: `topup:${topUp.reference}`
+        reference: getWalletTopUpTransactionReference(topUp.id)
       }
     })
     const approvedTopUp = await tx.walletTopUp.update({
