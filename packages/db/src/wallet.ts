@@ -28,7 +28,8 @@ function normalizeCurrency(value: string) {
 }
 
 export function getWalletTopUpReference(publicKey: string, topUpId: string) {
-  return `ATP${publicKey}-${topUpId}`
+  const requestToken = topUpId.replaceAll('-', '').slice(-12)
+  return `ATP${publicKey}${requestToken}`
 }
 
 export function getWalletTopUpTransactionReference(topUpId: string) {
