@@ -1,8 +1,10 @@
 import { SignInButton, SignedIn, SignedOut } from '@clerk/clerk-react'
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Check } from 'lucide-react'
 import { ThemeToggle } from '../../components/common/ThemeToggle'
-import type { ThemeMode } from '../../types/domain'
+import { formatMoney } from '../../lib/format'
+import type { Subscription, ThemeMode } from '../../types/domain'
 
 const painCards = [
     {
@@ -193,6 +195,19 @@ function PrimaryCta({ label, className = '' }: { label: string; className?: stri
 }
 
 export function LandingPage({ theme, onToggleTheme }: { theme: ThemeMode; onToggleTheme: () => void }) {
+    const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
+
+    useEffect(() => {
+        const controller = new AbortController()
+        void fetch('/api/public/subscriptions', { signal: controller.signal })
+            .then((response) => response.ok ? response.json() as Promise<Subscription[]> : Promise.reject(new Error('Unable to load subscriptions')))
+            .then(setSubscriptions)
+            .catch((error) => {
+                if (!(error instanceof DOMException && error.name === 'AbortError')) setSubscriptions([])
+            })
+        return () => controller.abort()
+    }, [])
+
     return (
         <main className="landing2-page shadcn-theme" data-theme={theme}>
             <header className="landing2-header">
@@ -206,6 +221,7 @@ export function LandingPage({ theme, onToggleTheme }: { theme: ThemeMode; onTogg
                         <a href="#solution">Giải pháp</a>
                         <a href="#how-it-works">Cách hoạt động</a>
                         <a href="#features">Tính năng</a>
+                        <a href="#pricing">Bảng giá</a>
                         <a href="#faq">FAQ</a>
                     </nav>
 
@@ -455,6 +471,35 @@ export function LandingPage({ theme, onToggleTheme }: { theme: ThemeMode; onTogg
                     </div>
                 </div>
             </section>
+
+            {subscriptions.length > 0 && <section className="landing2-section landing2-section-soft" id="pricing">
+                <div className="landing2-container">
+                    <div className="landing2-section-heading center">
+                        <div className="landing2-eyebrow">Subscription</div>
+                        <h2 className="landing2-section-title">Chọn gói phù hợp với quy mô tracking.</h2>
+                        <p className="landing2-section-description">Bắt đầu với quota phù hợp và nâng cấp khi campaign của bạn tăng trưởng.</p>
+                    </div>
+                    <div className="landing2-pricing-grid">
+                        {subscriptions.map((subscription) => (
+                            <article className={`landing2-pricing-card${subscription.isDefault ? ' is-featured' : ''}`} key={subscription.id}>
+                                <div className="landing2-pricing-card-head">
+                                    <div><span className="landing2-pricing-kicker">{subscription.isDefault ? 'Gói mặc định' : 'Subscription'}</span><h3>{subscription.name}</h3></div>
+                                    {subscription.isDefault && <span className="landing2-pricing-badge">Phổ biến</span>}
+                                </div>
+                                <p className="landing2-pricing-description">{subscription.description || 'Đầy đủ công cụ tracking và attribution cho affiliate campaign.'}</p>
+                                <div className="landing2-pricing-price"><strong>{formatMoney(subscription.monthlyPriceCents, subscription.currency)}</strong><span>/ tháng</span></div>
+                                <ul className="landing2-pricing-features">
+                                    <li><Check size={16} /> <span><strong>{subscription.clickLimit.toLocaleString('vi-VN')}</strong> click data / tháng</span></li>
+                                    <li><Check size={16} /> <span><strong>{subscription.capiEventLimit.toLocaleString('vi-VN')}</strong> CAPI event / tháng</span></li>
+                                    <li><Check size={16} /> <span><strong>{subscription.eapiEventLimit.toLocaleString('vi-VN')}</strong> EAPI event / tháng</span></li>
+                                    <li><Check size={16} /> <span><strong>{subscription.campaignDatasetLimit}</strong> dataset / campaign</span></li>
+                                </ul>
+                                <PrimaryCta label={`Bắt đầu với ${subscription.name}`} className="lp-btn-primary landing2-pricing-cta" />
+                            </article>
+                        ))}
+                    </div>
+                </div>
+            </section>}
 
             <section className="landing2-section landing2-section-dark">
                 <div className="landing2-container">
