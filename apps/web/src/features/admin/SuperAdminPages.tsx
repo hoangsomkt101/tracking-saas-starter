@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { NavLink, useParams, useSearchParams } from 'react-router'
 import { Check, Copy, CreditCard, Crown, Landmark, Loader2, Pencil, Plus, RefreshCw, Save, Settings, Trash2, Users, WalletCards, X } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
@@ -21,8 +21,18 @@ function getAccountLabel(account: SuperAdminUser) {
 export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null)
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false)
   const requestedTab = searchParams.get('tab')
   const activeTab = requestedTab === 'users' || requestedTab === 'payment' ? requestedTab : 'subscriptions'
+
+  useEffect(() => {
+    if (!isSubscriptionModalOpen) return
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !ctx.isLoading) setIsSubscriptionModalOpen(false)
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [ctx.isLoading, isSubscriptionModalOpen])
 
   if (!ctx.isSuperAdmin) {
     return (
@@ -57,6 +67,7 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
       })
       formElement.reset()
       setEditingSubscription(null)
+      setIsSubscriptionModalOpen(false)
       await ctx.refreshEntity('subscriptions')
     }, subscription ? 'Đã cập nhật gói subscription' : 'Đã tạo gói subscription')
   }
@@ -65,7 +76,10 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
     if (!window.confirm(`Xoá gói subscription "${subscription.name}"? Chỉ có thể xoá gói không phải default và chưa được gán cho workspace.`)) return
     await runEntityAction(ctx, async () => {
       await ctx.fetchJson<{ ok: boolean }>(`/superadmin/subscriptions/${subscription.id}`, { method: 'DELETE' })
-      if (editingSubscription?.id === subscription.id) setEditingSubscription(null)
+      if (editingSubscription?.id === subscription.id) {
+        setEditingSubscription(null)
+        setIsSubscriptionModalOpen(false)
+      }
       await ctx.refreshEntity('subscriptions')
     }, `Đã xoá gói subscription ${subscription.name}`)
   }
@@ -136,8 +150,19 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
   }
 
   function handleTabChange(tab: 'subscriptions' | 'users' | 'payment') {
+    setIsSubscriptionModalOpen(false)
     if (tab === 'subscriptions') setSearchParams({})
     else setSearchParams({ tab })
+  }
+
+  function openCreateSubscription() {
+    setEditingSubscription(null)
+    setIsSubscriptionModalOpen(true)
+  }
+
+  function openEditSubscription(subscription: Subscription) {
+    setEditingSubscription(subscription)
+    setIsSubscriptionModalOpen(true)
   }
 
   return (
@@ -149,47 +174,23 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
         <button className="superadmin-tab" type="button" role="tab" id="superadmin-payment-tab" aria-selected={activeTab === 'payment'} aria-controls="superadmin-payment-panel" onClick={() => handleTabChange('payment')}><Landmark size={16} /> Payment</button>
       </div>
       {activeTab === 'subscriptions' && <section id="superadmin-subscriptions-panel" role="tabpanel" aria-labelledby="superadmin-subscriptions-tab" className="superadmin-tab-panel">
-        <section className="single-page-grid">
-          <Card className="form-card">
-            <CardHeader>
-              <CardTitle>{editingSubscription ? <><Pencil size={18} /> Edit subscription</> : <><WalletCards size={18} /> Create subscription</>}</CardTitle>
-              <CardDescription>{editingSubscription ? `Cập nhật cấu hình cho gói ${editingSubscription.name}. Thay đổi có hiệu lực ngay với workspace đang dùng gói này.` : 'Tạo gói subscription với quota tháng cho click data, CAPI và EAPI/affiliate webhook.'}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form key={editingSubscription?.id ?? 'new'} onSubmit={handleSubscriptionSubmit}>
-                <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Free / Pro / Agency" defaultValue={editingSubscription?.name ?? ''} required /></label>
-                <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="free" defaultValue={editingSubscription?.slug ?? ''} /></label>
-                <label><FieldLabel>Description</FieldLabel><Input name="description" placeholder="Plan description" defaultValue={editingSubscription?.description ?? ''} /></label>
-                <label><FieldLabel>Monthly price cents</FieldLabel><Input name="monthlyPriceCents" type="number" min="0" defaultValue={editingSubscription?.monthlyPriceCents ?? 0} required /></label>
-                <label><FieldLabel>Currency</FieldLabel><Input name="currency" defaultValue={editingSubscription?.currency ?? 'VND'} required /></label>
-                <label><FieldLabel>Click data limit / month</FieldLabel><Input name="clickLimit" type="number" min="0" defaultValue={editingSubscription?.clickLimit ?? 1000} required /></label>
-                <label><FieldLabel>CAPI limit / month</FieldLabel><Input name="capiEventLimit" type="number" min="0" defaultValue={editingSubscription?.capiEventLimit ?? 1000} required /></label>
-                <label><FieldLabel>EAPI limit / month</FieldLabel><Input name="eapiEventLimit" type="number" min="0" defaultValue={editingSubscription?.eapiEventLimit ?? 1000} required /></label>
-                <label><FieldLabel>Datasets / campaign</FieldLabel><Input name="campaignDatasetLimit" type="number" min="0" defaultValue={editingSubscription?.campaignDatasetLimit ?? 2} required /></label>
-                <label className="checkbox"><input name="isDefault" type="checkbox" defaultChecked={editingSubscription?.isDefault ?? false} /> Default for new users</label>
-                <label className="checkbox"><input name="isActive" type="checkbox" defaultChecked={editingSubscription?.isActive ?? true} /> Active</label>
-                <div className="button-row"><Button type="submit" disabled={ctx.isLoading}>{editingSubscription ? <><Save size={16} /> Save changes</> : <><Plus size={16} /> Create subscription</>}</Button>{editingSubscription && <Button variant="outline" type="button" onClick={() => setEditingSubscription(null)} disabled={ctx.isLoading}>Cancel</Button>}</div>
-              </form>
-            </CardContent>
-          </Card>
-          <Card className="table-card">
-            <CardHeader>
-              <CardTitle><CreditCard size={18} /> Subscriptions</CardTitle>
-              <CardDescription>{ctx.subscriptions.length} subscriptions configured.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>Plan</th><th>Price</th><th>Limits/month</th><th>Datasets/campaign</th><th>Status</th><th>Actions</th></tr></thead>
-                  <tbody>
-                    {ctx.subscriptions.map((subscription) => <tr key={subscription.id}><td><strong>{subscription.name}</strong><br /><small>{subscription.slug}</small></td><td>{formatMoney(subscription.monthlyPriceCents, subscription.currency)}</td><td>{subscription.clickLimit} clicks · {subscription.capiEventLimit} CAPI · {subscription.eapiEventLimit} EAPI</td><td>{subscription.campaignDatasetLimit}</td><td><Badge variant={subscription.isActive ? 'active' : 'muted'}>{subscription.isDefault ? 'Default' : subscription.isActive ? 'Active' : 'Inactive'}</Badge></td><td><div className="button-row"><Button variant="outline" size="sm" type="button" onClick={() => setEditingSubscription(subscription)} disabled={ctx.isLoading}><Pencil size={14} /> Edit</Button><Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteSubscription(subscription)} disabled={ctx.isLoading || subscription.isDefault}><Trash2 size={14} /> Delete</Button></div></td></tr>)}
-                    {!ctx.subscriptions.length && <tr><td colSpan={6}>Chưa có subscription.</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        </section>
+        <Card className="table-card">
+          <CardHeader className="section-heading">
+            <div><CardTitle><CreditCard size={18} /> Subscriptions</CardTitle><CardDescription>{ctx.subscriptions.length} subscriptions configured.</CardDescription></div>
+            <Button type="button" size="sm" onClick={openCreateSubscription} disabled={ctx.isLoading}><Plus size={16} /> Create subscription</Button>
+          </CardHeader>
+          <CardContent>
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>Plan</th><th>Price</th><th>Limits/month</th><th>Datasets/campaign</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {ctx.subscriptions.map((subscription) => <tr key={subscription.id}><td><strong>{subscription.name}</strong><br /><small>{subscription.slug}</small></td><td>{formatMoney(subscription.monthlyPriceCents, subscription.currency)}</td><td>{subscription.clickLimit} clicks · {subscription.capiEventLimit} CAPI · {subscription.eapiEventLimit} EAPI</td><td>{subscription.campaignDatasetLimit}</td><td><Badge variant={subscription.isActive ? 'active' : 'muted'}>{subscription.isDefault ? 'Default' : subscription.isActive ? 'Active' : 'Inactive'}</Badge></td><td><div className="button-row"><Button variant="outline" size="sm" type="button" onClick={() => openEditSubscription(subscription)} disabled={ctx.isLoading}><Pencil size={14} /> Edit</Button><Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteSubscription(subscription)} disabled={ctx.isLoading || subscription.isDefault}><Trash2 size={14} /> Delete</Button></div></td></tr>)}
+                  {!ctx.subscriptions.length && <tr><td colSpan={6}>Chưa có subscription.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
         <Card className="table-card">
           <CardHeader className="section-heading">
             <div><CardTitle><WalletCards size={18} /> Wallet top-up requests</CardTitle><CardDescription>{ctx.superAdminWalletTopUps.filter((topUp) => topUp.status === 'PENDING').length} yêu cầu đang chờ xác nhận chuyển khoản.</CardDescription></div>
@@ -203,6 +204,28 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
           </CardContent>
         </Card>
       </section>}
+      {isSubscriptionModalOpen && <div className="subscription-modal-backdrop" role="presentation" onMouseDown={() => !ctx.isLoading && setIsSubscriptionModalOpen(false)}>
+        <section className="subscription-modal" role="dialog" aria-modal="true" aria-labelledby="subscription-modal-title" onMouseDown={(event) => event.stopPropagation()}>
+          <button className="subscription-modal-close" type="button" onClick={() => setIsSubscriptionModalOpen(false)} disabled={ctx.isLoading} aria-label="Close subscription form"><X size={18} /></button>
+          <div className="subscription-modal-heading">
+            <span className="subscription-modal-icon">{editingSubscription ? <Pencil size={19} /> : <Plus size={19} />}</span>
+            <div><h2 id="subscription-modal-title">{editingSubscription ? 'Edit subscription' : 'Create subscription'}</h2><p>{editingSubscription ? `Cập nhật cấu hình cho gói ${editingSubscription.name}. Thay đổi có hiệu lực ngay với workspace đang dùng gói này.` : 'Tạo gói subscription với quota tháng cho click data, CAPI và EAPI/affiliate webhook.'}</p></div>
+          </div>
+          <form key={editingSubscription?.id ?? 'new'} className="subscription-modal-form" onSubmit={handleSubscriptionSubmit}>
+            <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Free / Pro / Agency" defaultValue={editingSubscription?.name ?? ''} autoFocus required /></label>
+            <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="free" defaultValue={editingSubscription?.slug ?? ''} /></label>
+            <label className="subscription-modal-wide"><FieldLabel>Description</FieldLabel><Input name="description" placeholder="Plan description" defaultValue={editingSubscription?.description ?? ''} /></label>
+            <label><FieldLabel>Monthly price cents</FieldLabel><Input name="monthlyPriceCents" type="number" min="0" defaultValue={editingSubscription?.monthlyPriceCents ?? 0} required /></label>
+            <label><FieldLabel>Currency</FieldLabel><Input name="currency" defaultValue={editingSubscription?.currency ?? 'VND'} required /></label>
+            <label><FieldLabel>Click data limit / month</FieldLabel><Input name="clickLimit" type="number" min="0" defaultValue={editingSubscription?.clickLimit ?? 1000} required /></label>
+            <label><FieldLabel>CAPI limit / month</FieldLabel><Input name="capiEventLimit" type="number" min="0" defaultValue={editingSubscription?.capiEventLimit ?? 1000} required /></label>
+            <label><FieldLabel>EAPI limit / month</FieldLabel><Input name="eapiEventLimit" type="number" min="0" defaultValue={editingSubscription?.eapiEventLimit ?? 1000} required /></label>
+            <label><FieldLabel>Datasets / campaign</FieldLabel><Input name="campaignDatasetLimit" type="number" min="0" defaultValue={editingSubscription?.campaignDatasetLimit ?? 2} required /></label>
+            <div className="subscription-modal-options"><label className="checkbox"><input name="isDefault" type="checkbox" defaultChecked={editingSubscription?.isDefault ?? false} /> Default for new users</label><label className="checkbox"><input name="isActive" type="checkbox" defaultChecked={editingSubscription?.isActive ?? true} /> Active</label></div>
+            <div className="subscription-modal-actions"><Button variant="outline" type="button" onClick={() => setIsSubscriptionModalOpen(false)} disabled={ctx.isLoading}>Cancel</Button><Button type="submit" disabled={ctx.isLoading}>{editingSubscription ? <><Save size={16} /> Save changes</> : <><Plus size={16} /> Create subscription</>}</Button></div>
+          </form>
+        </section>
+      </div>}
       {activeTab === 'users' && <section id="superadmin-users-panel" role="tabpanel" aria-labelledby="superadmin-users-tab" className="superadmin-tab-panel">
         <Card className="table-card">
           <CardHeader className="section-heading">
