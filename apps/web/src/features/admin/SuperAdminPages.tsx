@@ -1,6 +1,6 @@
-import type { FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { NavLink, useParams, useSearchParams } from 'react-router'
-import { Check, Copy, CreditCard, Crown, Landmark, Loader2, Plus, RefreshCw, Settings, Trash2, Users, WalletCards, X } from 'lucide-react'
+import { Check, Copy, CreditCard, Crown, Landmark, Loader2, Pencil, Plus, RefreshCw, Save, Settings, Trash2, Users, WalletCards, X } from 'lucide-react'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -20,6 +20,7 @@ function getAccountLabel(account: SuperAdminUser) {
 
 export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
   const [searchParams, setSearchParams] = useSearchParams()
+  const [editingSubscription, setEditingSubscription] = useState<Subscription | null>(null)
   const requestedTab = searchParams.get('tab')
   const activeTab = requestedTab === 'users' || requestedTab === 'payment' ? requestedTab : 'subscriptions'
 
@@ -32,13 +33,14 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
     )
   }
 
-  async function handleCreateSubscription(event: FormEvent<HTMLFormElement>) {
+  async function handleSubscriptionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const formElement = event.currentTarget
     const form = new FormData(formElement)
+    const subscription = editingSubscription
     await runEntityAction(ctx, async () => {
-      await ctx.fetchJson<Subscription>('/superadmin/subscriptions', {
-        method: 'POST',
+      await ctx.fetchJson<Subscription>(subscription ? `/superadmin/subscriptions/${subscription.id}` : '/superadmin/subscriptions', {
+        method: subscription ? 'PUT' : 'POST',
         body: JSON.stringify({
           name: getFormString(form, 'name'),
           slug: getFormString(form, 'slug'),
@@ -48,13 +50,24 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
           clickLimit: Number(form.get('clickLimit') ?? 0),
           capiEventLimit: Number(form.get('capiEventLimit') ?? 0),
           eapiEventLimit: Number(form.get('eapiEventLimit') ?? 0),
+          campaignDatasetLimit: Number(form.get('campaignDatasetLimit') ?? 0),
           isDefault: form.get('isDefault') === 'on',
           isActive: form.get('isActive') === 'on'
         })
       })
       formElement.reset()
+      setEditingSubscription(null)
       await ctx.refreshEntity('subscriptions')
-    }, 'Đã tạo gói subscription')
+    }, subscription ? 'Đã cập nhật gói subscription' : 'Đã tạo gói subscription')
+  }
+
+  async function handleDeleteSubscription(subscription: Subscription) {
+    if (!window.confirm(`Xoá gói subscription "${subscription.name}"? Chỉ có thể xoá gói không phải default và chưa được gán cho workspace.`)) return
+    await runEntityAction(ctx, async () => {
+      await ctx.fetchJson<{ ok: boolean }>(`/superadmin/subscriptions/${subscription.id}`, { method: 'DELETE' })
+      if (editingSubscription?.id === subscription.id) setEditingSubscription(null)
+      await ctx.refreshEntity('subscriptions')
+    }, `Đã xoá gói subscription ${subscription.name}`)
   }
 
   async function handleDeleteUser(account: SuperAdminUser) {
@@ -139,22 +152,23 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
         <section className="single-page-grid">
           <Card className="form-card">
             <CardHeader>
-              <CardTitle><WalletCards size={18} /> Create subscription</CardTitle>
-              <CardDescription>Tạo gói subscription với quota tháng cho click data, CAPI và EAPI/affiliate webhook.</CardDescription>
+              <CardTitle>{editingSubscription ? <><Pencil size={18} /> Edit subscription</> : <><WalletCards size={18} /> Create subscription</>}</CardTitle>
+              <CardDescription>{editingSubscription ? `Cập nhật cấu hình cho gói ${editingSubscription.name}. Thay đổi có hiệu lực ngay với workspace đang dùng gói này.` : 'Tạo gói subscription với quota tháng cho click data, CAPI và EAPI/affiliate webhook.'}</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleCreateSubscription}>
-                <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Free / Pro / Agency" required /></label>
-                <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="free" /></label>
-                <label><FieldLabel>Description</FieldLabel><Input name="description" placeholder="Plan description" /></label>
-                <label><FieldLabel>Monthly price cents</FieldLabel><Input name="monthlyPriceCents" type="number" min="0" defaultValue="0" /></label>
-                <label><FieldLabel>Currency</FieldLabel><Input name="currency" defaultValue="USD" /></label>
-                <label><FieldLabel>Click data limit / month</FieldLabel><Input name="clickLimit" type="number" min="0" defaultValue="1000" /></label>
-                <label><FieldLabel>CAPI limit / month</FieldLabel><Input name="capiEventLimit" type="number" min="0" defaultValue="1000" /></label>
-                <label><FieldLabel>EAPI limit / month</FieldLabel><Input name="eapiEventLimit" type="number" min="0" defaultValue="1000" /></label>
-                <label className="checkbox"><input name="isDefault" type="checkbox" /> Default for new users</label>
-                <label className="checkbox"><input name="isActive" type="checkbox" defaultChecked /> Active</label>
-                <Button type="submit"><Plus size={16} /> Create subscription</Button>
+              <form key={editingSubscription?.id ?? 'new'} onSubmit={handleSubscriptionSubmit}>
+                <label><FieldLabel>Name</FieldLabel><Input name="name" placeholder="Free / Pro / Agency" defaultValue={editingSubscription?.name ?? ''} required /></label>
+                <label><FieldLabel>Slug</FieldLabel><Input name="slug" placeholder="free" defaultValue={editingSubscription?.slug ?? ''} /></label>
+                <label><FieldLabel>Description</FieldLabel><Input name="description" placeholder="Plan description" defaultValue={editingSubscription?.description ?? ''} /></label>
+                <label><FieldLabel>Monthly price cents</FieldLabel><Input name="monthlyPriceCents" type="number" min="0" defaultValue={editingSubscription?.monthlyPriceCents ?? 0} required /></label>
+                <label><FieldLabel>Currency</FieldLabel><Input name="currency" defaultValue={editingSubscription?.currency ?? 'VND'} required /></label>
+                <label><FieldLabel>Click data limit / month</FieldLabel><Input name="clickLimit" type="number" min="0" defaultValue={editingSubscription?.clickLimit ?? 1000} required /></label>
+                <label><FieldLabel>CAPI limit / month</FieldLabel><Input name="capiEventLimit" type="number" min="0" defaultValue={editingSubscription?.capiEventLimit ?? 1000} required /></label>
+                <label><FieldLabel>EAPI limit / month</FieldLabel><Input name="eapiEventLimit" type="number" min="0" defaultValue={editingSubscription?.eapiEventLimit ?? 1000} required /></label>
+                <label><FieldLabel>Datasets / campaign</FieldLabel><Input name="campaignDatasetLimit" type="number" min="0" defaultValue={editingSubscription?.campaignDatasetLimit ?? 2} required /></label>
+                <label className="checkbox"><input name="isDefault" type="checkbox" defaultChecked={editingSubscription?.isDefault ?? false} /> Default for new users</label>
+                <label className="checkbox"><input name="isActive" type="checkbox" defaultChecked={editingSubscription?.isActive ?? true} /> Active</label>
+                <div className="button-row"><Button type="submit" disabled={ctx.isLoading}>{editingSubscription ? <><Save size={16} /> Save changes</> : <><Plus size={16} /> Create subscription</>}</Button>{editingSubscription && <Button variant="outline" type="button" onClick={() => setEditingSubscription(null)} disabled={ctx.isLoading}>Cancel</Button>}</div>
               </form>
             </CardContent>
           </Card>
@@ -166,10 +180,10 @@ export function SuperAdminPage({ ctx }: { ctx: DashboardContext }) {
             <CardContent>
               <div className="table-wrap">
                 <table>
-                  <thead><tr><th>Plan</th><th>Price</th><th>Limits/month</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Plan</th><th>Price</th><th>Limits/month</th><th>Datasets/campaign</th><th>Status</th><th>Actions</th></tr></thead>
                   <tbody>
-                    {ctx.subscriptions.map((subscription) => <tr key={subscription.id}><td><strong>{subscription.name}</strong><br /><small>{subscription.slug}</small></td><td>{formatMoney(subscription.monthlyPriceCents, subscription.currency)}</td><td>{subscription.clickLimit} clicks · {subscription.capiEventLimit} CAPI · {subscription.eapiEventLimit} EAPI</td><td><Badge variant={subscription.isActive ? 'active' : 'muted'}>{subscription.isDefault ? 'Default' : subscription.isActive ? 'Active' : 'Inactive'}</Badge></td></tr>)}
-                    {!ctx.subscriptions.length && <tr><td colSpan={4}>Chưa có subscription.</td></tr>}
+                    {ctx.subscriptions.map((subscription) => <tr key={subscription.id}><td><strong>{subscription.name}</strong><br /><small>{subscription.slug}</small></td><td>{formatMoney(subscription.monthlyPriceCents, subscription.currency)}</td><td>{subscription.clickLimit} clicks · {subscription.capiEventLimit} CAPI · {subscription.eapiEventLimit} EAPI</td><td>{subscription.campaignDatasetLimit}</td><td><Badge variant={subscription.isActive ? 'active' : 'muted'}>{subscription.isDefault ? 'Default' : subscription.isActive ? 'Active' : 'Inactive'}</Badge></td><td><div className="button-row"><Button variant="outline" size="sm" type="button" onClick={() => setEditingSubscription(subscription)} disabled={ctx.isLoading}><Pencil size={14} /> Edit</Button><Button variant="destructive" size="sm" type="button" onClick={() => void handleDeleteSubscription(subscription)} disabled={ctx.isLoading || subscription.isDefault}><Trash2 size={14} /> Delete</Button></div></td></tr>)}
+                    {!ctx.subscriptions.length && <tr><td colSpan={6}>Chưa có subscription.</td></tr>}
                   </tbody>
                 </table>
               </div>
